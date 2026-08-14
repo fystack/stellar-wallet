@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { SendIcon, ShieldIcon, TrashIcon } from '../icons.tsx'
+import {
+  RefreshIcon,
+  SendIcon,
+  ShieldIcon,
+  SpinnerIcon,
+  TrashIcon,
+} from '../icons.tsx'
 import CopyAddress from '../components/CopyAddress.tsx'
 import TxStatusBadge from '../components/TxStatusBadge.tsx'
 import ReceiveModal from '../components/ReceiveModal.tsx'
@@ -89,13 +95,34 @@ export default function WalletDetail({
     }
   }
 
-  // Initial history load; live updates then arrive via SSE (no polling).
-  useEffect(() => {
+  const [refreshing, setRefreshing] = useState(false)
+
+  const loadTxns = () =>
     api
       .walletTxns(wallet.id)
       .then(setBase)
       .catch(() => {})
+
+  // Initial history load; live updates then arrive via SSE (no polling).
+  useEffect(() => {
+    loadTxns()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet.id])
+
+  // Manual refresh: pull incoming on-chain payments (covers the case where the
+  // user never opened the Receive QR, whose modal polls), then reload history
+  // and balance.
+  async function handleRefresh() {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await api.sync(wallet.id).catch(() => {})
+      await loadTxns()
+      loadBalance()
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   // Live on-chain balances (per asset).
   const loadBalance = () => {
@@ -371,7 +398,19 @@ export default function WalletDetail({
       </div>
 
       <section className="surface">
-        <h3 className="mb-4 text-[17px] font-bold">Transactions</h3>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-[17px] font-bold">Transactions</h3>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            title="Refresh transactions"
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-ink-soft hover:bg-card disabled:opacity-60"
+          >
+            {refreshing ? <SpinnerIcon size={14} /> : <RefreshIcon size={14} />}
+            {refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
         {txns.length === 0 ? (
           <div className="py-10 text-center text-sm text-muted">
             No transactions yet.

@@ -111,6 +111,15 @@ export function SpinnerIcon({ size = 14 }: IconProps) {
   )
 }
 
+export function RefreshIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M21 12a9 9 0 11-2.64-6.36" />
+      <path d="M21 3v5h-5" />
+    </svg>
+  )
+}
+
 export function TrashIcon({ size = 18 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
