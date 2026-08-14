@@ -10,11 +10,12 @@ type ChainOption = {
   id: Chain
   name: string
   symbol: string
+  disabled?: boolean
 }
 
 const chains: ChainOption[] = [
   { id: 'stellar', name: 'Stellar', symbol: 'XLM' },
-  { id: 'solana', name: 'Solana', symbol: 'SOL' },
+  { id: 'solana', name: 'Solana', symbol: 'SOL', disabled: true },
 ]
 
 type Props = {
@@ -124,11 +125,14 @@ export default function CreateWalletModal({
                 <button
                   type="button"
                   key={c.id}
+                  disabled={c.disabled}
                   onClick={() => setChain(c.id)}
                   className={
                     'flex items-center gap-3 border p-3.5 text-left transition ' +
                     (active
                       ? 'border-brand bg-brand-soft'
+                      : c.disabled
+                        ? 'cursor-not-allowed border-line bg-card opacity-60'
                       : 'border-line hover:border-[#c9d2df]')
                   }
                 >
@@ -141,6 +145,11 @@ export default function CreateWalletModal({
                       {chainTokens[c.id].map((t) => (
                         <TokenLogo key={t} symbol={t} size={16} />
                       ))}
+                      {c.disabled && (
+                        <span className="ml-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                          Coming soon
+                        </span>
+                      )}
                     </span>
                   </span>
                 </button>
