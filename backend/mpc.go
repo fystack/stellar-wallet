@@ -125,7 +125,7 @@ func (m *mpc) onSign(evt event.SigningResultEvent) {
 		m.publishTxnByID(userID, evt.TxID)
 		m.srv.db.Exec(`UPDATE transactions SET status = 'confirmed' WHERE id = ?`, evt.TxID)
 		m.publishTxnByID(userID, evt.TxID)
-		go m.srv.refreshWallet(tx.WalletID)
+		go m.srv.refreshAfterTx(tx.WalletID, tx.Counterparty)
 		return
 	}
 

@@ -23,6 +23,7 @@ type incomingPayment struct {
 	From   string
 	Amount string
 	Symbol string
+	At     string // on-chain ledger close time (RFC3339)
 }
 
 // stellarIncoming returns recent payments received by the address.
@@ -44,11 +45,11 @@ func stellarIncoming(address string) ([]incomingPayment, error) {
 				if op.Asset.Type != "native" {
 					sym = op.Asset.Code
 				}
-				out = append(out, incomingPayment{op.TransactionHash, op.From, op.Amount, sym})
+				out = append(out, incomingPayment{op.TransactionHash, op.From, op.Amount, sym, op.LedgerCloseTime.UTC().Format(time.RFC3339)})
 			}
 		case operations.CreateAccount:
 			if op.Account == address {
-				out = append(out, incomingPayment{op.TransactionHash, op.Funder, op.StartingBalance, "XLM"})
+				out = append(out, incomingPayment{op.TransactionHash, op.Funder, op.StartingBalance, "XLM", op.LedgerCloseTime.UTC().Format(time.RFC3339)})
 			}
 		}
 	}

@@ -63,6 +63,28 @@ func (s *server) refreshWallet(id string) {
 	}
 }
 
+// refreshWalletByAddress refreshes any local wallet holding this address
+// (e.g. the recipient of a transfer between the user's own wallets).
+func (s *server) refreshWalletByAddress(addr string) {
+	var w walletRow
+	err := s.db.QueryRow(
+		`SELECT id, user_id, chain, address, balance FROM wallets WHERE address = ?`, addr).
+		Scan(&w.id, &w.user, &w.chain, &w.addr, &w.bal)
+	if err == nil {
+		s.refreshOne(w)
+	}
+}
+
+// refreshAfterTx updates sender + recipient balances, with one retry to beat
+// Horizon's brief indexing lag right after a broadcast.
+func (s *server) refreshAfterTx(senderID, destAddr string) {
+	s.refreshWallet(senderID)
+	s.refreshWalletByAddress(destAddr)
+	time.Sleep(3 * time.Second)
+	s.refreshWallet(senderID)
+	s.refreshWalletByAddress(destAddr)
+}
+
 func (s *server) refreshOne(w walletRow) {
 	bal, err := getBalance(w.chain, w.addr)
 	if err != nil || bal == w.bal {

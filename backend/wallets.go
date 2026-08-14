@@ -31,6 +31,12 @@ func (s *server) syncIncoming(w Wallet) int {
 			continue
 		}
 		amt, _ := strconv.ParseFloat(p.Amount, 64)
+		// Prefer the on-chain ledger close time so history is ordered by when the
+		// payment actually happened, not when our sync happened to run.
+		createdAt := p.At
+		if createdAt == "" {
+			createdAt = time.Now().UTC().Format(time.RFC3339)
+		}
 		tx := Transaction{
 			ID:           uuid.NewString(),
 			WalletID:     w.ID,
@@ -41,7 +47,7 @@ func (s *server) syncIncoming(w Wallet) int {
 			Symbol:       p.Symbol,
 			Status:       "confirmed",
 			TxHash:       p.Hash,
-			CreatedAt:    time.Now().UTC().Format(time.RFC3339),
+			CreatedAt:    createdAt,
 		}
 		s.db.Exec(
 			`INSERT INTO transactions (id, wallet_id, user_id, type, counterparty, amount, symbol, memo, status, signature, envelope_xdr, tx_hash, created_at)
@@ -186,6 +192,10 @@ func (s *server) walletBalance(c *gin.Context) {
 		"symbol":   w.Symbol,
 		"explorer": explorerAddress(w.Chain, w.Address),
 	})
+	// The detail view just read the live balance; sync the cached column and
+	// push an SSE update so the wallet list reflects it immediately instead of
+	// waiting for the next 30s poll.
+	go s.refreshWallet(w.ID)
 }
 
 // fundWallet requests testnet funds (Friendbot / airdrop).
