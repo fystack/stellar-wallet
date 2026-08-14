@@ -109,6 +109,15 @@ export const api = {
       nodes: { name: string; region: string; online: boolean }[]
     }>(`/api/v1/cluster`),
   prices: () => req<Record<string, number>>(`/api/v1/prices`),
+  txChain: (hash: string) =>
+    req<{
+      fee: string
+      ledger: number
+      operations: number
+      source: string
+      memo: string
+      successful: boolean
+    }>(`/api/v1/tx/${hash}/chain`),
   chains: () =>
     req<
       {

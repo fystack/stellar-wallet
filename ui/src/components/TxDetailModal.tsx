@@ -1,10 +1,29 @@
+import { useEffect, useState } from 'react'
 import Modal from './Modal.tsx'
 import TxStatusBadge from './TxStatusBadge.tsx'
 import TxTimeline from './TxTimeline.tsx'
 import CopyAddress from './CopyAddress.tsx'
 import { TokenLogo } from '../logos.tsx'
-import { explorerTx } from '../api.ts'
+import { api, explorerTx } from '../api.ts'
+import { formatAmount, formatUsd } from '../format.ts'
 import type { Transaction } from '../types.ts'
+
+const NETWORK: Record<string, string> = {
+  stellar: 'Stellar · testnet',
+  solana: 'Solana · devnet',
+}
+
+function fmtDate(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
 
 function Row({
   label,
@@ -31,6 +50,32 @@ export default function TxDetailModal({
   onClose: () => void
 }) {
   const incoming = tx.type === 'in'
+  const isTrustline = tx.memo === 'Add trustline'
+  const kind = isTrustline ? 'Trustline' : incoming ? 'Received' : 'Sent'
+
+  const [prices, setPrices] = useState<Record<string, number>>({})
+  useEffect(() => {
+    api
+      .prices()
+      .then(setPrices)
+      .catch(() => {})
+  }, [])
+  const price = prices[tx.symbol]
+  const usdValue = price ? formatUsd(Number(tx.amount) * price) : ''
+
+  // Real on-chain metadata (fee charged, ledger) once broadcast.
+  const [onChain, setOnChain] = useState<{
+    fee: string
+    ledger: number
+    operations: number
+  } | null>(null)
+  useEffect(() => {
+    if (!tx.txHash || chain !== 'stellar') return
+    api
+      .txChain(tx.txHash)
+      .then(setOnChain)
+      .catch(() => setOnChain(null))
+  }, [tx.txHash, chain])
 
   return (
     <Modal title="Transaction" onClose={onClose} maxWidth={460}>
@@ -48,14 +93,16 @@ export default function TxDetailModal({
             {incoming ? '↓' : '↑'}
           </span>
           <div>
-            <div className="text-sm text-muted">
-              {incoming ? 'Received' : 'Sent'}
-            </div>
+            <div className="text-sm text-muted">{kind}</div>
             <div className="flex items-center gap-1.5 text-2xl font-extrabold leading-tight">
               <TokenLogo symbol={tx.symbol} size={22} />
-              {incoming ? '+' : '−'}
-              {tx.amount} <span className="text-muted">{tx.symbol}</span>
+              {isTrustline ? '' : incoming ? '+' : '−'}
+              {formatAmount(tx.amount)}{' '}
+              <span className="text-muted">{tx.symbol}</span>
             </div>
+            {usdValue && !isTrustline && (
+              <div className="mt-0.5 text-xs text-muted">≈ {usdValue}</div>
+            )}
           </div>
         </div>
         <TxStatusBadge status={tx.status} />
@@ -63,15 +110,33 @@ export default function TxDetailModal({
 
       {/* Details */}
       <div className="mb-6 divide-y divide-line bg-card px-4 text-sm">
-        <Row label={incoming ? 'From' : 'To'}>
+        <Row label={incoming ? 'From' : isTrustline ? 'Issuer' : 'To'}>
           <CopyAddress
             address={tx.counterparty}
             truncate
             className="max-w-[220px] text-ink"
           />
         </Row>
+        <Row label="Asset">
+          <span className="flex items-center justify-end gap-1.5 text-ink">
+            <TokenLogo symbol={tx.symbol} size={16} /> {tx.symbol}
+          </span>
+        </Row>
+        <Row label="Network">
+          <span className="text-ink">{NETWORK[chain] ?? chain}</span>
+        </Row>
+        {!incoming && (
+          <Row label="Network fee">
+            <span className="text-ink">{onChain?.fee ?? '0.00001'} XLM</span>
+          </Row>
+        )}
+        {onChain && (
+          <Row label="Ledger">
+            <span className="font-mono text-ink">#{onChain.ledger}</span>
+          </Row>
+        )}
         <Row label="Date">
-          <span className="text-ink">{tx.createdAt}</span>
+          <span className="text-ink">{fmtDate(tx.createdAt)}</span>
         </Row>
         {tx.memo && (
           <Row label="Memo">
