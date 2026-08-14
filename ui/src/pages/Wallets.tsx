@@ -112,7 +112,7 @@ export default function Wallets({ wallets, onCreate, onOpen }: Props) {
   if (hasWallets) {
     return (
       <section className="mx-auto max-w-[1040px]">
-        <div className="mb-5 flex items-center justify-between">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-2xl font-bold">My Wallets</h2>
           <div className="flex items-center gap-2">
             <button
@@ -140,21 +140,21 @@ export default function Wallets({ wallets, onCreate, onOpen }: Props) {
     <>
       <ClusterStatus />
 
-      <section className="mx-auto mt-10 max-w-[940px] text-center">
-        <div className="mx-auto mb-8 grid h-[78px] w-[78px] place-items-center bg-brand text-white">
+      <section className="mx-auto mt-6 max-w-[940px] text-center sm:mt-10">
+        <div className="mx-auto mb-6 grid h-16 w-16 place-items-center bg-brand text-white sm:mb-8 sm:h-[78px] sm:w-[78px]">
           <ShieldIcon size={34} />
         </div>
-        <h1 className="mb-4 text-[40px] font-extrabold tracking-tight">
+        <h1 className="mb-4 text-3xl font-extrabold tracking-tight sm:text-[40px]">
           Your keys, split — never whole
         </h1>
-        <p className="mx-auto mb-11 max-w-[620px] text-[19px] leading-relaxed text-muted">
+        <p className="mx-auto mb-8 max-w-[620px] text-base leading-relaxed text-muted sm:mb-11 sm:text-[19px]">
           This wallet uses threshold cryptography. No server, no browser, no one
           ever holds your complete private key.
         </p>
 
         <div className="grid grid-cols-1 gap-5 text-left md:grid-cols-3">
           {features.map((f) => (
-            <div className="border border-line bg-white p-6" key={f.title}>
+            <div className="border border-line bg-white p-5 sm:p-6" key={f.title}>
               <div className="mb-5 grid h-11 w-11 place-items-center bg-brand-soft text-brand">
                 {f.icon}
               </div>
@@ -164,11 +164,11 @@ export default function Wallets({ wallets, onCreate, onOpen }: Props) {
           ))}
         </div>
 
-        <button className="cta mt-11" onClick={onCreate}>
+        <button className="cta mt-8 w-full !px-6 sm:mt-11 sm:w-auto" onClick={onCreate}>
           Create your first wallet
         </button>
 
-        <p className="mt-7 text-[15px] text-muted">
+        <p className="mt-6 text-sm leading-relaxed text-muted sm:mt-7 sm:text-[15px]">
           Secured by{' '}
           <strong className="text-ink-soft">2-of-3 threshold signatures</strong> ·
           No seed phrase · No single server risk

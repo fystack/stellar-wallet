@@ -23,12 +23,12 @@ body {
   }
 
   .field-input {
-    @apply border border-line bg-white px-3.5 py-3 text-base text-ink outline-none
+    @apply min-w-0 w-full border border-line bg-white px-3.5 py-3 text-base text-ink outline-none
       transition focus:border-brand focus:ring-2 focus:ring-brand;
   }
 
   .surface {
-    @apply border border-line bg-white p-6;
+    @apply border border-line bg-white p-4 sm:p-6;
   }
 }
 

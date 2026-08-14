@@ -31,8 +31,8 @@ export default function Login({ onLogin }: { onLogin: (email: string) => void })
   return (
     <div className="flex min-h-full items-center justify-center bg-[#f7f8fa] p-4">
       <div className="w-full max-w-[400px]">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-5 w-fit">
+        <div className="mb-6 text-center sm:mb-8">
+          <div className="mx-auto mb-4 w-fit sm:mb-5">
             <AppLogo size={64} />
           </div>
           <h1 className="text-2xl font-extrabold">
@@ -47,7 +47,7 @@ export default function Login({ onLogin }: { onLogin: (email: string) => void })
 
         <form
           onSubmit={handleSubmit}
-          className="flex flex-col gap-4 border border-line bg-white p-7"
+          className="flex flex-col gap-4 border border-line bg-white p-5 sm:p-7"
         >
           <label className="flex flex-col gap-2">
             <span className="text-sm font-semibold text-ink-soft">Email</span>

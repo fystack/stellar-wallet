@@ -165,17 +165,19 @@ export default function App() {
   const openWallet = wallets.find((w) => w.id === openWalletId) ?? null
 
   return (
-    <div className="flex min-h-full">
-      <aside className="flex w-[260px] flex-shrink-0 flex-col border-r border-line bg-white p-4">
-        <div className="flex items-center gap-3 px-2 pb-6 pt-1.5">
-          <AppLogo size={46} />
+    <div className="flex min-h-full min-w-0 flex-col md:flex-row">
+      <aside className="sticky top-0 z-40 flex h-16 w-full flex-shrink-0 items-center border-b border-line bg-white px-4 md:static md:h-auto md:w-[260px] md:flex-col md:items-stretch md:border-b-0 md:border-r md:p-4">
+        <div className="flex items-center gap-2.5 md:gap-3 md:px-2 md:pb-6 md:pt-1.5">
+          <AppLogo size={40} />
           <div>
-            <div className="text-lg font-bold">Wallet</div>
-            <div className="text-[13px] text-muted">MPC-secured</div>
+            <div className="font-bold md:text-lg">Wallet</div>
+            <div className="hidden text-[13px] text-muted sm:block">
+              MPC-secured
+            </div>
           </div>
         </div>
 
-        <nav className="flex flex-col gap-1">
+        <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 border-t border-line bg-white px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 md:static md:flex md:flex-col md:gap-1 md:border-0 md:p-0">
           {nav.map((item) => {
             const active = page === item.key && !openWallet
             return (
@@ -187,7 +189,7 @@ export default function App() {
                   setPage(item.key)
                 }}
                 className={
-                  'flex items-center gap-3 px-3.5 py-3 text-base font-semibold transition ' +
+                  'flex min-w-0 flex-col items-center gap-1 px-1 py-2 text-xs font-semibold transition md:flex-row md:gap-3 md:px-3.5 md:py-3 md:text-base ' +
                   (active
                     ? 'bg-brand-soft text-brand'
                     : 'text-ink-soft hover:bg-[#f2f5f9]')
@@ -202,12 +204,13 @@ export default function App() {
 
         <button
           onClick={handleSignOut}
-          className="mt-auto flex items-center gap-3 px-2 py-3 text-left text-[15px] text-ink-soft transition-colors hover:text-ink"
+          aria-label={`Sign out ${user}`}
+          className="ml-auto flex items-center gap-3 text-left text-[15px] text-ink-soft transition-colors hover:text-ink md:ml-0 md:mt-auto md:px-2 md:py-3"
         >
-          <span className="grid h-10 w-10 shrink-0 place-items-center bg-[#1b1c1f] text-sm font-semibold uppercase text-white">
+          <span className="grid h-9 w-9 shrink-0 place-items-center bg-[#1b1c1f] text-sm font-semibold uppercase text-white md:h-10 md:w-10">
             {user.charAt(0)}
           </span>
-          <span className="min-w-0">
+          <span className="hidden min-w-0 md:block">
             <span className="block truncate text-sm font-semibold text-ink">
               {user}
             </span>
@@ -216,7 +219,7 @@ export default function App() {
         </button>
       </aside>
 
-      <main className="flex-1 overflow-y-auto px-10 pb-16 pt-6">
+      <main className="min-w-0 flex-1 overflow-y-auto px-4 pb-24 pt-5 sm:px-6 md:px-10 md:pb-16 md:pt-6">
         {openWallet ? (
           <WalletDetail
             wallet={openWallet}
