@@ -37,6 +37,7 @@ export default function WalletDetail({
   >(null)
   const [funding, setFunding] = useState(false)
   const [prices, setPrices] = useState<Record<string, number>>({})
+  const [sortBy, setSortBy] = useState<'amount' | 'name'>('amount')
   useEffect(() => {
     api
       .prices()
@@ -236,30 +237,57 @@ export default function WalletDetail({
               )}
             </div>
             {/* additional held tokens */}
-            {assets.length > 1 && (
-              <div className="flex flex-col divide-y divide-line border border-line">
-                {assets.slice(1).map((a) => (
-                  <div
-                    key={a.symbol}
-                    className="flex items-center justify-between gap-3 px-3 py-2.5"
-                  >
-                    <span className="flex items-center gap-2 font-semibold text-ink-soft">
-                      <TokenLogo symbol={a.symbol} size={22} /> {a.symbol}
-                    </span>
-                    <span className="text-right">
-                      <div className="font-mono text-sm font-semibold">
-                        {formatAmount(a.balance)}
+            {assets.length > 1 &&
+              (() => {
+                const extra = assets.slice(1)
+                const sorted = [...extra].sort((a, b) =>
+                  sortBy === 'amount'
+                    ? Number(b.balance) - Number(a.balance)
+                    : a.symbol.localeCompare(b.symbol),
+                )
+                return (
+                  <div>
+                    {extra.length > 1 && (
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <span className="text-xs font-medium uppercase tracking-wide text-muted">
+                          {extra.length} tokens
+                        </span>
+                        <select
+                          value={sortBy}
+                          onChange={(e) =>
+                            setSortBy(e.target.value as 'amount' | 'name')
+                          }
+                          className="border border-line bg-white px-2 py-1 text-xs font-semibold text-ink-soft"
+                        >
+                          <option value="amount">Sort: Amount</option>
+                          <option value="name">Sort: Name</option>
+                        </select>
                       </div>
-                      {usd(a.symbol, a.balance) && (
-                        <div className="text-xs text-muted">
-                          {usd(a.symbol, a.balance)}
-                        </div>
-                      )}
-                    </span>
+                    )}
+                    <div className="flex flex-col divide-y divide-line border border-line">
+                      {sorted.map((a) => {
+                        const v = usd(a.symbol, a.balance)
+                        return (
+                          <div
+                            key={a.symbol}
+                            className="flex min-h-[52px] items-center justify-between gap-3 px-3"
+                          >
+                            <span className="flex items-center gap-2 font-semibold text-ink-soft">
+                              <TokenLogo symbol={a.symbol} size={22} /> {a.symbol}
+                            </span>
+                            <span className="text-right">
+                              <div className="font-mono text-sm font-semibold">
+                                {formatAmount(a.balance)}
+                              </div>
+                              {v && <div className="text-xs text-muted">{v}</div>}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
-                ))}
-              </div>
-            )}
+                )
+              })()}
           </div>
         )}
 
