@@ -7,7 +7,18 @@ import TxDetailModal from '../components/TxDetailModal.tsx'
 import { api, explorerAddress } from '../api.ts'
 import { toast } from '../toast.tsx'
 import { ChainLogo, TokenLogo } from '../logos.tsx'
-import { formatAmount, formatUsd } from '../format.ts'
+import { formatAmount, formatUsd, shortAddress } from '../format.ts'
+
+function fmtShort(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
 import type { Transaction, Wallet } from '../types.ts'
 
 type Props = {
@@ -367,46 +378,61 @@ export default function WalletDetail({
           </div>
         ) : (
           <div className="flex flex-col">
-            {txns.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setOpenTxId(t.id)}
-                className="flex items-center gap-3 border-b border-line py-3.5 text-left transition-colors last:border-none hover:bg-[#fafbfc]"
-              >
-                <span
-                  className={
-                    'grid h-9 w-9 shrink-0 place-items-center text-base font-bold ' +
-                    (t.type === 'in'
-                      ? 'bg-green-50 text-green-600'
-                      : 'bg-[#f2f5f9] text-ink-soft')
-                  }
+            {txns.map((t) => {
+              const trust = t.memo === 'Add trustline'
+              const kind = trust
+                ? `Trustline · ${t.symbol}`
+                : t.type === 'in'
+                  ? 'Received'
+                  : 'Sent'
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setOpenTxId(t.id)}
+                  className="flex items-center gap-3 border-b border-line py-3.5 text-left transition-colors last:border-none hover:bg-[#fafbfc]"
                 >
-                  {t.type === 'in' ? '↓' : '↑'}
-                </span>
-                <div className="flex-1">
-                  <div className="font-semibold">
-                    {t.type === 'in' ? 'Received' : 'Sent'}
+                  <div className="relative shrink-0">
+                    <TokenLogo symbol={t.symbol} size={36} />
+                    <span
+                      className={
+                        'absolute -bottom-1 -right-1 grid h-[18px] w-[18px] place-items-center rounded-full border-2 border-white text-[9px] font-bold text-white ' +
+                        (t.type === 'in' ? 'bg-green-600' : 'bg-[#334]')
+                      }
+                    >
+                      {t.type === 'in' ? '↓' : '↑'}
+                    </span>
                   </div>
-                  <div className="font-mono text-[13px] text-muted">
-                    {t.counterparty}
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold">{kind}</div>
+                    <div className="truncate text-[13px] text-muted">
+                      <span className="font-mono">
+                        {shortAddress(t.counterparty, 6, 6)}
+                      </span>
+                      {' · '}
+                      {fmtShort(t.createdAt)}
+                    </div>
                   </div>
-                </div>
-                <div className="text-right">
-                  <div
-                    className={
-                      'font-semibold ' +
-                      (t.type === 'in' ? 'text-green-600' : 'text-ink')
-                    }
-                  >
-                    {t.type === 'in' ? '+' : '−'}
-                    {t.amount} {t.symbol}
+                  <div className="shrink-0 text-right">
+                    <div
+                      className={
+                        'font-semibold ' +
+                        (trust
+                          ? 'text-muted'
+                          : t.type === 'in'
+                            ? 'text-green-600'
+                            : 'text-ink')
+                      }
+                    >
+                      {trust ? '—' : (t.type === 'in' ? '+' : '−') + formatAmount(t.amount)}
+                      {!trust && ` ${t.symbol}`}
+                    </div>
+                    <div className="mt-0.5">
+                      <TxStatusBadge status={t.status} />
+                    </div>
                   </div>
-                  <div className="mt-0.5">
-                    <TxStatusBadge status={t.status} />
-                  </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              )
+            })}
           </div>
         )}
       </section>
