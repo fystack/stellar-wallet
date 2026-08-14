@@ -18,3 +18,7 @@ logs/
 # Misc
 .DS_Store
 .env
+
+# E2E
+test-results/
+playwright-report/
