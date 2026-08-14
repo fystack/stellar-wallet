@@ -26,14 +26,28 @@ const nav: NavItem[] = [
   { key: 'settings', label: 'Settings', icon: <SettingsIcon /> },
 ]
 
+// Parse the current URL hash into a route (used for initial state + back/forward).
+function initialRoute(): { page: PageKey; openId: string | null } {
+  const h = window.location.hash.replace(/^#\/?/, '')
+  if (h.startsWith('wallet/')) {
+    return { page: 'wallets', openId: h.slice('wallet/'.length) }
+  }
+  if (h === 'send' || h === 'settings' || h === 'wallets') {
+    return { page: h, openId: null }
+  }
+  return { page: 'wallets', openId: null }
+}
+
 export default function App() {
   const [user, setUser] = useState<string | null>(
     getToken() ? getEmail() : null,
   )
-  const [page, setPage] = useState<PageKey>('wallets')
+  const [page, setPage] = useState<PageKey>(() => initialRoute().page)
   const [wallets, setWallets] = useState<Wallet[]>([])
   const [showCreate, setShowCreate] = useState(false)
-  const [openWalletId, setOpenWalletId] = useState<string | null>(null)
+  const [openWalletId, setOpenWalletId] = useState<string | null>(
+    () => initialRoute().openId,
+  )
   const [sendFromId, setSendFromId] = useState<string | undefined>(undefined)
   // Live transaction updates pushed over SSE, keyed by tx id.
   const [liveTxns, setLiveTxns] = useState<Record<string, Transaction>>({})
@@ -79,17 +93,14 @@ export default function App() {
   }, [user])
 
   // --- Hash routing: keep the URL in sync so reload/deep-link works ---
+  // Initial route is read synchronously in useState above; here we only react
+  // to later hash changes (browser back/forward).
   useEffect(() => {
     const apply = () => {
-      const h = window.location.hash.replace(/^#\/?/, '')
-      if (h.startsWith('wallet/')) {
-        setOpenWalletId(h.slice('wallet/'.length))
-      } else if (h === 'send' || h === 'settings' || h === 'wallets') {
-        setOpenWalletId(null)
-        setPage(h)
-      }
+      const r = initialRoute()
+      setOpenWalletId(r.openId)
+      setPage(r.page)
     }
-    apply()
     window.addEventListener('hashchange', apply)
     return () => window.removeEventListener('hashchange', apply)
   }, [])
