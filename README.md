@@ -16,12 +16,12 @@ stellar-wallet/
 
 ## Prerequisites
 
-- **mpcium** + **mpcium-cli** installed:
-  `go install github.com/fystack/mpcium/cmd/mpcium@latest` (and `.../cmd/mpcium-cli@latest`).
-  You do *not* need to build the mpcium repo — they're used as installed CLIs.
 - **Go** ≥ 1.21, **Node** ≥ 18 / npm.
-- **Docker** — only needed for the local-infra fallback (see below).
-- The `mpcium/node0|1|2` folders with their `identity/` + `config.yaml` (already set up here).
+- **Docker** + docker compose (plugin *or* `docker-compose`) — for local NATS/Consul.
+- `mpcium` / `mpcium-cli` are **auto-installed** by `bootstrap.sh` if missing
+  (`go install github.com/fystack/mpcium/cmd/...`). The mpcium repo itself is never needed.
+
+The `mpcium/` folder (node data + keys) is **not in this repo** — it's created on first run.
 
 ## Run
 
@@ -29,17 +29,24 @@ stellar-wallet/
 ./start.sh
 ```
 
-It's **seamless** about infra — you don't have to start NATS/Consul yourself:
+It's **seamless** — you don't set up NATS/Consul, keys, or nodes yourself:
 
-1. If the shared dev cluster (`10.10.0.1:4222/8500`) is reachable → use it.
-2. Otherwise → boots a **local NATS + Consul via Docker**, points the node configs at
-   `127.0.0.1`, and registers the peers into Consul automatically.
-3. Starts the 3 MPC nodes (only if not already running — never duplicates).
-4. Builds & starts the backend on **:8090** (8080 is taken by other services here),
-   pointed at whichever infra was chosen.
-5. Installs UI deps if needed and starts the frontend on **:5173**.
+1. **No `mpcium/` folder** (fresh clone) → `bootstrap.sh` runs: installs mpcium/mpcium-cli,
+   boots local NATS+Consul (Docker), generates peers + node identities + the event-initiator
+   key, writes per-node configs, and registers peers into Consul.
+2. Else if the shared dev cluster (`10.10.0.1:4222/8500`) is reachable → use it.
+3. Else → reuse the existing local setup (bringing Docker infra up if needed).
+4. Starts the 3 MPC nodes (only if not already running — never duplicates).
+5. Builds & starts the backend on **:8090**, pointed at the chosen infra.
+6. Installs UI deps if needed and starts the frontend on **:5173**.
 
 Open **http://localhost:5173**, register, and create a wallet.
+
+If `4222`/`8500` are busy on your machine, override the ports:
+
+```bash
+NATS_PORT=14222 CONSUL_PORT=18500 ./start.sh
+```
 
 Stop:
 
