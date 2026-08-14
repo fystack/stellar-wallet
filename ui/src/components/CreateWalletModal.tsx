@@ -92,7 +92,7 @@ export default function CreateWalletModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex overflow-y-auto bg-black/40 p-3 sm:items-center sm:justify-center sm:p-4"
+      className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/40 p-3 sm:items-center sm:p-4"
       onClick={onClose}
     >
       <div

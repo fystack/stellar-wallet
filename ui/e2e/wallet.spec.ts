@@ -102,13 +102,22 @@ test('send validation: bad address + insufficient balance block submit', async (
   await expect(review).toBeDisabled()
 })
 
-test('receive modal shows the address and listens', async ({ page }) => {
+test('receive modal stays centered and listens for payments', async ({ page }) => {
   await register(page)
   const addr = await createWalletAndOpen(page, true)
+  const viewportWidth = 639 // one pixel below Tailwind's sm breakpoint
+  await page.setViewportSize({ width: viewportWidth, height: 900 })
   await page.getByRole('button', { name: 'Receive' }).click()
-  await expect(
-    page.getByRole('heading', { name: 'Receive' }),
-  ).toBeVisible()
+  const heading = page.getByRole('heading', { name: 'Receive' })
+  await expect(heading).toBeVisible()
+
+  const modal = heading.locator('../..')
+  const box = await modal.boundingBox()
+  expect(box).not.toBeNull()
+  expect(
+    Math.abs(box!.x + box!.width / 2 - viewportWidth / 2),
+  ).toBeLessThanOrEqual(1)
+
   await expect(page.getByText(addr).first()).toBeVisible()
   await expect(page.getByText(/Listening for incoming/)).toBeVisible()
 })
