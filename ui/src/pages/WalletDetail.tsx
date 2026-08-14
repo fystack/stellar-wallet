@@ -216,21 +216,24 @@ export default function WalletDetail({
         ) : (
           <div className="mb-5">
             {/* native asset — headline */}
-            <div className="mb-3 flex items-center gap-2.5">
-              <TokenLogo symbol={assets[0]?.symbol ?? wallet.symbol} size={30} />
-              <div>
+            <div className="mb-3">
+              <div className="flex items-center gap-2.5">
+                <TokenLogo
+                  symbol={assets[0]?.symbol ?? wallet.symbol}
+                  size={30}
+                />
                 <div className="text-4xl font-extrabold leading-none">
                   {formatAmount(assets[0]?.balance ?? '0')}{' '}
                   <span className="text-xl font-semibold text-muted">
                     {assets[0]?.symbol ?? wallet.symbol}
                   </span>
                 </div>
-                {assets[0] && usd(assets[0].symbol, assets[0].balance) && (
-                  <div className="mt-1 text-sm text-muted">
-                    ≈ {usd(assets[0].symbol, assets[0].balance)}
-                  </div>
-                )}
               </div>
+              {assets[0] && usd(assets[0].symbol, assets[0].balance) && (
+                <div className="mt-1.5 pl-[40px] text-sm text-muted">
+                  ≈ {usd(assets[0].symbol, assets[0].balance)}
+                </div>
+              )}
             </div>
             {/* additional held tokens */}
             {assets.length > 1 && (
