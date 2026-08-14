@@ -60,18 +60,22 @@ export default function TxTimeline({ status }: { status: TxStatus }) {
               <div className="relative grid place-items-center">
                 {/* pulsing ring on the in-progress step */}
                 {state === 'active' && (
-                  <span className="absolute inline-flex h-7 w-7 animate-ping bg-brand/25" />
+                  <span className="absolute inline-flex h-7 w-7 animate-ping rounded-md bg-brand/25" />
                 )}
                 <div
+                  style={{
+                    animation: 'tlPop .45s cubic-bezier(.34,1.56,.64,1) both',
+                    animationDelay: `${i * 0.09}s`,
+                  }}
                   className={
-                    'relative grid h-7 w-7 shrink-0 place-items-center border-2 transition-colors duration-300 ' +
+                    'relative grid h-7 w-7 shrink-0 place-items-center rounded-md border-2 shadow-sm transition-colors duration-300 ' +
                     (state === 'done'
                       ? 'border-green-500 bg-green-500 text-white'
                       : state === 'active'
                         ? 'border-brand bg-white text-brand'
                         : state === 'failed'
                           ? 'border-red-500 bg-red-500 text-white'
-                          : 'border-line bg-white text-[#cbd3de]')
+                          : 'border-line bg-white text-[#cbd3de] shadow-none')
                   }
                 >
                   {state === 'done' && <CheckIcon size={13} />}
@@ -81,11 +85,14 @@ export default function TxTimeline({ status }: { status: TxStatus }) {
                 </div>
               </div>
               {!isLast && (
-                <div className="relative mt-1 h-8 w-0.5 bg-line">
-                  {/* connector fills green once this step is done */}
+                <div className="relative mt-1 h-8 w-0.5 overflow-hidden rounded-full bg-line">
+                  {/* connector fills green once this step is done — drawn top→down, staggered */}
                   <div
                     className="absolute inset-x-0 top-0 bg-green-400 transition-all duration-500"
-                    style={{ height: state === 'done' ? '100%' : '0%' }}
+                    style={{
+                      height: state === 'done' ? '100%' : '0%',
+                      transitionDelay: `${i * 0.09 + 0.15}s`,
+                    }}
                   />
                   {state === 'done' && !nextDone && (
                     <div className="absolute inset-x-0 top-0 h-2 animate-pulse bg-brand" />
