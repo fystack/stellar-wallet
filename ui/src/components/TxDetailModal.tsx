@@ -6,6 +6,7 @@ import CopyAddress from './CopyAddress.tsx'
 import { TokenLogo } from '../logos.tsx'
 import { api, explorerTx } from '../api.ts'
 import { formatAmount, formatUsd } from '../format.ts'
+import { friendlyTxError } from '../txError.ts'
 import type { Transaction } from '../types.ts'
 
 const NETWORK: Record<string, string> = {
@@ -145,16 +146,34 @@ export default function TxDetailModal({
         )}
       </div>
 
-      {tx.status === 'failed' && (
-        <div className="mb-6 border border-[#f0c2c2] bg-[#fff5f5] px-3.5 py-3">
-          <div className="mb-1 text-sm font-semibold text-[#d33a3a]">
-            Transaction failed
-          </div>
-          <div className="font-mono text-xs text-ink-soft">
-            {tx.error || 'Unknown error'}
-          </div>
-        </div>
-      )}
+      {tx.status === 'failed' &&
+        (() => {
+          const friendly = friendlyTxError(tx.error)
+          return (
+            <div className="mb-6 border border-[#f0c2c2] bg-[#fff5f5] px-3.5 py-3">
+              <div className="mb-1 text-sm font-semibold text-[#d33a3a]">
+                Transaction failed
+              </div>
+              {friendly ? (
+                <>
+                  <div className="text-sm text-ink">{friendly.title}</div>
+                  {friendly.hint && (
+                    <div className="mt-1 text-xs text-ink-soft">
+                      {friendly.hint}
+                    </div>
+                  )}
+                  <div className="mt-2 font-mono text-[11px] text-muted">
+                    {tx.error}
+                  </div>
+                </>
+              ) : (
+                <div className="font-mono text-xs text-ink-soft">
+                  {tx.error || 'Unknown error'}
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
       {tx.txHash && (
         <div className="mb-6">
