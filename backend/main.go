@@ -1,105 +1,59 @@
 package main
 
 import (
-	"database/sql"
 	"log"
+	"net/http"
 	"os"
+	"strconv"
+	"time"
 
-	"github.com/gin-gonic/gin"
+	"stellar-wallet-backend/internal/app"
+	"stellar-wallet-backend/internal/auth"
+	"stellar-wallet-backend/internal/chain"
+	"stellar-wallet-backend/internal/cluster"
+	"stellar-wallet-backend/internal/mpcium"
+	"stellar-wallet-backend/internal/realtime"
+	"stellar-wallet-backend/internal/storage/sqlite"
 )
-
-type server struct {
-	db  *sql.DB
-	hub *hub
-	mpc *mpc
-}
 
 func main() {
 	dbPath := getenv("DB_PATH", "wallet.db")
-	db, err := openDB(dbPath)
+	db, err := sqlite.Open(dbPath)
 	if err != nil {
 		log.Fatalf("open db: %v", err)
 	}
 	defer db.Close()
 
-	s := &server{db: db, hub: newHub()}
+	httpClient := &http.Client{Timeout: 20 * time.Second}
+	chainClient := chain.NewClient(chain.DefaultHorizonURL, chain.DefaultSolanaURL, httpClient)
+	authManager := auth.New([]byte("dev-secret-change-me"), 24*time.Hour)
+	healthBase, _ := strconv.Atoi(getenv("HEALTH_BASE_PORT", "8091"))
+	clusterClient := cluster.NewClient(httpClient, getenv("CONSUL_ADDR", "10.10.0.1:8500"), healthBase)
+	server := app.NewServer(app.Dependencies{
+		Store:   sqlite.NewStore(db),
+		Auth:    authManager,
+		Chain:   chainClient,
+		Cluster: clusterClient,
+		Hub:     realtime.NewHub(),
+	})
 
 	natsURL := getenv("NATS_URL", "nats://10.10.0.1:4222")
 	keyPath := getenv("INITIATOR_KEY", "../mpcium/event_initiator.key")
-	m, err := newMPC(s, natsURL, keyPath)
+	mpcClient, err := mpcium.New(natsURL, keyPath, server.MPCCallbacks())
 	if err != nil {
 		log.Fatalf("connect mpcium: %v", err)
 	}
-	s.mpc = m
+	defer mpcClient.Close()
+	server.SetMPC(mpcClient)
 	log.Printf("linked to mpcium cluster via %s", natsURL)
 
-	s.applyRPCConfig() // load any custom RPC endpoints from settings
-	s.startBalanceRefresher()
-
-	r := gin.Default()
-	r.Use(corsMiddleware())
-
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
-	})
-
-	// MPC cluster status — real peer list + readiness from Consul.
-	r.GET("/api/v1/cluster", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"threshold": "2-of-3",
-			"nodes":     clusterNodes(),
-		})
-	})
-
-	v1 := r.Group("/api/v1")
-	{
-		v1.POST("/auth/register", s.register)
-		v1.POST("/auth/login", s.login)
-		v1.GET("/events", s.events) // SSE; token via ?token=
-
-		v1.GET("/prices", s.getPrices) // public price feed
-
-		auth := v1.Group("")
-		auth.Use(authMiddleware())
-		{
-			auth.GET("/wallets", s.listWallets)
-			auth.POST("/wallets", s.createWallet)
-			auth.GET("/wallets/:id", s.getWallet)
-			auth.DELETE("/wallets/:id", s.deleteWallet)
-			auth.GET("/wallets/:id/balance", s.walletBalance)
-			auth.POST("/wallets/:id/fund", s.fundWallet)
-			auth.POST("/wallets/:id/trustline", s.addTrustline)
-			auth.GET("/wallets/:id/sync", s.syncWallet)
-			auth.GET("/chains", s.getChains)
-			auth.GET("/config", s.getConfig)
-			auth.PUT("/config", s.putConfig)
-			auth.POST("/assets", s.addAsset)
-			auth.DELETE("/assets", s.removeAsset)
-			auth.GET("/wallets/:id/transactions", s.listWalletTxns)
-			auth.POST("/transactions", s.createTxn)
-			auth.GET("/transactions/:id", s.getTxn)
-			auth.GET("/tx/:hash/chain", s.txOnChain)
-		}
-	}
+	server.ApplyRPCConfig()
+	server.StartBalanceRefresher()
 
 	addr := getenv("ADDR", ":8080")
 	log.Printf("backend listening on %s (db=%s)", addr, dbPath)
-	if err := r.Run(addr); err != nil {
+	if err := server.Router(getenv("CORS_ORIGIN", "http://localhost:5173")).Run(addr); err != nil {
 		log.Fatal(err)
-	}
-}
-
-func corsMiddleware() gin.HandlerFunc {
-	origin := getenv("CORS_ORIGIN", "http://localhost:5173")
-	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", origin)
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-		c.Next()
 	}
 }
 
