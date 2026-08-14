@@ -11,7 +11,7 @@ import (
 	"stellar-wallet-backend/internal/auth"
 	"stellar-wallet-backend/internal/chain"
 	"stellar-wallet-backend/internal/cluster"
-	"stellar-wallet-backend/internal/mpcium"
+	"stellar-wallet-backend/internal/mpc"
 	"stellar-wallet-backend/internal/realtime"
 	"stellar-wallet-backend/internal/storage/sqlite"
 )
@@ -39,7 +39,7 @@ func main() {
 
 	natsURL := getenv("NATS_URL", "nats://10.10.0.1:4222")
 	keyPath := getenv("INITIATOR_KEY", "../mpcium/event_initiator.key")
-	mpcClient, err := mpcium.New(natsURL, keyPath, server.MPCCallbacks())
+	mpcClient, err := mpc.New(natsURL, keyPath, server.MPCCallbacks())
 	if err != nil {
 		log.Fatalf("connect mpcium: %v", err)
 	}

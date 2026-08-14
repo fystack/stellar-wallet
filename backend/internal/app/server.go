@@ -6,7 +6,7 @@ import (
 	"stellar-wallet-backend/internal/auth"
 	"stellar-wallet-backend/internal/chain"
 	"stellar-wallet-backend/internal/cluster"
-	"stellar-wallet-backend/internal/mpcium"
+	"stellar-wallet-backend/internal/mpc"
 	"stellar-wallet-backend/internal/realtime"
 	"stellar-wallet-backend/internal/store"
 
@@ -49,8 +49,8 @@ func (s *Server) SetMPC(client MPCClient) {
 	s.mpc = client
 }
 
-func (s *Server) MPCCallbacks() mpcium.Callbacks {
-	return mpcium.Callbacks{OnKeygen: s.onKeygen, OnSign: s.onSign}
+func (s *Server) MPCCallbacks() mpc.Callbacks {
+	return mpc.Callbacks{OnKeygen: s.onKeygen, OnSign: s.onSign}
 }
 
 func (s *Server) Router(corsOrigin string) *gin.Engine {

@@ -5,10 +5,10 @@ import (
 	"log"
 
 	"stellar-wallet-backend/internal/chain"
-	"stellar-wallet-backend/internal/mpcium"
+	"stellar-wallet-backend/internal/mpc"
 )
 
-func (s *Server) onKeygen(result mpcium.KeygenResult) {
+func (s *Server) onKeygen(result mpc.KeygenResult) {
 	if !result.Successful {
 		log.Printf("keygen failed wallet=%s reason=%s", result.WalletID, result.Error)
 		s.store.SetWalletStatus(result.WalletID, "failed")
@@ -27,7 +27,7 @@ func (s *Server) onKeygen(result mpcium.KeygenResult) {
 	}
 }
 
-func (s *Server) onSign(result mpcium.SignResult) {
+func (s *Server) onSign(result mpc.SignResult) {
 	transaction, ok := s.store.TransactionByID(result.TransactionID)
 	if !ok {
 		return

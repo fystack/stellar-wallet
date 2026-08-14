@@ -36,7 +36,7 @@ main.go
   ├── chain/     Stellar/Solana RPC, transaction building, prices
   ├── cluster/   Consul peer discovery and MPC node health
   ├── domain/    Wallet, transaction, asset, and cluster models
-  ├── mpcium/    NATS/mpcium client adapter
+  ├── mpc/       NATS/mpcium client adapter
   ├── realtime/  Per-user SSE event hub
   ├── store/     Database-neutral persistence contract
   └── storage/

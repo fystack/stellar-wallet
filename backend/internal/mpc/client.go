@@ -1,4 +1,4 @@
-package mpcium
+package mpc
 
 import (
 	"github.com/fystack/mpcium/pkg/client"
