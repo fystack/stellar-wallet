@@ -335,6 +335,22 @@ func stellarSubmit(envelopeB64, pubkeyHex string, sig []byte) (string, error) {
 	return resp.Hash, nil
 }
 
+// stellarTxOnChain fetches confirmed on-chain metadata for a transaction hash.
+func stellarTxOnChain(hash string) (map[string]any, error) {
+	t, err := horizon().TransactionDetail(hash)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"fee":        fmt.Sprintf("%.5f", float64(t.FeeCharged)/1e7),
+		"ledger":     t.Ledger,
+		"operations": t.OperationCount,
+		"source":     t.Account,
+		"memo":       t.Memo,
+		"successful": t.Successful,
+	}, nil
+}
+
 // horizonError turns a Horizon submission error into a readable result-code message.
 func horizonError(err error) error {
 	if p := horizonclient.GetError(err); p != nil {

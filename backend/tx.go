@@ -21,6 +21,16 @@ func (s *server) listWalletTxns(c *gin.Context) {
 	c.JSON(http.StatusOK, s.txnsWhere(`wallet_id = ? AND user_id = ?`, walletID, userID))
 }
 
+// txOnChain returns confirmed on-chain metadata (fee, ledger) for a tx hash.
+func (s *server) txOnChain(c *gin.Context) {
+	meta, err := stellarTxOnChain(c.Param("hash"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found on chain yet"})
+		return
+	}
+	c.JSON(http.StatusOK, meta)
+}
+
 func (s *server) getTxn(c *gin.Context) {
 	txns := s.txnsWhere(`id = ? AND user_id = ?`, c.Param("id"), c.GetString("userID"))
 	if len(txns) == 0 {

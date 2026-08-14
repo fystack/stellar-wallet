@@ -78,6 +78,7 @@ func main() {
 			auth.GET("/wallets/:id/transactions", s.listWalletTxns)
 			auth.POST("/transactions", s.createTxn)
 			auth.GET("/transactions/:id", s.getTxn)
+			auth.GET("/tx/:hash/chain", s.txOnChain)
 		}
 	}
 
