@@ -93,8 +93,8 @@ function Pref({
   disabled?: boolean
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-line py-3.5 last:border-none">
-      <div>
+    <div className="flex items-start justify-between gap-4 border-b border-line py-3.5 last:border-none sm:items-center">
+      <div className="min-w-0">
         <div className="font-semibold">{name}</div>
         <div className="mt-0.5 text-sm text-muted">{desc}</div>
       </div>
@@ -200,7 +200,7 @@ export default function Settings() {
   return (
     <div className="mx-auto mt-2.5 max-w-[760px]">
       <header className="mb-6">
-        <h1 className="mb-2 text-3xl font-bold">Settings</h1>
+        <h1 className="mb-2 text-2xl font-bold sm:text-3xl">Settings</h1>
         <p className="text-base leading-relaxed text-muted">
           Manage your MPC cluster, security, and preferences.
         </p>
@@ -220,9 +220,9 @@ export default function Settings() {
                   (n.online ? 'bg-green-600' : 'bg-[#cbd3de]')
                 }
               />
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <div className="font-semibold">{n.name}</div>
-                <div className="font-mono text-[13px] text-muted">{n.region}</div>
+                <div className="truncate font-mono text-[13px] text-muted">{n.region}</div>
               </div>
               <span
                 className={
@@ -235,7 +235,7 @@ export default function Settings() {
             </div>
           ))}
         </div>
-        <div className="flex items-center gap-2.5  bg-card px-3.5 py-3 text-sm text-ink-soft">
+        <div className="flex items-start gap-2.5 bg-card px-3.5 py-3 text-sm text-ink-soft sm:items-center">
           <span className="shrink-0 text-brand">
             <CheckShieldIcon size={18} />
           </span>
@@ -251,7 +251,7 @@ export default function Settings() {
         <div className="mb-5 flex flex-col gap-4">
           {/* Stellar */}
           <div>
-            <div className="mb-2 flex items-center gap-2.5">
+            <div className="mb-2 flex flex-wrap items-center gap-2.5">
               <ChainLogo chain="stellar" size={28} />
               <span className="font-semibold">Stellar</span>
               <span className="bg-card px-2 py-0.5 text-xs font-medium uppercase text-muted">
@@ -269,7 +269,7 @@ export default function Settings() {
 
           {/* Solana */}
           <div>
-            <div className="mb-2 flex items-center gap-2.5">
+            <div className="mb-2 flex flex-wrap items-center gap-2.5">
               <ChainLogo chain="solana" size={28} />
               <span className="font-semibold">Solana</span>
               <span className="bg-card px-2 py-0.5 text-xs font-medium uppercase text-muted">
@@ -289,7 +289,7 @@ export default function Settings() {
         <button
           onClick={saveRpc}
           disabled={savingRpc}
-          className="bg-brand px-4 py-2.5 font-semibold text-white transition-colors hover:bg-brand-deep disabled:opacity-50"
+          className="w-full bg-brand px-4 py-2.5 font-semibold text-white transition-colors hover:bg-brand-deep disabled:opacity-50 sm:w-auto"
         >
           {savingRpc ? 'Saving…' : 'Save endpoints'}
         </button>
@@ -374,14 +374,14 @@ export default function Settings() {
 
       <section className="surface mb-5 bg-[#fff7f7]">
         <h3 className="mb-[18px] text-[17px] font-bold">Danger zone</h3>
-        <div className="flex items-center justify-between gap-4">
-          <div>
+        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <div className="font-semibold">Sign out of all devices</div>
             <div className="mt-0.5 text-sm text-muted">
               End every active session immediately.
             </div>
           </div>
-          <button className="shrink-0 bg-[#ffe5e5] px-4 py-2.5 font-semibold text-[#d33a3a] hover:bg-[#fdd6d6]">
+          <button className="w-full shrink-0 bg-[#ffe5e5] px-4 py-2.5 font-semibold text-[#d33a3a] hover:bg-[#fdd6d6] sm:w-auto">
             Sign out all
           </button>
         </div>

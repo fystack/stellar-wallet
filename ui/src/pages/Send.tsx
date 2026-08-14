@@ -70,8 +70,8 @@ export default function Send({
 
   if (wallets.length === 0) {
     return (
-      <div className="mx-auto mt-16 max-w-[460px] text-center">
-        <div className="mx-auto mb-8 grid h-[78px] w-[78px] place-items-center  bg-brand text-white">
+      <div className="mx-auto mt-10 max-w-[460px] text-center sm:mt-16">
+        <div className="mx-auto mb-6 grid h-16 w-16 place-items-center bg-brand text-white sm:mb-8 sm:h-[78px] sm:w-[78px]">
           <SendIcon size={32} />
         </div>
         <h2 className="mb-2.5 text-2xl font-bold">No wallet to send from</h2>
@@ -79,7 +79,7 @@ export default function Send({
           Create a wallet first, then you can send assets across the Stellar
           network.
         </p>
-        <button className="cta" onClick={onGoCreate}>
+        <button className="cta w-full !px-6 sm:w-auto" onClick={onGoCreate}>
           Create your first wallet
         </button>
       </div>
@@ -107,7 +107,7 @@ export default function Send({
   return (
     <div className="mx-auto mt-2.5 max-w-[760px]">
       <header className="mb-6">
-        <h1 className="mb-2 text-3xl font-bold">Send</h1>
+        <h1 className="mb-2 text-2xl font-bold sm:text-3xl">Send</h1>
         <p className="text-base leading-relaxed text-muted">
           Transfer assets. The transaction is signed by 2 of 3 nodes — your key
           is never assembled.
@@ -156,7 +156,7 @@ export default function Send({
           )}
         </label>
 
-        <div className="flex gap-3.5">
+        <div className="flex flex-col gap-3.5 sm:flex-row">
           <label className="flex flex-1 flex-col gap-2">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-ink-soft">Amount</span>
@@ -180,7 +180,7 @@ export default function Send({
               onChange={(e) => setAmount(e.target.value)}
             />
           </label>
-          <label className="flex flex-col gap-2">
+          <label className="flex flex-col gap-2 sm:w-[180px]">
             <span className="text-sm font-semibold text-ink-soft">Asset</span>
             {assets.length > 1 ? (
               <div className="relative flex items-center">
@@ -256,7 +256,7 @@ export default function Send({
           )}
         </div>
 
-        <div className="flex items-center gap-2.5  bg-card px-3.5 py-3 text-sm text-ink-soft">
+        <div className="flex items-start gap-2.5 bg-card px-3.5 py-3 text-sm text-ink-soft sm:items-center">
           <span className="shrink-0 text-brand">
             <ShieldIcon size={18} />
           </span>

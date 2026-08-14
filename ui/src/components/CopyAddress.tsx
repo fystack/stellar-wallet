@@ -24,17 +24,19 @@ export default function CopyAddress({
       onClick={copy}
       title={address}
       className={
-        'group inline-flex max-w-full items-center gap-1.5 font-mono text-sm text-muted transition-colors hover:text-ink ' +
+        'group inline-flex min-w-0 max-w-full items-center gap-1.5 font-mono text-sm text-muted transition-colors hover:text-ink ' +
         className
       }
     >
-      <span className={truncate ? 'truncate' : ''}>{address}</span>
+      <span className={truncate ? 'min-w-0 truncate' : ''}>{address}</span>
       {copied ? (
-        <span className="text-green-600">
+        <span className="shrink-0 text-green-600">
           <CheckIcon size={13} />
         </span>
       ) : (
-        <CopyIcon size={13} />
+        <span className="shrink-0">
+          <CopyIcon size={13} />
+        </span>
       )}
     </button>
   )

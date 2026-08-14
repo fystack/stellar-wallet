@@ -198,15 +198,15 @@ export default function WalletDetail({
       </div>
 
       {confirmDel && (
-        <div className="mb-5 flex items-center justify-between gap-4 border border-[#f0c2c2] bg-[#fff7f7] px-4 py-3">
+        <div className="mb-5 flex flex-col items-start gap-3 border border-[#f0c2c2] bg-[#fff7f7] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <span className="text-sm text-ink-soft">
             Delete <strong>{wallet.name}</strong> and its history? This can't be
             undone.
           </span>
-          <div className="flex shrink-0 gap-2">
+          <div className="flex w-full shrink-0 gap-2 sm:w-auto">
             <button
               onClick={() => setConfirmDel(false)}
-              className="border border-line px-3 py-1.5 text-sm font-semibold text-ink-soft hover:bg-[#f2f5f9]"
+              className="flex-1 border border-line px-3 py-1.5 text-sm font-semibold text-ink-soft hover:bg-[#f2f5f9] sm:flex-none"
             >
               Cancel
             </button>
@@ -220,7 +220,7 @@ export default function WalletDetail({
                   setDeleting(false)
                 }
               }}
-              className="bg-[#d33a3a] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#bf2f2f] disabled:opacity-50"
+              className="flex-1 bg-[#d33a3a] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#bf2f2f] disabled:opacity-50 sm:flex-none"
             >
               {deleting ? 'Deleting…' : 'Delete'}
             </button>
@@ -229,7 +229,7 @@ export default function WalletDetail({
       )}
 
       <section className="surface mb-5">
-        <div className="mb-5 flex items-center justify-between gap-3">
+        <div className="mb-5 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <ChainLogo chain={wallet.chain} size={44} />
             <div className="min-w-0">
@@ -261,7 +261,7 @@ export default function WalletDetail({
                   symbol={assets[0]?.symbol ?? wallet.symbol}
                   size={30}
                 />
-                <div className="text-4xl font-extrabold leading-none">
+                <div className="min-w-0 text-3xl font-extrabold leading-none sm:text-4xl">
                   {formatAmount(assets[0]?.balance ?? '0')}{' '}
                   <span className="text-xl font-semibold text-muted">
                     {assets[0]?.symbol ?? wallet.symbol}
@@ -367,30 +367,30 @@ export default function WalletDetail({
             )
           })()}
 
-        <div className="flex gap-3">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3">
           <button
             onClick={onSend}
-            className="flex items-center gap-2 bg-brand px-5 py-3 font-semibold text-white transition-colors hover:bg-brand-deep"
+            className="flex items-center justify-center gap-2 bg-brand px-4 py-3 font-semibold text-white transition-colors hover:bg-brand-deep sm:px-5"
           >
             <SendIcon size={18} /> Send
           </button>
           <button
             onClick={() => setShowReceive(true)}
-            className="border border-line px-5 py-3 font-semibold text-ink-soft transition-colors hover:bg-[#f2f5f9]"
+            className="border border-line px-4 py-3 font-semibold text-ink-soft transition-colors hover:bg-[#f2f5f9] sm:px-5"
           >
             Receive
           </button>
           <button
             onClick={handleFund}
             disabled={funding}
-            className="border border-line px-5 py-3 font-semibold text-ink-soft transition-colors hover:bg-[#f2f5f9] disabled:opacity-50"
+            className="col-span-2 border border-line px-4 py-3 font-semibold text-ink-soft transition-colors hover:bg-[#f2f5f9] disabled:opacity-50 sm:col-auto sm:px-5"
           >
             {funding ? 'Funding…' : 'Fund (testnet)'}
           </button>
         </div>
       </section>
 
-      <div className="mb-1 flex items-center gap-2 px-1 text-sm text-ink-soft">
+      <div className="mb-1 flex items-start gap-2 px-1 text-sm text-ink-soft sm:items-center">
         <span className="text-brand">
           <ShieldIcon size={16} />
         </span>
@@ -428,7 +428,7 @@ export default function WalletDetail({
                 <button
                   key={t.id}
                   onClick={() => setOpenTxId(t.id)}
-                  className="flex items-center gap-3 border-b border-line py-3.5 text-left transition-colors last:border-none hover:bg-[#fafbfc]"
+                  className="flex items-center gap-2.5 border-b border-line py-3.5 text-left transition-colors last:border-none hover:bg-[#fafbfc] sm:gap-3"
                 >
                   <div className="relative shrink-0">
                     <TokenLogo symbol={t.symbol} size={36} />
@@ -451,7 +451,7 @@ export default function WalletDetail({
                       {fmtShort(t.createdAt)}
                     </div>
                   </div>
-                  <div className="shrink-0 text-right">
+                  <div className="max-w-[120px] shrink-0 text-right text-sm sm:max-w-none sm:text-base">
                     <div
                       className={
                         'font-semibold ' +
