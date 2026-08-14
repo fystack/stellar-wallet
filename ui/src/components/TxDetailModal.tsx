@@ -34,9 +34,9 @@ function Row({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-2">
+    <div className="flex flex-col items-start gap-1 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <span className="shrink-0 text-muted">{label}</span>
-      <span className="min-w-0 text-right">{children}</span>
+      <span className="min-w-0 max-w-full text-left sm:text-right">{children}</span>
     </div>
   )
 }
@@ -81,8 +81,8 @@ export default function TxDetailModal({
   return (
     <Modal title="Transaction" onClose={onClose} maxWidth={460}>
       {/* Amount header */}
-      <div className="mb-5 flex items-start justify-between">
-        <div className="flex items-center gap-3">
+      <div className="mb-5 flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <span
             className={
               'grid h-11 w-11 shrink-0 place-items-center text-xl font-bold ' +
@@ -95,7 +95,7 @@ export default function TxDetailModal({
           </span>
           <div>
             <div className="text-sm text-muted">{kind}</div>
-            <div className="flex items-center gap-1.5 text-2xl font-extrabold leading-tight">
+            <div className="flex flex-wrap items-center gap-1.5 text-xl font-extrabold leading-tight sm:text-2xl">
               <TokenLogo symbol={tx.symbol} size={22} />
               {isTrustline ? '' : incoming ? '+' : '−'}
               {formatAmount(tx.amount)}{' '}
@@ -115,7 +115,7 @@ export default function TxDetailModal({
           <CopyAddress
             address={tx.counterparty}
             truncate
-            className="max-w-[220px] text-ink"
+            className="max-w-full text-ink sm:max-w-[220px]"
           />
         </Row>
         <Row label="Asset">

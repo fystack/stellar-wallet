@@ -92,16 +92,16 @@ export default function CreateWalletModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex overflow-y-auto bg-black/40 p-3 sm:items-center sm:justify-center sm:p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[520px] border border-line bg-white p-7 shadow-2xl"
+        className="my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-[520px] overflow-y-auto border border-line bg-white p-4 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:p-7"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-6 flex items-start justify-between">
-          <div>
-            <h2 className="text-2xl font-bold">Create a new wallet</h2>
+        <div className="mb-5 flex items-start justify-between gap-3 sm:mb-6">
+          <div className="min-w-0">
+            <h2 className="text-xl font-bold sm:text-2xl">Create a new wallet</h2>
             <p className="mt-1 text-[15px] text-muted">
               Secured by 2-of-3 threshold signatures.
             </p>
@@ -117,7 +117,7 @@ export default function CreateWalletModal({
 
         <form onSubmit={handleSubmit}>
           <div className="mb-2 text-sm font-semibold text-ink-soft">Choose chain</div>
-          <div className="mb-5 grid grid-cols-2 gap-3">
+          <div className="mb-5 grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3">
             {chains.map((c) => {
               const active = c.id === chain
               return (
@@ -162,7 +162,7 @@ export default function CreateWalletModal({
             />
           </label>
 
-          <div className="mb-6 flex items-center gap-2.5  bg-card px-3.5 py-3 text-sm text-ink-soft">
+          <div className="mb-6 flex items-start gap-2.5 bg-card px-3.5 py-3 text-sm text-ink-soft sm:items-center">
             <span className="shrink-0 text-brand">
               <ShieldIcon size={18} />
             </span>
@@ -178,7 +178,7 @@ export default function CreateWalletModal({
             </div>
           )}
 
-          <div className="flex gap-3">
+          <div className="flex flex-col-reverse gap-2.5 sm:flex-row sm:gap-3">
             <button
               type="button"
               onClick={onClose}

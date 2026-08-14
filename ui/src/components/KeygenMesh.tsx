@@ -265,7 +265,7 @@ export default function KeygenMesh({ done = false }: { done?: boolean }) {
         </p>
       ) : (
         <div className="flex flex-col items-center gap-2">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2">
             {STEPS.map((label, i) => (
               <div key={label} className="flex items-center gap-2">
                 <div
@@ -287,7 +287,7 @@ export default function KeygenMesh({ done = false }: { done?: boolean }) {
                   {label}
                 </div>
                 {i < STEPS.length - 1 && (
-                  <span className="h-px w-4 bg-line" />
+                  <span className="hidden h-px w-4 bg-line sm:block" />
                 )}
               </div>
             ))}
