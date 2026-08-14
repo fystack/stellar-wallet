@@ -97,7 +97,16 @@ function WalletGrid({
 
 export default function Wallets({ wallets, onCreate, onOpen }: Props) {
   const hasWallets = wallets.length > 0
-  const [hidden, setHidden] = useState(false)
+  // Shared with the Settings "Hide balances" pref, and persisted.
+  const [hidden, setHidden] = useState(
+    () => localStorage.getItem('pref_hide') === '1',
+  )
+  const toggleHidden = () =>
+    setHidden((h) => {
+      const next = !h
+      localStorage.setItem('pref_hide', next ? '1' : '0')
+      return next
+    })
 
   // With at least one wallet, skip the onboarding hero — just show the list.
   if (hasWallets) {
@@ -107,7 +116,7 @@ export default function Wallets({ wallets, onCreate, onOpen }: Props) {
           <h2 className="text-2xl font-bold">My Wallets</h2>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setHidden((h) => !h)}
+              onClick={toggleHidden}
               className="border border-line p-2 text-muted hover:bg-[#f2f5f9]"
               aria-label={hidden ? 'Show balances' : 'Hide balances'}
               title={hidden ? 'Show balances' : 'Hide balances'}
