@@ -230,9 +230,9 @@ export default function WalletDetail({
 
       <section className="surface mb-5">
         <div className="mb-5 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
+          <div className="flex w-full min-w-0 items-center gap-3 sm:flex-1">
             <ChainLogo chain={wallet.chain} size={44} />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="text-lg font-bold">{wallet.name}</div>
               <CopyAddress address={wallet.address} truncate />
             </div>
