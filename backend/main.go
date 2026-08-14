@@ -26,7 +26,7 @@ func main() {
 
 	natsURL := getenv("NATS_URL", "nats://10.10.0.1:4222")
 	keyPath := getenv("INITIATOR_KEY", "../mpcium/event_initiator.key")
-	m, err := newMPC(s, natsURL, keyPath, getenv("CLIENT_ID", "stellar-wallet-backend"))
+	m, err := newMPC(s, natsURL, keyPath)
 	if err != nil {
 		log.Fatalf("connect mpcium: %v", err)
 	}

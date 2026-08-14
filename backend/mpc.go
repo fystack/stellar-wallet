@@ -17,7 +17,7 @@ type mpc struct {
 	srv    *server
 }
 
-func newMPC(s *server, natsURL, keyPath, clientID string) (*mpc, error) {
+func newMPC(s *server, natsURL, keyPath string) (*mpc, error) {
 	nc, err := nats.Connect(natsURL)
 	if err != nil {
 		return nil, err
@@ -31,7 +31,6 @@ func newMPC(s *server, natsURL, keyPath, clientID string) (*mpc, error) {
 	c := client.NewMPCClient(client.Options{
 		NatsConn: nc,
 		Signer:   signer,
-		ClientID: clientID,
 	})
 
 	m := &mpc{client: c, nats: nc, srv: s}
