@@ -40,8 +40,8 @@ export default function Login({ onLogin }: { onLogin: (email: string) => void })
           </h1>
           <p className="mt-1.5 text-[15px] text-muted">
             {mode === 'login'
-              ? 'Sign in to your MPC-secured wallet.'
-              : 'Set up access to your MPC-secured wallet.'}
+              ? 'Sign in to your Mpcium wallet.'
+              : 'Set up access to your Mpcium wallet.'}
           </p>
         </div>
 

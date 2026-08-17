@@ -22,8 +22,8 @@ function ChainBadge({
         (online === undefined
           ? 'text-muted'
           : online
-            ? 'text-green-600'
-            : 'text-[#d33a3a]')
+            ? 'text-success'
+            : 'text-danger')
       }
     >
       <span
@@ -33,7 +33,7 @@ function ChainBadge({
             ? 'bg-[#d5dbe4]'
             : online
               ? 'bg-green-600'
-              : 'bg-[#d33a3a]')
+              : 'bg-danger')
         }
       />
       {online === undefined ? 'Checking…' : online ? 'Online' : 'Unreachable'}
@@ -227,7 +227,7 @@ export default function Settings() {
               <span
                 className={
                   'text-[13px] font-semibold ' +
-                  (n.online ? 'text-green-600' : 'text-muted')
+                  (n.online ? 'text-success' : 'text-muted')
                 }
               >
                 {n.online ? 'Online' : 'Offline'}
@@ -318,7 +318,7 @@ export default function Settings() {
                 </div>
                 <button
                   onClick={() => removeAsset(a.code, a.issuer)}
-                  className="shrink-0 text-sm font-semibold text-muted hover:text-[#d33a3a]"
+                  className="shrink-0 text-sm font-semibold text-muted hover:text-danger"
                 >
                   Remove
                 </button>
@@ -381,7 +381,7 @@ export default function Settings() {
               End every active session immediately.
             </div>
           </div>
-          <button className="w-full shrink-0 bg-[#ffe5e5] px-4 py-2.5 font-semibold text-[#d33a3a] hover:bg-[#fdd6d6] sm:w-auto">
+          <button className="w-full shrink-0 bg-[#ffe5e5] px-4 py-2.5 font-semibold text-danger hover:bg-[#fdd6d6] sm:w-auto">
             Sign out all
           </button>
         </div>

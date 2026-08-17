@@ -110,7 +110,7 @@ export default function CreateWalletModal({
           <button
             onClick={onClose}
             aria-label="Close"
-            className="grid h-9 w-9 place-items-center  text-muted hover:bg-[#f2f5f9]"
+            className="grid h-9 w-9 place-items-center  text-muted hover:bg-hover"
           >
             ✕
           </button>
@@ -182,7 +182,7 @@ export default function CreateWalletModal({
           </div>
 
           {error && (
-            <div className="mb-4 bg-[#fdecec] px-3 py-2 text-sm text-[#d33a3a]">
+            <div className="mb-4 bg-danger-soft px-3 py-2 text-sm text-danger">
               {error}
             </div>
           )}
@@ -191,7 +191,7 @@ export default function CreateWalletModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 border border-line py-3.5 font-semibold text-ink-soft transition hover:bg-[#f2f5f9]"
+              className="flex-1 border border-line py-3.5 font-semibold text-ink-soft transition hover:bg-hover"
             >
               Cancel
             </button>

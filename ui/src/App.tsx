@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { GridIcon, SendIcon, SettingsIcon } from './icons.tsx'
+import { GridIcon, SendIcon, SettingsIcon, SwapIcon } from './icons.tsx'
 import Wallets from './pages/Wallets.tsx'
 import Send from './pages/Send.tsx'
+import Swap from './pages/Swap.tsx'
 import Settings from './pages/Settings.tsx'
 import WalletDetail from './pages/WalletDetail.tsx'
 import Login from './pages/Login.tsx'
@@ -12,7 +13,7 @@ import { Toaster, toast } from './toast.tsx'
 import { api, getEmail, getToken, clearSession, BASE } from './api.ts'
 import type { Chain, Transaction, Wallet } from './types.ts'
 
-type PageKey = 'wallets' | 'send' | 'settings'
+type PageKey = 'wallets' | 'send' | 'swap' | 'settings'
 
 type NavItem = {
   key: PageKey
@@ -23,6 +24,7 @@ type NavItem = {
 const nav: NavItem[] = [
   { key: 'wallets', label: 'Wallets', icon: <GridIcon /> },
   { key: 'send', label: 'Send', icon: <SendIcon /> },
+  { key: 'swap', label: 'Swap', icon: <SwapIcon /> },
   { key: 'settings', label: 'Settings', icon: <SettingsIcon /> },
 ]
 
@@ -32,7 +34,7 @@ function initialRoute(): { page: PageKey; openId: string | null } {
   if (h.startsWith('wallet/')) {
     return { page: 'wallets', openId: h.slice('wallet/'.length) }
   }
-  if (h === 'send' || h === 'settings' || h === 'wallets') {
+  if (h === 'send' || h === 'swap' || h === 'settings' || h === 'wallets') {
     return { page: h, openId: null }
   }
   return { page: 'wallets', openId: null }
@@ -122,6 +124,7 @@ export default function App() {
     to: string
     amount: string
     memo: string
+    memoType?: string
     asset?: { code: string; issuer: string }
   }) {
     try {
@@ -131,6 +134,7 @@ export default function App() {
         data.amount,
         data.memo,
         data.asset,
+        data.memoType,
       )
       setLiveTxns((prev) => ({ ...prev, [tx.id]: tx }))
       setFocusTxId(tx.id) // auto-open its detail so the signing animation shows
@@ -139,6 +143,31 @@ export default function App() {
       toast.success('Transaction submitted for signing')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to send')
+    }
+  }
+
+  async function handleSwap(data: {
+    walletId: string
+    from: string
+    to: string
+    amount: string
+    slippageBps: number
+  }) {
+    try {
+      const { transaction } = await api.createSwap(
+        data.walletId,
+        data.from,
+        data.to,
+        data.amount,
+        data.slippageBps,
+      )
+      setLiveTxns((prev) => ({ ...prev, [transaction.id]: transaction }))
+      setFocusTxId(transaction.id)
+      setOpenWalletId(data.walletId)
+      setPage('wallets')
+      toast.success('Swap submitted for signing')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to swap')
     }
   }
 
@@ -166,18 +195,27 @@ export default function App() {
 
   return (
     <div className="flex min-h-full min-w-0 flex-col md:flex-row">
-      <aside className="sticky top-0 z-40 flex h-16 w-full flex-shrink-0 items-center border-b border-line bg-white px-4 md:static md:h-auto md:w-[260px] md:flex-col md:items-stretch md:border-b-0 md:border-r md:p-4">
-        <div className="flex items-center gap-2.5 md:gap-3 md:px-2 md:pb-6 md:pt-1.5">
+      <aside className="sticky top-0 z-40 flex h-16 w-full flex-shrink-0 items-center border-b border-line bg-white px-4 md:top-0 md:h-screen md:w-[260px] md:flex-col md:items-stretch md:overflow-y-auto md:border-b-0 md:border-r md:p-4">
+        <button
+          type="button"
+          onClick={() => {
+            setOpenWalletId(null)
+            setSendFromId(undefined)
+            setPage('wallets')
+          }}
+          aria-label="Go to wallets"
+          className="flex items-center gap-2.5 text-left transition-opacity hover:opacity-80 md:gap-3 md:px-2 md:pb-6 md:pt-1.5"
+        >
           <AppLogo size={40} />
           <div>
-            <div className="font-bold md:text-lg">Wallet</div>
+            <div className="font-bold md:text-lg">Mpcium</div>
             <div className="hidden text-[13px] text-muted sm:block">
-              MPC-secured
+              MPC-secured wallet
             </div>
           </div>
-        </div>
+        </button>
 
-        <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 border-t border-line bg-white px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 md:static md:flex md:flex-col md:gap-1 md:border-0 md:p-0">
+        <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-line bg-white px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 md:static md:flex md:flex-col md:gap-1 md:border-0 md:p-0">
           {nav.map((item) => {
             const active = page === item.key && !openWallet
             return (
@@ -192,7 +230,7 @@ export default function App() {
                   'flex min-w-0 flex-col items-center gap-1 px-1 py-2 text-xs font-semibold transition md:flex-row md:gap-3 md:px-3.5 md:py-3 md:text-base ' +
                   (active
                     ? 'bg-brand-soft text-brand'
-                    : 'text-ink-soft hover:bg-[#f2f5f9]')
+                    : 'text-ink-soft hover:bg-hover')
                 }
               >
                 <span className="grid place-items-center">{item.icon}</span>
@@ -249,6 +287,14 @@ export default function App() {
                 preselectId={sendFromId}
                 onGoCreate={() => setShowCreate(true)}
                 onSubmit={handleSend}
+              />
+            )}
+            {page === 'swap' && (
+              <Swap
+                wallets={wallets}
+                preselectId={sendFromId}
+                onGoCreate={() => setShowCreate(true)}
+                onSubmit={handleSwap}
               />
             )}
             {page === 'settings' && <Settings />}

@@ -2,9 +2,16 @@ import { useId } from 'react'
 
 type Props = { size?: number }
 
-// App brand mark — a shield (security) holding 3 nodes (the MPC cluster).
+// App brand mark — a 3-node mesh forming a triangle: the 2-of-3 MPC cluster.
 export function AppLogo({ size = 46 }: Props) {
   const id = useId()
+  const glow = useId()
+  // Triangle vertices (the three signing nodes).
+  const nodes = [
+    { x: 22, y: 13.5 },
+    { x: 13, y: 29.5 },
+    { x: 31, y: 29.5 },
+  ]
   return (
     <svg width={size} height={size} viewBox="0 0 44 44">
       <defs>
@@ -12,25 +19,24 @@ export function AppLogo({ size = 46 }: Props) {
           <stop offset="0%" stopColor="#3b82ff" />
           <stop offset="100%" stopColor="#0b53e6" />
         </linearGradient>
+        <radialGradient id={glow} cx="50%" cy="30%" r="75%">
+          <stop offset="0%" stopColor="#fff" stopOpacity="0.22" />
+          <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+        </radialGradient>
       </defs>
-      <rect width="44" height="44" rx="11" fill={`url(#${id})`} />
-      <path
-        d="M22 9.5l8.5 3.2v7c0 6.4-4.1 9.7-8.5 11.3-4.4-1.6-8.5-4.9-8.5-11.3v-7L22 9.5z"
-        fill="rgba(255,255,255,0.16)"
-        stroke="#fff"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
+      <rect width="44" height="44" rx="12" fill={`url(#${id})`} />
+      <rect width="44" height="44" rx="12" fill={`url(#${glow})`} />
+      {/* edges */}
+      <g stroke="#fff" strokeOpacity="0.55" strokeWidth="1.5">
+        <path d={`M${nodes[0].x} ${nodes[0].y}L${nodes[1].x} ${nodes[1].y}`} />
+        <path d={`M${nodes[1].x} ${nodes[1].y}L${nodes[2].x} ${nodes[2].y}`} />
+        <path d={`M${nodes[2].x} ${nodes[2].y}L${nodes[0].x} ${nodes[0].y}`} />
+      </g>
+      {/* nodes */}
       <g fill="#fff">
-        <circle cx="18" cy="21" r="1.7" />
-        <circle cx="22" cy="21" r="1.7" />
-        <circle cx="26" cy="21" r="1.7" />
-        <path
-          d="M18 21h8"
-          stroke="#fff"
-          strokeWidth="1.2"
-          strokeOpacity="0.55"
-        />
+        {nodes.map((n, i) => (
+          <circle key={i} cx={n.x} cy={n.y} r="3.4" />
+        ))}
       </g>
     </svg>
   )
@@ -133,6 +139,35 @@ export function UsdtLogo({ size = 28 }: Props) {
   )
 }
 
+export function BtcLogo({ size = 28 }: Props) {
+  return (
+    <CoinBadge size={size} bg="#F7931A">
+      <text
+        x="20"
+        y="27"
+        textAnchor="middle"
+        fontSize="18"
+        fontWeight="700"
+        fill="#fff"
+        fontFamily="Arial, sans-serif"
+      >
+        ₿
+      </text>
+    </CoinBadge>
+  )
+}
+
+export function EthLogo({ size = 28 }: Props) {
+  return (
+    <CoinBadge size={size} bg="#627EEA">
+      <g fill="#fff">
+        <polygon points="20,6 28,20 20,24.5 12,20" opacity="0.95" />
+        <polygon points="20,26 28,21.5 20,34 12,21.5" opacity="0.7" />
+      </g>
+    </CoinBadge>
+  )
+}
+
 // --- Dispatchers ---
 
 export function ChainLogo({ chain, size = 28 }: { chain: string; size?: number }) {
@@ -148,6 +183,10 @@ export function TokenLogo({ symbol, size = 28 }: { symbol: string; size?: number
       return <UsdcLogo size={size} />
     case 'USDT':
       return <UsdtLogo size={size} />
+    case 'BTC':
+      return <BtcLogo size={size} />
+    case 'ETH':
+      return <EthLogo size={size} />
     case 'XLM':
       return <StellarLogo size={size} />
     default:

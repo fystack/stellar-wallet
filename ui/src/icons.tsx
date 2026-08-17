@@ -36,6 +36,17 @@ export function SendIcon({ size = 20 }: IconProps) {
   )
 }
 
+export function SwapIcon({ size = 20 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M7 4v13" />
+      <path d="M4 7l3-3 3 3" />
+      <path d="M17 20V7" />
+      <path d="M20 17l-3 3-3-3" />
+    </svg>
+  )
+}
+
 export function SettingsIcon({ size = 20 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" {...base}>

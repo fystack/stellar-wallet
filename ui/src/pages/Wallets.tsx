@@ -58,7 +58,7 @@ function WalletGrid({
           type="button"
           onClick={() => w.status === 'ready' && onOpen(w.id)}
           disabled={w.status !== 'ready'}
-          className="border border-line bg-white p-5 text-left transition-colors enabled:hover:border-brand disabled:cursor-default"
+          className="border border-line bg-white p-5 text-left transition duration-200 enabled:hover:-translate-y-0.5 enabled:hover:border-brand enabled:hover:shadow-card disabled:cursor-default"
           key={w.id}
         >
           <div className="mb-4 flex items-center justify-between">
@@ -74,7 +74,7 @@ function WalletGrid({
               Generating key across 3 nodes…
             </div>
           ) : w.status === 'failed' ? (
-            <div className="mb-4 mt-1 text-sm text-[#d33a3a]">Keygen failed</div>
+            <div className="mb-4 mt-1 text-sm text-danger">Keygen failed</div>
           ) : (
             <div className="mb-4 mt-1 break-all font-mono text-sm text-muted">
               {w.address}
@@ -117,7 +117,7 @@ export default function Wallets({ wallets, onCreate, onOpen }: Props) {
           <div className="flex items-center gap-2">
             <button
               onClick={toggleHidden}
-              className="border border-line p-2 text-muted hover:bg-[#f2f5f9]"
+              className="border border-line p-2 text-muted hover:bg-hover"
               aria-label={hidden ? 'Show balances' : 'Hide balances'}
               title={hidden ? 'Show balances' : 'Hide balances'}
             >

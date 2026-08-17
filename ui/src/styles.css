@@ -17,9 +17,32 @@ body {
 @layer components {
   .cta {
     @apply inline-block cursor-pointer  bg-brand
-      px-11 py-[18px] text-lg font-bold text-white transition-colors
-      hover:bg-brand-deep
-      disabled:cursor-not-allowed disabled:opacity-50;
+      px-11 py-[18px] text-lg font-bold text-white transition
+      hover:bg-brand-deep active:scale-[0.99]
+      disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
+  }
+
+  .cta-secondary {
+    @apply inline-block cursor-pointer border border-line bg-white
+      px-6 py-3 text-base font-semibold text-ink transition
+      hover:bg-hover active:scale-[0.99]
+      disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
+  }
+
+  /* Shimmering placeholder for loading states. */
+  .skeleton {
+    @apply relative overflow-hidden bg-card;
+  }
+  .skeleton::after {
+    @apply absolute inset-0 animate-shimmer;
+    content: '';
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.65),
+      transparent
+    );
+    transform: translateX(-100%);
   }
 
   .field-input {
