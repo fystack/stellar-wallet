@@ -1,4 +1,4 @@
-import type { Transaction, Wallet } from './types.ts'
+import type { SwapQuote, Transaction, Wallet } from './types.ts'
 
 export const BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8090'
 const TOKEN_KEY = 'wallet_token'
@@ -79,6 +79,7 @@ export const api = {
     amount: string,
     memo: string,
     asset?: { code: string; issuer: string },
+    memoType?: string,
   ) =>
     req<Transaction>('/api/v1/transactions', {
       method: 'POST',
@@ -87,10 +88,36 @@ export const api = {
         to,
         amount,
         memo,
+        memo_type: memoType ?? '',
         asset_code: asset?.code ?? '',
         asset_issuer: asset?.issuer ?? '',
       },
     }),
+  resolve: (q: string) =>
+    req<{
+      address: string
+      memo_type?: string
+      memo?: string
+      federation?: string
+    }>(`/api/v1/resolve?q=${encodeURIComponent(q)}`),
+  swapQuote: (walletId: string, from: string, to: string, amount: string) =>
+    req<SwapQuote>(
+      `/api/v1/wallets/${walletId}/swap/quote?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&amount=${encodeURIComponent(amount)}`,
+    ),
+  createSwap: (
+    walletId: string,
+    from: string,
+    to: string,
+    amount: string,
+    slippageBps: number,
+  ) =>
+    req<{ transaction: Transaction; quote: SwapQuote; dest_min: string }>(
+      `/api/v1/wallets/${walletId}/swap`,
+      {
+        method: 'POST',
+        json: { from, to, amount, slippage_bps: slippageBps },
+      },
+    ),
   balance: (id: string) =>
     req<{
       assets: { symbol: string; balance: string; issuer?: string }[]
