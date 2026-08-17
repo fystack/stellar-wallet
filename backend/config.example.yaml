@@ -1,0 +1,18 @@
+# Backend config. Copy to config.yaml and adjust.
+# Values here override the built-in defaults; a missing config.yaml uses
+# defaults. That's it — no env overrides.
+
+addr: ":8090"                       # HTTP listen address (UI expects :8090)
+db_path: "wallet.db"
+cors_origin: "http://localhost:5173"
+auth_secret: "dev-secret-change-me" # CHANGE in any non-dev environment
+
+# mpcium cluster
+nats_url: "nats://10.10.0.1:4222"
+consul_addr: "10.10.0.1:8500"
+initiator_key: "../mpcium/event_initiator.key"
+health_base_port: 8091              # node$n /health on health_base_port + n
+
+# Chains
+horizon_url: "https://horizon-testnet.stellar.org"
+solana_url: "https://api.devnet.solana.com"

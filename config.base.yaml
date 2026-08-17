@@ -1,0 +1,28 @@
+# Base config template for a from-scratch mpcium cluster.
+# bootstrap.sh copies this into mpcium/config.yaml, then fills in the
+# runtime bits: nats/consul host:port, per-node healthcheck port, and any
+# secret left blank below (generated with `openssl rand`).
+#
+# - Leave badger_password / chain_code EMPTY to auto-generate fresh secrets.
+#   Set them explicitly to pin a reproducible cluster.
+# - event_initiator_pubkey is always filled from the generated initiator key.
+# - nats.url / consul.address are overwritten with the active host:port.
+nats:
+  url: nats://127.0.0.1:4222
+consul:
+  address: 127.0.0.1:8500
+mpc_threshold: 2
+environment: development
+badger_password: ""
+event_initiator_algorithm: "ed25519"
+event_initiator_pubkey: ""
+chain_code: ""
+db_path: "."
+backup_enabled: true
+backup_period_seconds: 300
+backup_dir: backups
+max_concurrent_keygen: 2
+max_concurrent_signing: 10
+healthcheck:
+  enabled: true
+  address: "0.0.0.0:8091"

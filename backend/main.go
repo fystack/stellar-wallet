@@ -3,32 +3,34 @@ package main
 import (
 	"log"
 	"net/http"
-	"os"
-	"strconv"
 	"time"
 
 	"stellar-wallet-backend/internal/app"
 	"stellar-wallet-backend/internal/auth"
 	"stellar-wallet-backend/internal/chain"
 	"stellar-wallet-backend/internal/cluster"
+	"stellar-wallet-backend/internal/config"
 	"stellar-wallet-backend/internal/mpc"
 	"stellar-wallet-backend/internal/realtime"
 	"stellar-wallet-backend/internal/storage/sqlite"
 )
 
 func main() {
-	dbPath := getenv("DB_PATH", "wallet.db")
-	db, err := sqlite.Open(dbPath)
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("load config: %v", err)
+	}
+
+	db, err := sqlite.Open(cfg.DBPath)
 	if err != nil {
 		log.Fatalf("open db: %v", err)
 	}
 	defer db.Close()
 
 	httpClient := &http.Client{Timeout: 20 * time.Second}
-	chainClient := chain.NewClient(chain.DefaultHorizonURL, chain.DefaultSolanaURL, httpClient)
-	authManager := auth.New([]byte("dev-secret-change-me"), 24*time.Hour)
-	healthBase, _ := strconv.Atoi(getenv("HEALTH_BASE_PORT", "8091"))
-	clusterClient := cluster.NewClient(httpClient, getenv("CONSUL_ADDR", "10.10.0.1:8500"), healthBase)
+	chainClient := chain.NewClient(cfg.HorizonURL, cfg.SolanaURL, httpClient)
+	authManager := auth.New([]byte(cfg.AuthSecret), 24*time.Hour)
+	clusterClient := cluster.NewClient(httpClient, cfg.ConsulAddr, cfg.HealthBasePort)
 	server := app.NewServer(app.Dependencies{
 		Store:   sqlite.NewStore(db),
 		Auth:    authManager,
@@ -37,29 +39,19 @@ func main() {
 		Hub:     realtime.NewHub(),
 	})
 
-	natsURL := getenv("NATS_URL", "nats://10.10.0.1:4222")
-	keyPath := getenv("INITIATOR_KEY", "../mpcium/event_initiator.key")
-	mpcClient, err := mpc.New(natsURL, keyPath, server.MPCCallbacks())
+	mpcClient, err := mpc.New(cfg.NATSURL, cfg.InitiatorKey, server.MPCCallbacks())
 	if err != nil {
 		log.Fatalf("connect mpcium: %v", err)
 	}
 	defer mpcClient.Close()
 	server.SetMPC(mpcClient)
-	log.Printf("linked to mpcium cluster via %s", natsURL)
+	log.Printf("linked to mpcium cluster via %s", cfg.NATSURL)
 
 	server.ApplyRPCConfig()
 	server.StartBalanceRefresher()
 
-	addr := getenv("ADDR", ":8080")
-	log.Printf("backend listening on %s (db=%s)", addr, dbPath)
-	if err := server.Router(getenv("CORS_ORIGIN", "http://localhost:5173")).Run(addr); err != nil {
+	log.Printf("backend listening on %s (db=%s)", cfg.Addr, cfg.DBPath)
+	if err := server.Router(cfg.CORSOrigin).Run(cfg.Addr); err != nil {
 		log.Fatal(err)
 	}
-}
-
-func getenv(k, def string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
-	}
-	return def
 }

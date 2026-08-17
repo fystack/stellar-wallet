@@ -13,6 +13,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 MPCIUM="${MPCIUM_DIR:-$ROOT/mpcium}"
+BASE_CONFIG="${BASE_CONFIG:-$ROOT/config.base.yaml}"
 HOST="${HOST:-127.0.0.1}"
 NATS_PORT="${NATS_PORT:-4222}"
 CONSUL_PORT="${CONSUL_PORT:-8500}"
@@ -45,34 +46,26 @@ if [ -f "$MPCIUM/node0/config.yaml" ]; then
   exit 0
 fi
 
-say "Bootstrapping a fresh cluster at $MPCIUM (host=$HOST)"
+[ -f "$BASE_CONFIG" ] || die "base config not found: $BASE_CONFIG"
+
+say "Bootstrapping a fresh cluster at $MPCIUM (host=$HOST, base=$BASE_CONFIG)"
 mkdir -p "$MPCIUM"
+cp "$BASE_CONFIG" "$MPCIUM/config.yaml"
 cd "$MPCIUM"
 
-CHAIN_CODE="$(openssl rand -hex 32)"
-BADGER_PW="$(openssl rand -hex 12)"
+# Read a top-level scalar field's value from the config.
+field() { sed -nE "s|^${1}: *\"?([^\"]*)\"?[[:space:]]*$|\\1|p" config.yaml | head -1; }
 
-cat > config.yaml <<EOF
-nats:
-  url: nats://$HOST:$NATS_PORT
-consul:
-  address: $HOST:$CONSUL_PORT
-mpc_threshold: 2
-environment: development
-badger_password: "$BADGER_PW"
-event_initiator_algorithm: "ed25519"
-event_initiator_pubkey: ""
-chain_code: "$CHAIN_CODE"
-db_path: "."
-backup_enabled: true
-backup_period_seconds: 300
-backup_dir: backups
-max_concurrent_keygen: 2
-max_concurrent_signing: 10
-healthcheck:
-  enabled: true
-  address: "0.0.0.0:$HEALTH_BASE"
-EOF
+# Overlay runtime values onto the base template.
+sedi -E "s|url: nats://[^[:space:]]+|url: nats://$HOST:$NATS_PORT|" config.yaml
+sedi -E "s|^([[:space:]]*address:) [0-9a-zA-Z.]+:[0-9]+|\\1 $HOST:$CONSUL_PORT|" config.yaml
+sedi -E "s|address: \"0.0.0.0:[0-9]+\"|address: \"0.0.0.0:$HEALTH_BASE\"|" config.yaml
+
+# Generate any secret left blank in the base config; keep it if pinned.
+[ -n "$(field badger_password)" ] || \
+  sedi -E "s|^(badger_password:).*|\\1 \"$(openssl rand -hex 12)\"|" config.yaml
+[ -n "$(field chain_code)" ] || \
+  sedi -E "s|^(chain_code:).*|\\1 \"$(openssl rand -hex 32)\"|" config.yaml
 
 # --- 3) Peers + event initiator ---
 say "Generating peers"

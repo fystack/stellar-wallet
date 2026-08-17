@@ -22,3 +22,6 @@ logs/
 # E2E
 test-results/
 playwright-report/
+
+# Backend local config (copy of config.example.yaml)
+backend/config.yaml

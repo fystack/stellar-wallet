@@ -9,6 +9,7 @@ require (
 	github.com/nats-io/nats.go v1.48.0
 	github.com/stellar/go v0.0.0-20251210100531-aab2ea4aca88
 	golang.org/x/crypto v0.55.0
+	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.56.0
 )
 
@@ -99,7 +100,6 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/exp v0.0.0-20260112195511-716be5621a96 // indirect
 	golang.org/x/term v0.45.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 require (
