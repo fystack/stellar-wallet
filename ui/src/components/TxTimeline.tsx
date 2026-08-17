@@ -1,4 +1,4 @@
-import { CheckIcon, ClockIcon, CloseIcon, SpinnerIcon } from '../icons.tsx'
+import { CheckIcon, CloseIcon } from '../icons.tsx'
 import type { TxStatus } from '../types.ts'
 
 const steps: { status: TxStatus; label: string; description: string }[] = [
@@ -49,67 +49,76 @@ function stepState(step: TxStatus, current: TxStatus): State {
 
 export default function TxTimeline({ status }: { status: TxStatus }) {
   return (
-    <ol>
+    <ol className="flex flex-col">
       {steps.map((step, i) => {
         const state = stepState(step.status, status)
         const isLast = i === steps.length - 1
-        const nextDone = stepState(steps[i + 1]?.status, status) === 'done'
         return (
-          <li key={step.status} className="flex gap-4">
+          <li key={step.status} className="flex gap-3.5">
+            {/* rail: node + connector */}
             <div className="flex flex-col items-center">
-              <div className="relative grid place-items-center">
-                {/* pulsing ring on the in-progress step */}
+              <div className="relative grid h-6 w-6 place-items-center">
                 {state === 'active' && (
-                  <span className="absolute inline-flex h-7 w-7 animate-ping rounded-md bg-brand/25" />
+                  <span className="absolute inline-flex h-6 w-6 animate-ping rounded-full bg-brand/20" />
                 )}
                 <div
                   style={{
-                    animation: 'tlPop .45s cubic-bezier(.34,1.56,.64,1) both',
-                    animationDelay: `${i * 0.09}s`,
+                    animation: 'tlPop .4s cubic-bezier(.34,1.56,.64,1) both',
+                    animationDelay: `${i * 0.08}s`,
                   }}
                   className={
-                    'relative grid h-7 w-7 shrink-0 place-items-center rounded-md border-2 shadow-sm transition-colors duration-300 ' +
+                    'relative grid h-6 w-6 place-items-center rounded-full transition-colors duration-300 ' +
                     (state === 'done'
-                      ? 'border-green-500 bg-green-500 text-white'
+                      ? 'bg-brand text-white'
                       : state === 'active'
-                        ? 'border-brand bg-white text-brand'
+                        ? 'border-2 border-brand bg-white'
                         : state === 'failed'
-                          ? 'border-red-500 bg-red-500 text-white'
-                          : 'border-line bg-white text-[#cbd3de] shadow-none')
+                          ? 'bg-danger text-white'
+                          : 'border-2 border-line bg-white')
                   }
                 >
                   {state === 'done' && <CheckIcon size={13} />}
-                  {state === 'active' && <SpinnerIcon size={13} />}
-                  {state === 'pending' && <ClockIcon size={13} />}
+                  {state === 'active' && (
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-brand" />
+                  )}
+                  {state === 'pending' && (
+                    <span className="h-1.5 w-1.5 rounded-full bg-line" />
+                  )}
                   {state === 'failed' && <CloseIcon size={13} />}
                 </div>
               </div>
               {!isLast && (
-                <div className="relative mt-1 h-8 w-0.5 overflow-hidden rounded-full bg-line">
-                  {/* connector fills green once this step is done — drawn top→down, staggered */}
+                <div className="relative my-1 w-0.5 flex-1 overflow-hidden rounded-full bg-line">
                   <div
-                    className="absolute inset-x-0 top-0 bg-green-400 transition-all duration-500"
+                    className="absolute inset-x-0 top-0 bg-brand transition-all duration-500"
                     style={{
                       height: state === 'done' ? '100%' : '0%',
-                      transitionDelay: `${i * 0.09 + 0.15}s`,
+                      transitionDelay: `${i * 0.08 + 0.12}s`,
                     }}
                   />
-                  {state === 'done' && !nextDone && (
-                    <div className="absolute inset-x-0 top-0 h-2 animate-pulse bg-brand" />
-                  )}
                 </div>
               )}
             </div>
-            <div className="pb-7">
+
+            {/* content */}
+            <div className={isLast ? 'pb-0' : 'pb-6'}>
               <p
                 className={
-                  'text-sm font-semibold transition-colors ' +
-                  (state === 'pending' ? 'text-[#cbd3de]' : 'text-ink')
+                  'text-sm font-semibold leading-6 transition-colors ' +
+                  (state === 'pending'
+                    ? 'text-muted'
+                    : state === 'active'
+                      ? 'text-brand'
+                      : state === 'failed'
+                        ? 'text-danger'
+                        : 'text-ink')
                 }
               >
                 {step.label}
               </p>
-              <p className="mt-0.5 text-xs text-muted">{step.description}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted">
+                {step.description}
+              </p>
             </div>
           </li>
         )

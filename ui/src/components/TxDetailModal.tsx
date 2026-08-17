@@ -52,7 +52,14 @@ export default function TxDetailModal({
 }) {
   const incoming = tx.type === 'in'
   const isTrustline = tx.memo === 'Add trustline'
-  const kind = isTrustline ? 'Trustline' : incoming ? 'Received' : 'Sent'
+  const isSwap = tx.type === 'swap'
+  const kind = isSwap
+    ? 'Swap'
+    : isTrustline
+      ? 'Trustline'
+      : incoming
+        ? 'Received'
+        : 'Sent'
 
   const [prices, setPrices] = useState<Record<string, number>>({})
   useEffect(() => {
@@ -86,22 +93,37 @@ export default function TxDetailModal({
           <span
             className={
               'grid h-11 w-11 shrink-0 place-items-center text-xl font-bold ' +
-              (incoming
-                ? 'bg-green-50 text-green-600'
-                : 'bg-[#f2f5f9] text-ink-soft')
+              (isSwap
+                ? 'bg-brand-soft text-brand'
+                : incoming
+                  ? 'bg-success-soft text-success'
+                  : 'bg-hover text-ink-soft')
             }
           >
-            {incoming ? '↓' : '↑'}
+            {isSwap ? '⇅' : incoming ? '↓' : '↑'}
           </span>
           <div>
             <div className="text-sm text-muted">{kind}</div>
-            <div className="flex flex-wrap items-center gap-1.5 text-xl font-extrabold leading-tight sm:text-2xl">
-              <TokenLogo symbol={tx.symbol} size={22} />
-              {isTrustline ? '' : incoming ? '+' : '−'}
-              {formatAmount(tx.amount)}{' '}
-              <span className="text-muted">{tx.symbol}</span>
-            </div>
-            {usdValue && !isTrustline && (
+            {isSwap ? (
+              <div className="flex flex-col gap-0.5 text-lg font-extrabold leading-tight sm:text-xl">
+                <span className="flex items-center gap-1.5 text-success">
+                  <TokenLogo symbol={tx.recvSymbol ?? ''} size={20} />+
+                  {formatAmount(tx.recvAmount ?? '0')} {tx.recvSymbol}
+                </span>
+                <span className="flex items-center gap-1.5 text-ink-soft">
+                  <TokenLogo symbol={tx.symbol} size={20} />−
+                  {formatAmount(tx.amount)} {tx.symbol}
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-1.5 text-xl font-extrabold leading-tight sm:text-2xl">
+                <TokenLogo symbol={tx.symbol} size={22} />
+                {isTrustline ? '' : incoming ? '+' : '−'}
+                {formatAmount(tx.amount)}{' '}
+                <span className="text-muted">{tx.symbol}</span>
+              </div>
+            )}
+            {usdValue && !isTrustline && !isSwap && (
               <div className="mt-0.5 text-xs text-muted">≈ {usdValue}</div>
             )}
           </div>
@@ -111,13 +133,19 @@ export default function TxDetailModal({
 
       {/* Details */}
       <div className="mb-6 divide-y divide-line bg-card px-4 text-sm">
-        <Row label={incoming ? 'From' : isTrustline ? 'Issuer' : 'To'}>
-          <CopyAddress
-            address={tx.counterparty}
-            truncate
-            className="max-w-full text-ink sm:max-w-[220px]"
-          />
-        </Row>
+        {isSwap ? (
+          <Row label="Venue">
+            <span className="text-ink">Stellar DEX (path payment)</span>
+          </Row>
+        ) : (
+          <Row label={incoming ? 'From' : isTrustline ? 'Issuer' : 'To'}>
+            <CopyAddress
+              address={tx.counterparty}
+              truncate
+              className="max-w-full text-ink sm:max-w-[220px]"
+            />
+          </Row>
+        )}
         <Row label="Asset">
           <span className="flex items-center justify-end gap-1.5 text-ink">
             <TokenLogo symbol={tx.symbol} size={16} /> {tx.symbol}
@@ -150,8 +178,8 @@ export default function TxDetailModal({
         (() => {
           const friendly = friendlyTxError(tx.error)
           return (
-            <div className="mb-6 border border-[#f0c2c2] bg-[#fff5f5] px-3.5 py-3">
-              <div className="mb-1 text-sm font-semibold text-[#d33a3a]">
+            <div className="mb-6 border border-danger-line bg-[#fff5f5] px-3.5 py-3">
+              <div className="mb-1 text-sm font-semibold text-danger">
                 Transaction failed
               </div>
               {friendly ? (
@@ -207,7 +235,7 @@ export default function TxDetailModal({
         </div>
       )}
 
-      {tx.type === 'out' && tx.status !== 'failed' && (
+      {tx.type !== 'in' && tx.status !== 'failed' && (
         <div className="border-t border-line pt-5">
           <h3 className="mb-4 text-sm font-semibold text-ink-soft">
             Signing progress

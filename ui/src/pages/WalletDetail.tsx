@@ -158,6 +158,11 @@ export default function WalletDetail({
     )
   }, [base, liveTxns, wallet.id])
 
+  // Paginate the (potentially long) history — reveal more on demand.
+  const PAGE = 8
+  const [visibleCount, setVisibleCount] = useState(PAGE)
+  useEffect(() => setVisibleCount(PAGE), [wallet.id])
+
   // Refresh balance when a tx confirms or the cached balance changes (via SSE).
   // A short retry covers Horizon's brief indexing lag after a broadcast.
   const confirmedCount = txns.filter(
@@ -191,14 +196,14 @@ export default function WalletDetail({
         </button>
         <button
           onClick={() => setConfirmDel(true)}
-          className="flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-[#d33a3a]"
+          className="flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-danger"
         >
           <TrashIcon size={16} /> Delete
         </button>
       </div>
 
       {confirmDel && (
-        <div className="mb-5 flex flex-col items-start gap-3 border border-[#f0c2c2] bg-[#fff7f7] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="mb-5 flex flex-col items-start gap-3 border border-danger-line bg-[#fff7f7] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <span className="text-sm text-ink-soft">
             Delete <strong>{wallet.name}</strong> and its history? This can't be
             undone.
@@ -206,7 +211,7 @@ export default function WalletDetail({
           <div className="flex w-full shrink-0 gap-2 sm:w-auto">
             <button
               onClick={() => setConfirmDel(false)}
-              className="flex-1 border border-line px-3 py-1.5 text-sm font-semibold text-ink-soft hover:bg-[#f2f5f9] sm:flex-none"
+              className="flex-1 border border-line px-3 py-1.5 text-sm font-semibold text-ink-soft hover:bg-hover sm:flex-none"
             >
               Cancel
             </button>
@@ -220,7 +225,7 @@ export default function WalletDetail({
                   setDeleting(false)
                 }
               }}
-              className="flex-1 bg-[#d33a3a] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#bf2f2f] disabled:opacity-50 sm:flex-none"
+              className="flex-1 bg-danger px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#bf2f2f] disabled:opacity-50 sm:flex-none"
             >
               {deleting ? 'Deleting…' : 'Delete'}
             </button>
@@ -249,8 +254,12 @@ export default function WalletDetail({
 
         <div className="mb-1 text-sm text-muted">Balances</div>
         {assets === null ? (
-          <div className="mb-5 text-4xl font-extrabold leading-none text-muted">
-            …
+          <div className="mb-5 flex flex-col gap-2.5">
+            <div className="flex items-center gap-2.5">
+              <div className="skeleton h-[30px] w-[30px] rounded-full" />
+              <div className="skeleton h-9 w-44" />
+            </div>
+            <div className="skeleton ml-[40px] h-4 w-24" />
           </div>
         ) : (
           <div className="mb-5">
@@ -376,14 +385,14 @@ export default function WalletDetail({
           </button>
           <button
             onClick={() => setShowReceive(true)}
-            className="border border-line px-4 py-3 font-semibold text-ink-soft transition-colors hover:bg-[#f2f5f9] sm:px-5"
+            className="border border-line px-4 py-3 font-semibold text-ink-soft transition-colors hover:bg-hover sm:px-5"
           >
             Receive
           </button>
           <button
             onClick={handleFund}
             disabled={funding}
-            className="col-span-2 border border-line px-4 py-3 font-semibold text-ink-soft transition-colors hover:bg-[#f2f5f9] disabled:opacity-50 sm:col-auto sm:px-5"
+            className="col-span-2 border border-line px-4 py-3 font-semibold text-ink-soft transition-colors hover:bg-hover disabled:opacity-50 sm:col-auto sm:px-5"
           >
             {funding ? 'Funding…' : 'Fund (testnet)'}
           </button>
@@ -417,54 +426,78 @@ export default function WalletDetail({
           </div>
         ) : (
           <div className="flex flex-col">
-            {txns.map((t) => {
+            {txns.slice(0, visibleCount).map((t) => {
               const trust = t.memo === 'Add trustline'
+              const swap = t.type === 'swap'
               const kind = trust
                 ? `Trustline · ${t.symbol}`
-                : t.type === 'in'
-                  ? 'Received'
-                  : 'Sent'
+                : swap
+                  ? 'Swap'
+                  : t.type === 'in'
+                    ? 'Received'
+                    : 'Sent'
               return (
                 <button
                   key={t.id}
                   onClick={() => setOpenTxId(t.id)}
-                  className="flex items-center gap-2.5 border-b border-line py-3.5 text-left transition-colors last:border-none hover:bg-[#fafbfc] sm:gap-3"
+                  className="flex min-h-[76px] items-center gap-2.5 border-b border-line py-3 text-left transition-colors last:border-none hover:bg-[#fafbfc] sm:gap-3"
                 >
                   <div className="relative shrink-0">
                     <TokenLogo symbol={t.symbol} size={36} />
                     <span
                       className={
                         'absolute -bottom-1 -right-1 grid h-[18px] w-[18px] place-items-center rounded-full border-2 border-white text-[9px] font-bold text-white ' +
-                        (t.type === 'in' ? 'bg-green-600' : 'bg-[#334]')
+                        (swap
+                          ? 'bg-brand'
+                          : t.type === 'in'
+                            ? 'bg-green-600'
+                            : 'bg-[#334]')
                       }
                     >
-                      {t.type === 'in' ? '↓' : '↑'}
+                      {swap ? '⇅' : t.type === 'in' ? '↓' : '↑'}
                     </span>
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold">{kind}</div>
                     <div className="truncate text-[13px] text-muted">
-                      <span className="font-mono">
-                        {shortAddress(t.counterparty, 6, 6)}
-                      </span>
+                      {swap ? (
+                        <span>Stellar DEX</span>
+                      ) : (
+                        <span className="font-mono">
+                          {shortAddress(t.counterparty, 6, 6)}
+                        </span>
+                      )}
                       {' · '}
                       {fmtShort(t.createdAt)}
                     </div>
                   </div>
-                  <div className="max-w-[120px] shrink-0 text-right text-sm sm:max-w-none sm:text-base">
-                    <div
-                      className={
-                        'font-semibold ' +
-                        (trust
-                          ? 'text-muted'
-                          : t.type === 'in'
-                            ? 'text-green-600'
-                            : 'text-ink')
-                      }
-                    >
-                      {trust ? '—' : (t.type === 'in' ? '+' : '−') + formatAmount(t.amount)}
-                      {!trust && ` ${t.symbol}`}
-                    </div>
+                  <div className="max-w-[140px] shrink-0 text-right text-sm sm:max-w-none sm:text-base">
+                    {swap ? (
+                      <div className="font-semibold leading-tight">
+                        <div className="text-success">
+                          +{formatAmount(t.recvAmount ?? '0')} {t.recvSymbol}
+                        </div>
+                        <div className="text-muted">
+                          −{formatAmount(t.amount)} {t.symbol}
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        className={
+                          'font-semibold ' +
+                          (trust
+                            ? 'text-muted'
+                            : t.type === 'in'
+                              ? 'text-success'
+                              : 'text-ink')
+                        }
+                      >
+                        {trust
+                          ? '—'
+                          : (t.type === 'in' ? '+' : '−') + formatAmount(t.amount)}
+                        {!trust && ` ${t.symbol}`}
+                      </div>
+                    )}
                     <div className="mt-0.5">
                       <TxStatusBadge status={t.status} />
                     </div>
@@ -472,6 +505,35 @@ export default function WalletDetail({
                 </button>
               )
             })}
+            {txns.length > PAGE && (
+              <div className="flex items-center justify-between gap-3 pt-4 text-sm">
+                <span className="text-muted">
+                  Showing {Math.min(visibleCount, txns.length)} of {txns.length}
+                </span>
+                <div className="flex gap-2">
+                  {visibleCount > PAGE && (
+                    <button
+                      type="button"
+                      onClick={() => setVisibleCount(PAGE)}
+                      className="border border-line px-3 py-1.5 font-semibold text-ink-soft transition-colors hover:bg-hover"
+                    >
+                      Show less
+                    </button>
+                  )}
+                  {visibleCount < txns.length && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setVisibleCount((n) => Math.min(n + PAGE, txns.length))
+                      }
+                      className="border border-line px-3 py-1.5 font-semibold text-brand transition-colors hover:bg-brand-soft"
+                    >
+                      Show more
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </section>
