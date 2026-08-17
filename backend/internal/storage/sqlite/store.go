@@ -179,13 +179,14 @@ func (s *Store) DeleteWallet(userID, walletID string) {
 	_, _ = s.db.Exec(`DELETE FROM wallets WHERE id = ? AND user_id = ?`, walletID, userID)
 }
 
-const transactionColumns = `id, wallet_id, user_id, type, counterparty, amount, symbol, COALESCE(memo, ''), status, signature, envelope_xdr, tx_hash, error, created_at`
+const transactionColumns = `id, wallet_id, user_id, type, counterparty, amount, symbol, COALESCE(recv_amount, ''), COALESCE(recv_symbol, ''), COALESCE(memo, ''), status, signature, envelope_xdr, tx_hash, error, created_at`
 
 func scanTransaction(scanner interface{ Scan(...any) error }) (domain.Transaction, error) {
 	var transaction domain.Transaction
 	err := scanner.Scan(
 		&transaction.ID, &transaction.WalletID, &transaction.UserID, &transaction.Type,
-		&transaction.Counterparty, &transaction.Amount, &transaction.Symbol, &transaction.Memo,
+		&transaction.Counterparty, &transaction.Amount, &transaction.Symbol,
+		&transaction.RecvAmount, &transaction.RecvSymbol, &transaction.Memo,
 		&transaction.Status, &transaction.Signature, &transaction.EnvelopeXDR,
 		&transaction.TxHash, &transaction.Error, &transaction.CreatedAt,
 	)
@@ -194,10 +195,11 @@ func scanTransaction(scanner interface{ Scan(...any) error }) (domain.Transactio
 
 func (s *Store) CreateTransaction(transaction domain.Transaction) error {
 	_, err := s.db.Exec(
-		`INSERT INTO transactions (id, wallet_id, user_id, type, counterparty, amount, symbol, memo, status, signature, envelope_xdr, tx_hash, error, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO transactions (id, wallet_id, user_id, type, counterparty, amount, symbol, recv_amount, recv_symbol, memo, status, signature, envelope_xdr, tx_hash, error, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		transaction.ID, transaction.WalletID, transaction.UserID, transaction.Type,
-		transaction.Counterparty, transaction.Amount, transaction.Symbol, transaction.Memo,
+		transaction.Counterparty, transaction.Amount, transaction.Symbol,
+		transaction.RecvAmount, transaction.RecvSymbol, transaction.Memo,
 		transaction.Status, transaction.Signature, transaction.EnvelopeXDR,
 		transaction.TxHash, transaction.Error, transaction.CreatedAt,
 	)

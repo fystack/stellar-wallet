@@ -39,6 +39,9 @@ type Transaction struct {
 	Counterparty string `json:"counterparty"`
 	Amount       string `json:"amount"`
 	Symbol       string `json:"symbol"`
+	// Swap-only: the asset/amount received on the other leg of a path payment.
+	RecvAmount   string `json:"recvAmount,omitempty"`
+	RecvSymbol   string `json:"recvSymbol,omitempty"`
 	Memo         string `json:"memo,omitempty"`
 	Status       string `json:"status"`
 	Signature    string `json:"signature,omitempty"`

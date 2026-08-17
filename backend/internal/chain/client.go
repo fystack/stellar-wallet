@@ -235,7 +235,7 @@ func (c *Client) solanaRPC(method string, params []any, output any) error {
 
 func (c *Client) BuildPayment(
 	wallet domain.Wallet,
-	to, amount, assetCode, assetIssuer, memo string,
+	to, amount, assetCode, assetIssuer, memo, memoType string,
 ) (string, []byte, error) {
 	account, err := c.horizon().AccountDetail(horizonclient.AccountRequest{AccountID: wallet.Address})
 	if err != nil {
@@ -269,11 +269,7 @@ func (c *Client) BuildPayment(
 		Operations:           []txnbuild.Operation{operation},
 	}
 	if memo != "" {
-		memoText := memo
-		if len(memoText) > 28 {
-			memoText = memoText[:28]
-		}
-		params.Memo = txnbuild.MemoText(memoText)
+		params.Memo = buildMemo(memo, memoType)
 	}
 	transaction, err := txnbuild.NewTransaction(params)
 	if err != nil {
@@ -360,6 +356,29 @@ func (c *Client) TransactionOnChain(hash string) (map[string]any, error) {
 		"memo":       transaction.Memo,
 		"successful": transaction.Successful,
 	}, nil
+}
+
+// buildMemo maps a federation/user memo into the right Stellar memo type.
+// Unknown or malformed types fall back to a (truncated) text memo so a send
+// never fails purely on memo formatting.
+func buildMemo(memo, memoType string) txnbuild.Memo {
+	switch strings.ToLower(memoType) {
+	case "id":
+		if id, err := strconv.ParseUint(memo, 10, 64); err == nil {
+			return txnbuild.MemoID(id)
+		}
+	case "hash", "return":
+		if raw, err := hex.DecodeString(memo); err == nil && len(raw) == 32 {
+			var hash txnbuild.MemoHash
+			copy(hash[:], raw)
+			return hash
+		}
+	}
+	text := memo
+	if len(text) > 28 {
+		text = text[:28]
+	}
+	return txnbuild.MemoText(text)
 }
 
 func horizonError(err error) error {

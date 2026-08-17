@@ -49,6 +49,8 @@ func Open(path string) (*sql.DB, error) {
 		counterparty TEXT NOT NULL,
 		amount       TEXT NOT NULL,
 		symbol       TEXT NOT NULL,
+		recv_amount  TEXT NOT NULL DEFAULT '',
+		recv_symbol  TEXT NOT NULL DEFAULT '',
 		memo         TEXT,
 		status       TEXT NOT NULL,
 		signature    TEXT NOT NULL DEFAULT '',
@@ -61,6 +63,25 @@ func Open(path string) (*sql.DB, error) {
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
 		return nil, err
+	}
+	// Idempotent migrations for databases created before these columns existed.
+	// SQLite has no "ADD COLUMN IF NOT EXISTS"; a duplicate-column error is fine.
+	for _, migration := range []string{
+		`ALTER TABLE transactions ADD COLUMN recv_amount TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE transactions ADD COLUMN recv_symbol TEXT NOT NULL DEFAULT ''`,
+	} {
+		_, _ = db.Exec(migration)
+	}
+	// Seed default Stellar testnet assets so they're swappable/sendable out of the
+	// box. INSERT OR IGNORE keeps it idempotent; users can still delete them.
+	const testnetMarketMaker = "GAHPYWLK6YRN7CVYZOO4H3VDRZ7PVF5UJGLZCSPAEIKJE2XSWF5LAGER"
+	for _, seed := range [][2]string{
+		{"USDC", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+		{"USDT", testnetMarketMaker},
+		{"BTC", testnetMarketMaker},
+		{"ETH", testnetMarketMaker},
+	} {
+		_, _ = db.Exec(`INSERT OR IGNORE INTO custom_assets (code, issuer) VALUES (?, ?)`, seed[0], seed[1])
 	}
 	return db, nil
 }

@@ -92,6 +92,9 @@ func (s *Server) Router(corsOrigin string) *gin.Engine {
 	protected.POST("/transactions", s.createTransaction)
 	protected.GET("/transactions/:id", s.getTransaction)
 	protected.GET("/tx/:hash/chain", s.transactionOnChain)
+	protected.GET("/resolve", s.resolveRecipient)
+	protected.GET("/wallets/:id/swap/quote", s.swapQuote)
+	protected.POST("/wallets/:id/swap", s.createSwap)
 
 	return router
 }
