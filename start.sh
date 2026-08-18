@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 #
-# Start the Go backend + Vite UI against an ALREADY-RUNNING mpcium cluster.
+# Start the Go backend + Vite UI against an already-running mpcium cluster.
 #
-# Starting mpcium (NATS, Consul, the 3 nodes) is on you. This script only
-# checks the cluster is reachable, then boots backend + UI. All connection
-# settings come from backend/config.yaml — the single source of truth.
+# The mpcium cluster (NATS, Consul, the nodes) is started and operated
+# separately. This script only checks NATS + Consul are reachable, then boots
+# backend + UI. All connection settings come from backend/config.yaml — the
+# single source of truth.
 #
 set -euo pipefail
 
@@ -30,10 +31,8 @@ cfg() {
 
 CONSUL_ADDR="$(cfg consul_addr)"                  # host:port
 NATS_URL="$(cfg nats_url)"                         # nats://host:port
-HEALTH_BASE_PORT="$(cfg health_base_port)"
 ADDR="$(cfg addr)"                                 # :8090
 UI_PORT="${UI_PORT:-5173}"
-HEALTH_HOST="${HEALTH_HOST:-127.0.0.1}"
 
 CONSUL_HOST="${CONSUL_ADDR%%:*}"; CONSUL_PORT="${CONSUL_ADDR##*:}"
 NATS_HOSTPORT="${NATS_URL#nats://}"
@@ -41,19 +40,16 @@ NATS_HOST="${NATS_HOSTPORT%%:*}"; NATS_PORT="${NATS_HOSTPORT##*:}"
 
 reachable() { nc -z -w2 "$1" "$2" >/dev/null 2>&1; }
 
-# --- 1) Check the mpcium cluster is up --------------------------------------
-say "Checking mpcium cluster (NATS $NATS_HOST:$NATS_PORT, Consul $CONSUL_ADDR)"
+# --- 1) Check NATS + Consul are reachable -----------------------------------
+# The mpcium cluster is started and operated separately; we only need its
+# NATS + Consul endpoints to be up so the backend can connect.
+say "Checking backend deps (NATS $NATS_HOST:$NATS_PORT, Consul $CONSUL_ADDR)"
 
 hint() {
   cat <<EOF
 
-  The mpcium cluster isn't ready. Start it yourself, then re-run ./start.sh:
-
-    for n in 0 1 2; do ( cd $ROOT/mpcium/node\$n && mpcium start -n node\$n \\
-      > $LOGS/node\$n.log 2>&1 & ); done
-    curl -s http://$HEALTH_HOST:$HEALTH_BASE_PORT/health
-
-  Connection targets live in $CFG.
+  NATS/Consul aren't reachable. Make sure the mpcium cluster is up, then
+  re-run ./start.sh. Connection targets live in $CFG.
 EOF
 }
 
@@ -61,17 +57,7 @@ reachable "$NATS_HOST" "$NATS_PORT"     || { warn "NATS unreachable at $NATS_HOS
 reachable "$CONSUL_HOST" "$CONSUL_PORT" || { warn "Consul unreachable at $CONSUL_ADDR";        hint; exit 1; }
 [ -n "$(curl -s "http://$CONSUL_ADDR/v1/status/leader" | tr -d '"')" ] \
   || { warn "Consul has no leader"; hint; exit 1; }
-curl -s "http://$CONSUL_ADDR/v1/kv/mpc_peers/?keys" | grep -q node0 \
-  || { warn "no peers registered in Consul (mpc_peers/ empty)"; hint; exit 1; }
-
-live=0
-for n in 0 1 2; do
-  curl -s -m 2 "http://$HEALTH_HOST:$((HEALTH_BASE_PORT + n))/health" | grep -q '"live":true' \
-    && live=$((live + 1))
-done
-[ "$live" -gt 0 ] || { warn "no mpcium nodes responding on $HEALTH_HOST:$HEALTH_BASE_PORT-$((HEALTH_BASE_PORT + 2))"; hint; exit 1; }
-[ "$live" -eq 3 ] || warn "only $live/3 nodes live — keygen/signing may stall (2-of-3)"
-ok "Cluster reachable ($live/3 nodes live)"
+ok "NATS + Consul reachable"
 
 # --- 2) Backend (reads backend/config.yaml) ---------------------------------
 say "Building & starting backend on $ADDR"
@@ -84,5 +70,5 @@ ok "Backend up on $ADDR"
 
 # --- 3) Frontend (foreground) ----------------------------------------------
 [ -d "$ROOT/ui/node_modules" ] || ( say "Installing UI deps"; cd "$ROOT/ui" && npm install )
-ok "Frontend → http://localhost:$UI_PORT   (Ctrl+C stops the UI; backend & mpcium keep running)"
+ok "Frontend → http://localhost:$UI_PORT   (Ctrl+C stops the UI; backend keeps running)"
 cd "$ROOT/ui" && npm run dev -- --port "$UI_PORT"

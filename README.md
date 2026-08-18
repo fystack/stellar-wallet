@@ -7,21 +7,22 @@ is signed by 2 of 3 nodes.
 
 ```
 stellar-wallet/
-├── mpcium/      # the MPC cluster (node0/1/2 data + identities). Runs via the `mpcium` binary.
 ├── backend/     # Go (Gin) API — links to the cluster over NATS, builds/broadcasts txs
 ├── ui/          # Vite + React + Tailwind frontend
-├── start.sh     # start everything
-└── stop.sh      # stop backend + UI (+ --nodes to stop the cluster)
+├── start.sh     # start backend + UI
+└── stop.sh      # stop backend + UI
 ```
+
+This repo is the **webapp only** (backend + UI). The mpcium cluster (NATS,
+Consul, the nodes) is started and operated **separately** — see the
+[mpcium](https://github.com/fystack/mpcium) project. The backend connects to it
+over the NATS/Consul endpoints configured in `backend/config.yaml`.
 
 ## Prerequisites
 
 - **Go** ≥ 1.21, **Node** ≥ 18 / npm.
-- **Docker** + docker compose (plugin *or* `docker-compose`) — for local NATS/Consul.
-- `mpcium` / `mpcium-cli` are **auto-installed** by `bootstrap.sh` if missing
-  (`go install github.com/fystack/mpcium/cmd/...`). The mpcium repo itself is never needed.
-
-The `mpcium/` folder (node data + keys) is **not in this repo** — it's created on first run.
+- A **running mpcium cluster** reachable at the NATS + Consul addresses in
+  `backend/config.yaml` (dev default: `10.10.0.1:4222` / `10.10.0.1:8500`).
 
 ## Run
 
@@ -29,47 +30,29 @@ The `mpcium/` folder (node data + keys) is **not in this repo** — it's created
 ./start.sh
 ```
 
-It's **seamless** — you don't set up NATS/Consul, keys, or nodes yourself:
-
-1. **No `mpcium/` folder** (fresh clone) → `bootstrap.sh` runs: installs mpcium/mpcium-cli,
-   boots local NATS+Consul (Docker), generates peers + node identities + the event-initiator
-   key, writes per-node configs, and registers peers into Consul.
-2. Else if the shared dev cluster (`10.10.0.1:4222/8500`) is reachable → use it.
-3. Else → reuse the existing local setup (bringing Docker infra up if needed).
-4. Starts the 3 MPC nodes (only if not already running — never duplicates).
-5. Builds & starts the backend on **:8090**, pointed at the chosen infra.
-6. Installs UI deps if needed and starts the frontend on **:5173**.
+`start.sh` checks that NATS + Consul are reachable, then builds & starts the
+backend on **:8090** and the frontend on **:5173**. All connection settings come
+from `backend/config.yaml` (the single source of truth).
 
 Open **http://localhost:5173**, register, and create a wallet.
-
-If `4222`/`8500` are busy on your machine, override the ports:
-
-```bash
-NATS_PORT=14222 CONSUL_PORT=18500 ./start.sh
-```
 
 Stop:
 
 ```bash
-./stop.sh            # backend + UI (nodes keep running)
-./stop.sh --nodes    # also stop the MPC node processes
-./stop.sh --all      # also stop the local Docker NATS/Consul
+./stop.sh            # backend + UI (the mpcium cluster is untouched)
 ```
 
-Logs are written to `logs/` (`node0.log`, `backend.log`, …).
+Logs are written to `logs/` (`backend.log`).
 
 ## Configuration (env)
 
 | Var            | Default            | Used by     |
 | -------------- | ------------------ | ----------- |
-| `BACKEND_ADDR` | `:8090`            | start.sh    |
 | `UI_PORT`      | `5173`             | start.sh    |
-| `NATS_HOST`    | `10.10.0.1`        | start.sh    |
-| `NATS_URL`     | `nats://10.10.0.1:4222` | backend |
-| `CONSUL_ADDR`  | `10.10.0.1:8500`   | backend     |
-| `INITIATOR_KEY`| `../mpcium/event_initiator.key` | backend |
-| `DB_PATH`      | `wallet.db`        | backend     |
 | `VITE_API_BASE`| `http://localhost:8090` | ui     |
+
+Backend connection settings (`addr`, `nats_url`, `consul_addr`, `db_path`,
+event-initiator key, …) live in `backend/config.yaml`.
 
 RPC endpoints (Stellar Horizon, Solana) are editable at runtime in **Settings → Chains & RPC**.
 
