@@ -7,42 +7,54 @@ is signed by 2 of 3 nodes.
 
 ```
 stellar-wallet/
-├── backend/     # Go (Gin) API — links to the cluster over NATS, builds/broadcasts txs
-├── ui/          # Vite + React + Tailwind frontend
-├── start.sh     # start backend + UI
-└── stop.sh      # stop backend + UI
+├── backend/              # Go (Gin) API — links to the cluster over NATS, builds/broadcasts txs
+├── ui/                   # Vite + React + Tailwind frontend
+├── mpcium/               # node identities + BadgerDB key-shares (mounted into the node containers)
+├── infra/                # mpcium Dockerfile + node config for the Docker stack
+├── docker-compose.yaml   # full stack: NATS + Consul + 3 nodes + backend + UI
+├── start.sh / stop.sh    # local dev (backend + UI against an external cluster)
 ```
 
-This repo is the **webapp only** (backend + UI). The mpcium cluster (NATS,
-Consul, the nodes) is started and operated **separately** — see the
-[mpcium](https://github.com/fystack/mpcium) project. The backend connects to it
-over the NATS/Consul endpoints configured in `backend/config.yaml`.
+## Run with Docker (everything)
+
+Brings up NATS, Consul, the 3 mpcium nodes, the backend, and the UI — then you
+just open the web:
+
+```bash
+docker compose up --build -d
+```
+
+Open **http://localhost:8080**, register, and create a wallet. That's it.
+
+- UI on **:8080** (nginx; proxies `/api` + SSE to the backend, so single-origin)
+- Backend on **:8090**, mpcium node health on **:8091–8093**, Consul on **:8500**
+- The nodes reuse the existing key-shares under `mpcium/nodeN/` (bind-mounted);
+  Consul runs in dev mode and each node re-seeds its peer IDs on startup.
+- Wallet data lives in the `backend_data` volume (fresh DB on first run).
+
+```bash
+docker compose logs -f backend        # follow a service
+docker compose down                   # stop everything (key-shares persist on host)
+docker compose down -v                # also wipe the wallet DB volume
+```
+
+## Run locally (backend + UI only, external cluster)
+
+For iterating on the app against an already-running mpcium cluster (e.g. the
+shared dev cluster), skip Docker:
+
+```bash
+./start.sh   # checks NATS+Consul reachable, then backend :8090 + UI :5173
+./stop.sh    # stops backend + UI (the cluster is untouched)
+```
+
+Connection settings come from `backend/config.yaml` (the single source of
+truth). Logs are written to `logs/`.
 
 ## Prerequisites
 
-- **Go** ≥ 1.21, **Node** ≥ 18 / npm.
-- A **running mpcium cluster** reachable at the NATS + Consul addresses in
-  `backend/config.yaml` (dev default: `10.10.0.1:4222` / `10.10.0.1:8500`).
-
-## Run
-
-```bash
-./start.sh
-```
-
-`start.sh` checks that NATS + Consul are reachable, then builds & starts the
-backend on **:8090** and the frontend on **:5173**. All connection settings come
-from `backend/config.yaml` (the single source of truth).
-
-Open **http://localhost:5173**, register, and create a wallet.
-
-Stop:
-
-```bash
-./stop.sh            # backend + UI (the mpcium cluster is untouched)
-```
-
-Logs are written to `logs/` (`backend.log`).
+- **Docker** + compose (for the full-stack path), or
+- **Go** ≥ 1.21, **Node** ≥ 18 / npm (for the local path).
 
 ## Configuration (env)
 

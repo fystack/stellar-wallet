@@ -1,0 +1,116 @@
+# Full local stack: NATS + Consul + 3 mpcium nodes + backend API + UI.
+# Bring it all up and just open the web:
+#
+#   docker compose up --build -d
+#   open http://localhost:8080
+#
+# mpcium runs from the official fystacklabs/mpcium image (WORKDIR /app). Each
+# node mounts its existing identity + peers.json (from ./mpcium/nodeN) and gets
+# a fresh named volume for its BadgerDB shares. Consul + NATS are seeded on
+# node startup via --peers.
+name: stellar-wallet
+
+services:
+  consul:
+    image: consul:1.15.4
+    command: "agent -server -ui -node=server-1 -bootstrap-expect=1 -client=0.0.0.0"
+    ports:
+      - "8500:8500"
+    healthcheck:
+      test: ["CMD", "consul", "operator", "raft", "list-peers"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  node0:
+    image: docker.io/fystacklabs/mpcium:0.3.5
+    user: "0:0"
+    command: ["start", "-n", "node0", "--peers", "/app/peers.json"]
+    volumes:
+      - ./infra/mpcium.docker.yaml:/app/config.yaml:ro
+      - ./mpcium/node0/identity:/app/identity:ro
+      - ./mpcium/node0/peers.json:/app/peers.json:ro
+      - node0_db:/app/db
+      - node0_backups:/app/backups
+    ports:
+      - "8091:8080"
+    depends_on:
+      consul: { condition: service_healthy }
+      nats: { condition: service_healthy }
+    restart: unless-stopped
+
+  node1:
+    image: docker.io/fystacklabs/mpcium:0.3.5
+    user: "0:0"
+    command: ["start", "-n", "node1", "--peers", "/app/peers.json"]
+    volumes:
+      - ./infra/mpcium.docker.yaml:/app/config.yaml:ro
+      - ./mpcium/node1/identity:/app/identity:ro
+      - ./mpcium/node1/peers.json:/app/peers.json:ro
+      - node1_db:/app/db
+      - node1_backups:/app/backups
+    ports:
+      - "8092:8080"
+    depends_on:
+      consul: { condition: service_healthy }
+      nats: { condition: service_healthy }
+    restart: unless-stopped
+
+  node2:
+    image: docker.io/fystacklabs/mpcium:0.3.5
+    user: "0:0"
+    command: ["start", "-n", "node2", "--peers", "/app/peers.json"]
+    volumes:
+      - ./infra/mpcium.docker.yaml:/app/config.yaml:ro
+      - ./mpcium/node2/identity:/app/identity:ro
+      - ./mpcium/node2/peers.json:/app/peers.json:ro
+      - node2_db:/app/db
+      - node2_backups:/app/backups
+    ports:
+      - "8093:8080"
+    depends_on:
+      consul: { condition: service_healthy }
+      nats: { condition: service_healthy }
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    volumes:
+      - ./backend/config.docker.yaml:/app/config.yaml:ro
+      - ./mpcium/event_initiator.key:/run/secrets/event_initiator.key:ro
+      - backend_data:/data
+    ports:
+      - "8090:8090"
+    depends_on:
+      - node0
+      - node1
+      - node2
+
+  ui:
+    build:
+      context: ./ui
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  node0_db:
+  node0_backups:
+  node1_db:
+  node1_backups:
+  node2_db:
+  node2_backups:
+  backend_data:

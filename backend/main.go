@@ -30,7 +30,7 @@ func main() {
 	httpClient := &http.Client{Timeout: 20 * time.Second}
 	chainClient := chain.NewClient(cfg.HorizonURL, cfg.SolanaURL, httpClient)
 	authManager := auth.New([]byte(cfg.AuthSecret), 24*time.Hour)
-	clusterClient := cluster.NewClient(httpClient, cfg.ConsulAddr, cfg.HealthBasePort)
+	clusterClient := cluster.NewClient(httpClient, cfg.ConsulAddr, cfg.HealthBasePort, cfg.NodeHealthURL, cfg.AssumePeersOnline)
 	server := app.NewServer(app.Dependencies{
 		Store:   sqlite.NewStore(db),
 		Auth:    authManager,

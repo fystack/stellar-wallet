@@ -21,8 +21,18 @@ type Config struct {
 	ConsulAddr     string `yaml:"consul_addr"`
 	InitiatorKey   string `yaml:"initiator_key"`
 	HealthBasePort int    `yaml:"health_base_port"`
-	HorizonURL     string `yaml:"horizon_url"`
-	SolanaURL      string `yaml:"solana_url"`
+	// NodeHealthURL templates each node's /health URL. Empty = the local
+	// default (http://localhost:<health_base_port+index>/health). In Docker,
+	// where nodes are separate hosts, set e.g. "http://node{i}:8091/health"
+	// ({i} = node index, {port} = health_base_port+index).
+	NodeHealthURL string `yaml:"node_health_url"`
+	// AssumePeersOnline treats every Consul-registered peer as live without
+	// hitting a /health endpoint. The official fystacklabs/mpcium image ships
+	// no health server, so set this true there; the timeout watchdog still
+	// catches a node that dies mid-keygen/sign.
+	AssumePeersOnline bool   `yaml:"assume_peers_online"`
+	HorizonURL        string `yaml:"horizon_url"`
+	SolanaURL         string `yaml:"solana_url"`
 }
 
 func defaults() Config {

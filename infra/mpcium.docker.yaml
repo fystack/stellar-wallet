@@ -1,0 +1,29 @@
+# mpcium node config for the Docker Compose stack (official fystacklabs/mpcium
+# image, WORKDIR /app). Shared by all three node containers — each mounts its
+# own identity + peers.json and its own named volume at /app/db, so their
+# BadgerDB shares stay separate.
+#
+# Only the transport addresses + paths differ from the host config; secrets
+# (badger_password, chain_code, initiator pubkey) MUST stay identical to the
+# host config or existing key-shares won't decrypt.
+nats:
+  url: nats://nats:4222
+consul:
+  address: consul:8500
+mpc_threshold: 2
+environment: development
+badger_password: "65e720b32a1b3780178aa883"
+event_initiator_algorithm: "ed25519"
+event_initiator_pubkey: "5f61619dd429d4a291e40d8854c6ac01045ecbd6db91ac8029f366626852fe61"
+chain_code: "13ddc491b3dcda986ece9cf777efd0b627d7f190f1349eaf427fda37e19aa723"
+db_path: "/app/db"
+backup_enabled: true
+backup_period_seconds: 300
+backup_dir: "/app/backups"
+max_concurrent_keygen: 2
+max_concurrent_signing: 10
+healthcheck:
+  enabled: true
+  # Same port inside every container; compose maps them to 8091/8092/8093 on
+  # the host. The backend reaches them by service name (node_health_url).
+  address: "0.0.0.0:8080"

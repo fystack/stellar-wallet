@@ -7,7 +7,7 @@ import (
 )
 
 func TestNodesFallsBackToThreeLocalNodes(t *testing.T) {
-	client := NewClient(&http.Client{Timeout: 50 * time.Millisecond}, "127.0.0.1:1", 1)
+	client := NewClient(&http.Client{Timeout: 50 * time.Millisecond}, "127.0.0.1:1", 1, "", false)
 
 	nodes := client.Nodes()
 	if len(nodes) != 3 {

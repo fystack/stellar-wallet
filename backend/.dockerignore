@@ -1,0 +1,6 @@
+stellar-wallet-backend
+wallet.db
+wallet.db-shm
+wallet.db-wal
+config.yaml
+*.log

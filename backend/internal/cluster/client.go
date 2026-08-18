@@ -15,10 +15,31 @@ type Client struct {
 	httpClient    *http.Client
 	consulAddress string
 	healthBase    int
+	healthURLTmpl string
+	assumeOnline  bool
 }
 
-func NewClient(httpClient *http.Client, consulAddress string, healthBase int) *Client {
-	return &Client{httpClient: httpClient, consulAddress: consulAddress, healthBase: healthBase}
+func NewClient(httpClient *http.Client, consulAddress string, healthBase int, healthURLTmpl string, assumeOnline bool) *Client {
+	return &Client{
+		httpClient:    httpClient,
+		consulAddress: consulAddress,
+		healthBase:    healthBase,
+		healthURLTmpl: healthURLTmpl,
+		assumeOnline:  assumeOnline,
+	}
+}
+
+// healthURL builds a node's /health endpoint. With no template it targets
+// localhost on a per-node port (health_base+index); with a template it fills
+// {i} (index) and {port} so nodes can live on separate hosts (Docker).
+func (c *Client) healthURL(index int) string {
+	port := c.healthBase + index
+	if c.healthURLTmpl == "" {
+		return fmt.Sprintf("http://localhost:%d/health", port)
+	}
+	return strings.NewReplacer(
+		"{i}", strconv.Itoa(index), "{port}", strconv.Itoa(port),
+	).Replace(c.healthURLTmpl)
 }
 
 // OnlineCount reports how many MPC nodes are currently live. Used as a
@@ -35,8 +56,12 @@ func (c *Client) OnlineCount() int {
 }
 
 func (c *Client) nodeReady(index int) bool {
-	url := fmt.Sprintf("http://localhost:%d/health", c.healthBase+index)
-	response, err := c.httpClient.Get(url)
+	// No health endpoint (e.g. the official mpcium image) — a peer present in
+	// Consul is taken as live; the timeout watchdog covers actual failures.
+	if c.assumeOnline {
+		return true
+	}
+	response, err := c.httpClient.Get(c.healthURL(index))
 	if err != nil {
 		return false
 	}

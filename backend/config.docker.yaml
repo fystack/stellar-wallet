@@ -1,0 +1,21 @@
+# Backend config for the Docker Compose stack. Mounted to /app/config.yaml.
+# Differs from the host config only in the transport addresses (compose service
+# names) and node_health_url (nodes are separate hosts in Docker).
+addr: ":8090"
+db_path: "/data/wallet.db"
+cors_origin: "*"                    # UI is same-origin via nginx; * is harmless
+auth_secret: "dev-secret-change-me" # CHANGE for any real deployment
+
+# mpcium cluster (compose services)
+nats_url: "nats://nats:4222"
+consul_addr: "consul:8500"
+initiator_key: "/run/secrets/event_initiator.key"
+health_base_port: 8080
+node_health_url: "http://node{i}:8080/health"
+# The official mpcium image DOES serve /health on :8080, so keep real liveness
+# detection. Set assume_peers_online: true only if you run an image without it.
+assume_peers_online: false
+
+# Chains
+horizon_url: "https://horizon-testnet.stellar.org"
+solana_url: "https://api.devnet.solana.com"
