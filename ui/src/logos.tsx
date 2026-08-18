@@ -57,26 +57,6 @@ export function StellarLogo({ size = 28 }: Props) {
   )
 }
 
-export function SolanaLogo({ size = 28 }: Props) {
-  const id = useId()
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40">
-      <defs>
-        <linearGradient id={id} x1="6" y1="28" x2="34" y2="12" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#9945FF" />
-          <stop offset="100%" stopColor="#14F195" />
-        </linearGradient>
-      </defs>
-      <circle cx="20" cy="20" r="20" fill="#131316" />
-      <g fill={`url(#${id})`}>
-        <path d="M11 11h20l-4 4H7z" />
-        <path d="M7 17.5h20l4 4H11z" />
-        <path d="M11 24h20l-4 4H7z" />
-      </g>
-    </svg>
-  )
-}
-
 // --- Token marks ---
 
 function CoinBadge({
@@ -170,15 +150,12 @@ export function EthLogo({ size = 28 }: Props) {
 
 // --- Dispatchers ---
 
-export function ChainLogo({ chain, size = 28 }: { chain: string; size?: number }) {
-  if (chain === 'solana') return <SolanaLogo size={size} />
+export function ChainLogo({ chain: _chain, size = 28 }: { chain: string; size?: number }) {
   return <StellarLogo size={size} />
 }
 
 export function TokenLogo({ symbol, size = 28 }: { symbol: string; size?: number }) {
   switch (symbol) {
-    case 'SOL':
-      return <SolanaLogo size={size} />
     case 'USDC':
       return <UsdcLogo size={size} />
     case 'USDT':
@@ -216,5 +193,4 @@ function MonogramLogo({ symbol, size = 28 }: { symbol: string; size?: number }) 
 // Tokens available per chain (native first).
 export const chainTokens: Record<string, string[]> = {
   stellar: ['XLM', 'USDC', 'USDT'],
-  solana: ['SOL', 'USDC', 'USDT'],
 }

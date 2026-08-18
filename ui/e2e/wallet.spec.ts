@@ -122,17 +122,6 @@ test('receive modal stays centered and listens for payments', async ({ page }) =
   await expect(page.getByText(/Listening for incoming/)).toBeVisible()
 })
 
-test('solana wallet creation is disabled', async ({ page }) => {
-  await register(page)
-  await page.getByRole('button', { name: 'Create your first wallet' }).click()
-
-  const stellar = page.getByRole('button', { name: /Stellar/ })
-  const solana = page.getByRole('button', { name: /Solana/ })
-  await expect(stellar).toBeEnabled()
-  await expect(solana).toBeDisabled()
-  await expect(solana).toContainText('Coming soon')
-})
-
 test('delete wallet returns to the empty state', async ({ page }) => {
   await register(page)
   await createWalletAndOpen(page, true)

@@ -1,9 +1,7 @@
 package chain
 
 import (
-	"bytes"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,7 +21,6 @@ import (
 
 const (
 	DefaultHorizonURL = "https://horizon-testnet.stellar.org"
-	DefaultSolanaURL  = "https://api.devnet.solana.com"
 	friendbotURL      = "https://friendbot.stellar.org"
 )
 
@@ -40,38 +37,29 @@ type Client struct {
 
 	rpcMu      sync.RWMutex
 	horizonURL string
-	solanaURL  string
 
 	priceMu     sync.Mutex
 	priceCache  map[string]float64
 	priceExpiry time.Time
 }
 
-func NewClient(horizonURL, solanaURL string, httpClient *http.Client) *Client {
+func NewClient(horizonURL string, httpClient *http.Client) *Client {
 	return &Client{
 		httpClient: httpClient,
 		horizonURL: horizonURL,
-		solanaURL:  solanaURL,
 	}
 }
 
-func (c *Client) SetRPC(horizonURL, solanaURL string) {
+func (c *Client) SetRPC(horizonURL string) {
 	c.rpcMu.Lock()
 	defer c.rpcMu.Unlock()
 	c.horizonURL = horizonURL
-	c.solanaURL = solanaURL
 }
 
 func (c *Client) HorizonURL() string {
 	c.rpcMu.RLock()
 	defer c.rpcMu.RUnlock()
 	return c.horizonURL
-}
-
-func (c *Client) SolanaURL() string {
-	c.rpcMu.RLock()
-	defer c.rpcMu.RUnlock()
-	return c.solanaURL
 }
 
 func (c *Client) horizon() *horizonclient.Client {
@@ -138,9 +126,6 @@ func (c *Client) Balances(chainName, address string) []domain.AssetBalance {
 			}
 		}
 		return balances
-	case "solana":
-		balance, _ := c.Balance("solana", address)
-		return []domain.AssetBalance{{Symbol: "SOL", Balance: balance}}
 	default:
 		return nil
 	}
@@ -153,13 +138,6 @@ func (c *Client) PingHorizon() bool {
 	}
 	defer response.Body.Close()
 	return response.StatusCode < http.StatusBadRequest
-}
-
-func (c *Client) PingSolana() bool {
-	var response struct {
-		Result string `json:"result"`
-	}
-	return c.solanaRPC("getHealth", []any{}, &response) == nil && response.Result == "ok"
 }
 
 func (c *Client) Balance(chainName, address string) (string, error) {
@@ -175,16 +153,6 @@ func (c *Client) Balance(chainName, address string) (string, error) {
 			}
 		}
 		return "0.00", nil
-	case "solana":
-		var response struct {
-			Result struct {
-				Value uint64 `json:"value"`
-			} `json:"result"`
-		}
-		if err := c.solanaRPC("getBalance", []any{address}, &response); err != nil {
-			return "0.00", nil
-		}
-		return fmt.Sprintf("%.4f", float64(response.Result.Value)/1e9), nil
 	default:
 		return "0.00", nil
 	}
@@ -203,34 +171,9 @@ func (c *Client) Fund(chainName, address string) error {
 			return fmt.Errorf("friendbot: %s", string(body))
 		}
 		return nil
-	case "solana":
-		var response struct {
-			Error *struct {
-				Message string `json:"message"`
-			} `json:"error"`
-		}
-		if err := c.solanaRPC("requestAirdrop", []any{address, 1000000000}, &response); err != nil {
-			return err
-		}
-		if response.Error != nil {
-			return fmt.Errorf("airdrop: %s", response.Error.Message)
-		}
-		return nil
 	default:
 		return fmt.Errorf("unsupported chain")
 	}
-}
-
-func (c *Client) solanaRPC(method string, params []any, output any) error {
-	payload, _ := json.Marshal(map[string]any{
-		"jsonrpc": "2.0", "id": 1, "method": method, "params": params,
-	})
-	response, err := c.httpClient.Post(c.SolanaURL(), "application/json", bytes.NewReader(payload))
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-	return json.NewDecoder(response.Body).Decode(output)
 }
 
 func (c *Client) BuildPayment(

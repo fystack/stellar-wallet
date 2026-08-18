@@ -1,4 +1,4 @@
-export type Chain = 'stellar' | 'solana'
+export type Chain = 'stellar'
 
 export type WalletStatus = 'generating' | 'ready' | 'failed'
 

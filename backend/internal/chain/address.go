@@ -8,8 +8,6 @@ import (
 
 func DeriveAddress(chainName string, publicKey []byte) string {
 	switch chainName {
-	case "solana":
-		return base58.Encode(publicKey)
 	case "stellar":
 		return stellarStrkey(publicKey)
 	default:
@@ -44,8 +42,6 @@ func ExplorerAddress(chainName, address string) string {
 	switch chainName {
 	case "stellar":
 		return "https://stellar.expert/explorer/testnet/account/" + address
-	case "solana":
-		return "https://explorer.solana.com/address/" + address + "?cluster=devnet"
 	default:
 		return ""
 	}

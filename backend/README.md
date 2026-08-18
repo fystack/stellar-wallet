@@ -1,6 +1,6 @@
 # Stellar Wallet Backend
 
-Go (Gin) + SQLite API for the Stellar/Solana wallet. Key generation and signing
+Go (Gin) + SQLite API for the Stellar wallet. Key generation and signing
 use the real mpcium cluster over NATS; transaction and wallet updates are pushed
 to clients over SSE.
 
@@ -33,7 +33,7 @@ go run .
 main.go
   ├── app/       HTTP routes, handlers, use-case orchestration, MPC callbacks
   ├── auth/      JWT creation and authentication middleware
-  ├── chain/     Stellar/Solana RPC, transaction building, prices
+  ├── chain/     Stellar (Horizon) RPC, transaction building, prices
   ├── cluster/   Consul peer discovery and MPC node health
   ├── domain/    Wallet, transaction, asset, and cluster models
   ├── mpc/       NATS/mpcium client adapter
@@ -65,7 +65,7 @@ go build ./...
 | POST   | `/auth/register`              | –    | `{email, password}` → `{access_token}`|
 | POST   | `/auth/login`                 | –    | `{email, password}` → `{access_token}`|
 | GET    | `/wallets`                    | ✓    | list wallets                          |
-| POST   | `/wallets`                    | ✓    | `{name, chain}` (`stellar` or `solana`) |
+| POST   | `/wallets`                    | ✓    | `{name, chain}` (`stellar`)           |
 | GET    | `/wallets/:id`                | ✓    | one wallet                            |
 | GET    | `/wallets/:id/transactions`   | ✓    | wallet transactions                   |
 | POST   | `/transactions`               | ✓    | `{wallet_id, to, amount, memo}`       |
@@ -73,5 +73,4 @@ go build ./...
 | GET    | `/cluster`                    | –    | real MPC peer/node status             |
 
 Outgoing Stellar transactions move through `signing → broadcast → confirmed`
-from real MPC result events. Solana currently stops after MPC signing and does
-not broadcast on-chain.
+from real MPC result events.

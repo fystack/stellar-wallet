@@ -8,7 +8,6 @@ type ChainMetadata struct {
 
 var Chains = map[string]ChainMetadata{
 	"stellar": {Symbol: "XLM", Network: "stellar-testnet"},
-	"solana":  {Symbol: "SOL", Network: "solana-devnet"},
 }
 
 type User struct {
@@ -40,15 +39,15 @@ type Transaction struct {
 	Amount       string `json:"amount"`
 	Symbol       string `json:"symbol"`
 	// Swap-only: the asset/amount received on the other leg of a path payment.
-	RecvAmount   string `json:"recvAmount,omitempty"`
-	RecvSymbol   string `json:"recvSymbol,omitempty"`
-	Memo         string `json:"memo,omitempty"`
-	Status       string `json:"status"`
-	Signature    string `json:"signature,omitempty"`
-	EnvelopeXDR  string `json:"-"`
-	TxHash       string `json:"txHash,omitempty"`
-	Error        string `json:"error,omitempty"`
-	CreatedAt    string `json:"createdAt"`
+	RecvAmount  string `json:"recvAmount,omitempty"`
+	RecvSymbol  string `json:"recvSymbol,omitempty"`
+	Memo        string `json:"memo,omitempty"`
+	Status      string `json:"status"`
+	Signature   string `json:"signature,omitempty"`
+	EnvelopeXDR string `json:"-"`
+	TxHash      string `json:"txHash,omitempty"`
+	Error       string `json:"error,omitempty"`
+	CreatedAt   string `json:"createdAt"`
 }
 
 type AssetBalance struct {

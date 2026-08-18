@@ -15,4 +15,3 @@ health_base_port: 8091              # node$n /health on health_base_port + n
 
 # Chains
 horizon_url: "https://horizon-testnet.stellar.org"
-solana_url: "https://api.devnet.solana.com"

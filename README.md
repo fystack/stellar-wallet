@@ -1,6 +1,6 @@
 # Stellar MPC Wallet
 
-A threshold-signature (2-of-3 MPC) wallet for Stellar & Solana, powered by the
+A threshold-signature (2-of-3 MPC) wallet for Stellar, powered by the
 [mpcium](https://github.com/fystack/mpcium) signing cluster. The private key is
 generated in shares across 3 nodes and **never assembled** — every transaction
 is signed by 2 of 3 nodes.
@@ -66,11 +66,11 @@ truth). Logs are written to `logs/`.
 Backend connection settings (`addr`, `nats_url`, `consul_addr`, `db_path`,
 event-initiator key, …) live in `backend/config.yaml`.
 
-RPC endpoints (Stellar Horizon, Solana) are editable at runtime in **Settings → Chains & RPC**.
+The Stellar Horizon RPC endpoint is editable at runtime in **Settings → Chains & RPC**.
 
 ## What works
 
-- **Keygen** — real distributed MPC keygen; Stellar (`G…`) & Solana addresses derived from the EdDSA pubkey.
+- **Keygen** — real distributed MPC keygen; Stellar (`G…`) address derived from the EdDSA pubkey.
 - **Send** — builds a Stellar payment / createAccount, signs via the cluster, broadcasts to Horizon (testnet). Address + balance validation, fee estimate, memo on-chain.
 - **Receive** — QR + polls Horizon for incoming payments.
 - **Balances** — live per-asset, cached with a background refresher, USD values (CoinGecko).
@@ -80,8 +80,7 @@ RPC endpoints (Stellar Horizon, Solana) are editable at runtime in **Settings �
 
 ## Notes / limits
 
-- **Testnet only** — Horizon testnet + Friendbot, Solana devnet + airdrop. Mainnet not enabled.
-- **Solana** — keygen, address, balance, fund work; on-chain *send* is sign-only (no broadcast yet).
+- **Testnet only** — Horizon testnet + Friendbot. Mainnet not enabled.
 - Dev auth (hardcoded JWT secret). Harden (env secret, HTTPS, rate-limit) before any real deployment.
 
 ## Backend API (`/api/v1`)

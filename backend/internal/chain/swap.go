@@ -45,11 +45,11 @@ func (a SwapAsset) canonical() string {
 // of the source asset, how much of the destination asset would arrive, and
 // through which intermediate hops.
 type SwapQuote struct {
-	SendAsset      SwapAsset   `json:"send_asset"`
-	SendAmount     string      `json:"send_amount"`
-	DestAsset      SwapAsset   `json:"dest_asset"`
-	DestAmount     string      `json:"dest_amount"`
-	Path           []SwapAsset `json:"path"`
+	SendAsset  SwapAsset   `json:"send_asset"`
+	SendAmount string      `json:"send_amount"`
+	DestAsset  SwapAsset   `json:"dest_asset"`
+	DestAmount string      `json:"dest_amount"`
+	Path       []SwapAsset `json:"path"`
 }
 
 func (c *Client) SwapQuote(send SwapAsset, sendAmount string, dest SwapAsset) (SwapQuote, error) {

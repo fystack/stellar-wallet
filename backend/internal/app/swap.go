@@ -58,7 +58,7 @@ func (s *Server) swapQuote(c *gin.Context) {
 }
 
 type swapBody struct {
-	From        string `json:"from"`         // "XLM" or "CODE:ISSUER"
+	From        string `json:"from"` // "XLM" or "CODE:ISSUER"
 	To          string `json:"to"`
 	Amount      string `json:"amount"`       // exact amount of `from` to send
 	SlippageBps int    `json:"slippage_bps"` // acceptable slippage, default 100 (1%)

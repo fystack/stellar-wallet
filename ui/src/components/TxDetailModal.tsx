@@ -11,7 +11,6 @@ import type { Transaction } from '../types.ts'
 
 const NETWORK: Record<string, string> = {
   stellar: 'Stellar · testnet',
-  solana: 'Solana · devnet',
 }
 
 function fmtDate(iso: string): string {

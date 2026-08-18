@@ -14,7 +14,7 @@ import (
 // Stellar destination. MemoType/Memo are populated only for federated
 // addresses whose server tells us a memo is required (e.g. exchange deposits).
 type Resolved struct {
-	Address  string `json:"address"`            // G... or M... — usable as a payment destination
+	Address  string `json:"address"`             // G... or M... — usable as a payment destination
 	MemoType string `json:"memo_type,omitempty"` // "text" | "id" | "hash"
 	Memo     string `json:"memo,omitempty"`
 	Federal  string `json:"federation,omitempty"` // the original name*domain, echoed back

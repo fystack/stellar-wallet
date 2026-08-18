@@ -159,13 +159,12 @@ export const api = {
   getConfig: () =>
     req<{
       horizonUrl: string
-      solanaUrl: string
       assets: { code: string; issuer: string }[]
     }>(`/api/v1/config`),
-  putConfig: (horizonUrl: string, solanaUrl: string) =>
+  putConfig: (horizonUrl: string) =>
     req<{ assets: { code: string; issuer: string }[] }>(`/api/v1/config`, {
       method: 'PUT',
-      json: { horizonUrl, solanaUrl },
+      json: { horizonUrl },
     }),
   addAsset: (code: string, issuer: string) =>
     req<{ assets: { code: string; issuer: string }[] }>(`/api/v1/assets`, {
@@ -187,15 +186,11 @@ export const api = {
 export function explorerTx(chain: string, hash: string): string {
   if (chain === 'stellar')
     return `https://stellar.expert/explorer/testnet/tx/${hash}`
-  if (chain === 'solana')
-    return `https://explorer.solana.com/tx/${hash}?cluster=devnet`
   return ''
 }
 
 export function explorerAddress(chain: string, address: string): string {
   if (chain === 'stellar')
     return `https://stellar.expert/explorer/testnet/account/${address}`
-  if (chain === 'solana')
-    return `https://explorer.solana.com/address/${address}?cluster=devnet`
   return ''
 }

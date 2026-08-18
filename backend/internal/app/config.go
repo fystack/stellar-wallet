@@ -24,10 +24,6 @@ func (s *Server) horizonURL() string {
 	return s.setting("horizon_url", chain.DefaultHorizonURL)
 }
 
-func (s *Server) solanaURL() string {
-	return s.setting("solana_url", chain.DefaultSolanaURL)
-}
-
 func (s *Server) customAssets() []domain.CustomAsset {
 	return s.store.CustomAssets()
 }
@@ -44,21 +40,18 @@ type chainStatus struct {
 func (s *Server) getChains(c *gin.Context) {
 	c.JSON(http.StatusOK, []chainStatus{
 		{"stellar", "Stellar", "XLM", "testnet", s.horizonURL(), s.chain.PingHorizon()},
-		{"solana", "Solana", "SOL", "devnet", s.solanaURL(), s.chain.PingSolana()},
 	})
 }
 
 func (s *Server) getConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"horizonUrl": s.horizonURL(),
-		"solanaUrl":  s.solanaURL(),
 		"assets":     s.customAssets(),
 	})
 }
 
 type configBody struct {
 	HorizonURL string `json:"horizonUrl"`
-	SolanaURL  string `json:"solanaUrl"`
 }
 
 func (s *Server) putConfig(c *gin.Context) {
@@ -70,15 +63,12 @@ func (s *Server) putConfig(c *gin.Context) {
 	if body.HorizonURL != "" {
 		s.setSetting("horizon_url", body.HorizonURL)
 	}
-	if body.SolanaURL != "" {
-		s.setSetting("solana_url", body.SolanaURL)
-	}
 	s.ApplyRPCConfig()
 	s.getConfig(c)
 }
 
 func (s *Server) ApplyRPCConfig() {
-	s.chain.SetRPC(s.horizonURL(), s.solanaURL())
+	s.chain.SetRPC(s.horizonURL())
 }
 
 func (s *Server) addAsset(c *gin.Context) {

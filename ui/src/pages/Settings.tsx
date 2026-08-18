@@ -124,7 +124,6 @@ export default function Settings() {
 
   // Chain / RPC config + custom asset registry.
   const [horizonUrl, setHorizonUrl] = useState('')
-  const [solanaUrl, setSolanaUrl] = useState('')
   const [assets, setAssets] = useState<{ code: string; issuer: string }[]>([])
   const [savingRpc, setSavingRpc] = useState(false)
   const [newCode, setNewCode] = useState('')
@@ -161,7 +160,6 @@ export default function Settings() {
       .getConfig()
       .then((r) => {
         setHorizonUrl(r.horizonUrl)
-        setSolanaUrl(r.solanaUrl)
         setAssets(r.assets)
       })
       .catch(() => {})
@@ -170,7 +168,7 @@ export default function Settings() {
   async function saveRpc() {
     setSavingRpc(true)
     try {
-      await api.putConfig(horizonUrl.trim(), solanaUrl.trim())
+      await api.putConfig(horizonUrl.trim())
       toast.success('RPC endpoints saved')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Save failed')
@@ -263,24 +261,6 @@ export default function Settings() {
               className="field-input w-full font-mono text-sm"
               value={horizonUrl}
               onChange={(e) => setHorizonUrl(e.target.value)}
-              spellCheck={false}
-            />
-          </div>
-
-          {/* Solana */}
-          <div>
-            <div className="mb-2 flex flex-wrap items-center gap-2.5">
-              <ChainLogo chain="solana" size={28} />
-              <span className="font-semibold">Solana</span>
-              <span className="bg-card px-2 py-0.5 text-xs font-medium uppercase text-muted">
-                devnet
-              </span>
-              <ChainBadge chain="solana" chains={chains} />
-            </div>
-            <input
-              className="field-input w-full font-mono text-sm"
-              value={solanaUrl}
-              onChange={(e) => setSolanaUrl(e.target.value)}
               spellCheck={false}
             />
           </div>

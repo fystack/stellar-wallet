@@ -32,7 +32,6 @@ type Config struct {
 	// catches a node that dies mid-keygen/sign.
 	AssumePeersOnline bool   `yaml:"assume_peers_online"`
 	HorizonURL        string `yaml:"horizon_url"`
-	SolanaURL         string `yaml:"solana_url"`
 }
 
 func defaults() Config {
@@ -46,7 +45,6 @@ func defaults() Config {
 		InitiatorKey:   "../mpcium/event_initiator.key",
 		HealthBasePort: 8091,
 		HorizonURL:     "https://horizon-testnet.stellar.org",
-		SolanaURL:      "https://api.devnet.solana.com",
 	}
 }
 

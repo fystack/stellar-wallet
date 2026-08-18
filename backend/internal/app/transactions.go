@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -128,23 +127,16 @@ func (s *Server) createTransaction(c *gin.Context) {
 		CreatedAt:    time.Now().UTC().Format(time.RFC3339),
 	}
 
-	var payload []byte
-	if wallet.Chain == "stellar" {
-		envelope, hash, buildErr := s.chain.BuildPayment(
-			wallet, transaction.Counterparty, transaction.Amount,
-			body.AssetCode, body.AssetIssuer, transaction.Memo, memoType,
-		)
-		if buildErr != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": buildErr.Error()})
-			return
-		}
-		transaction.EnvelopeXDR = envelope
-		payload = hash
-	} else {
-		payload = []byte(fmt.Sprintf(
-			"%s|%s|%s|%s", wallet.ID, transaction.Counterparty, transaction.Amount, transaction.Memo,
-		))
+	envelope, hash, buildErr := s.chain.BuildPayment(
+		wallet, transaction.Counterparty, transaction.Amount,
+		body.AssetCode, body.AssetIssuer, transaction.Memo, memoType,
+	)
+	if buildErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": buildErr.Error()})
+		return
 	}
+	transaction.EnvelopeXDR = envelope
+	payload := hash
 
 	err = s.store.CreateTransaction(transaction)
 	if err != nil {

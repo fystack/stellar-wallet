@@ -18,4 +18,3 @@ assume_peers_online: false
 
 # Chains
 horizon_url: "https://horizon-testnet.stellar.org"
-solana_url: "https://api.devnet.solana.com"

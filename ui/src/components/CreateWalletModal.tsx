@@ -15,7 +15,6 @@ type ChainOption = {
 
 const chains: ChainOption[] = [
   { id: 'stellar', name: 'Stellar', symbol: 'XLM' },
-  { id: 'solana', name: 'Solana', symbol: 'SOL', disabled: true },
 ]
 
 type Props = {

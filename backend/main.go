@@ -28,7 +28,7 @@ func main() {
 	defer db.Close()
 
 	httpClient := &http.Client{Timeout: 20 * time.Second}
-	chainClient := chain.NewClient(cfg.HorizonURL, cfg.SolanaURL, httpClient)
+	chainClient := chain.NewClient(cfg.HorizonURL, httpClient)
 	authManager := auth.New([]byte(cfg.AuthSecret), 24*time.Hour)
 	clusterClient := cluster.NewClient(httpClient, cfg.ConsulAddr, cfg.HealthBasePort, cfg.NodeHealthURL, cfg.AssumePeersOnline)
 	server := app.NewServer(app.Dependencies{
