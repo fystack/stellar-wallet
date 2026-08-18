@@ -102,6 +102,11 @@ func (s *Server) createWallet(c *gin.Context) {
 		name = capitalize(body.Chain) + " Wallet"
 	}
 
+	if err := s.requireNodes(keygenQuorum, "keygen"); err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		return
+	}
+
 	wallet := domain.Wallet{
 		ID:        uuid.NewString(),
 		UserID:    userID,
@@ -123,6 +128,7 @@ func (s *Server) createWallet(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "keygen dispatch failed: " + err.Error()})
 		return
 	}
+	s.watchKeygenTimeout(userID, wallet.ID)
 	c.JSON(http.StatusOK, wallet)
 }
 

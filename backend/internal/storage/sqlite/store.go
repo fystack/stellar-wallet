@@ -159,6 +159,24 @@ func (s *Store) ReadyWallets() []domain.Wallet {
 	return wallets
 }
 
+func (s *Store) GeneratingWallets() []domain.Wallet {
+	rows, err := s.db.Query(
+		`SELECT ` + walletColumns + ` FROM wallets WHERE status = 'generating'`,
+	)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	wallets := []domain.Wallet{}
+	for rows.Next() {
+		if wallet, scanErr := scanWallet(rows); scanErr == nil {
+			wallets = append(wallets, wallet)
+		}
+	}
+	return wallets
+}
+
 func (s *Store) SetWalletStatus(walletID, status string) {
 	_, _ = s.db.Exec(`UPDATE wallets SET status = ? WHERE id = ?`, status, walletID)
 }
@@ -260,6 +278,12 @@ func (s *Store) transactions(query string, args ...any) []domain.Transaction {
 		}
 	}
 	return transactions
+}
+
+func (s *Store) PendingTransactions() []domain.Transaction {
+	return s.transactions(
+		`SELECT ` + transactionColumns + ` FROM transactions WHERE status = 'signing'`,
+	)
 }
 
 func (s *Store) SetTransactionStatus(transactionID, status string) {

@@ -25,6 +25,7 @@ type Store interface {
 	WalletByID(walletID string) (domain.Wallet, bool)
 	WalletByAddress(address string) (domain.Wallet, bool)
 	ReadyWallets() []domain.Wallet
+	GeneratingWallets() []domain.Wallet
 	SetWalletStatus(walletID, status string)
 	CompleteWalletKeygen(walletID, address, publicKey string)
 	SetWalletBalance(walletID, balance string)
@@ -35,6 +36,7 @@ type Store interface {
 	TransactionsByWallet(userID, walletID string) []domain.Transaction
 	TransactionForUser(transactionID, userID string) (domain.Transaction, bool)
 	TransactionByID(transactionID string) (domain.Transaction, bool)
+	PendingTransactions() []domain.Transaction
 	SetTransactionStatus(transactionID, status string)
 	FailTransaction(transactionID, reason string)
 	SetTransactionSignature(transactionID, signature string)

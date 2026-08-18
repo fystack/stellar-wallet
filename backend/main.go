@@ -49,6 +49,7 @@ func main() {
 
 	server.ApplyRPCConfig()
 	server.StartBalanceRefresher()
+	server.ReconcilePending()
 
 	log.Printf("backend listening on %s (db=%s)", cfg.Addr, cfg.DBPath)
 	if err := server.Router(cfg.CORSOrigin).Run(cfg.Addr); err != nil {

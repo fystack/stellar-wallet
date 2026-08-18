@@ -21,6 +21,19 @@ func NewClient(httpClient *http.Client, consulAddress string, healthBase int) *C
 	return &Client{httpClient: httpClient, consulAddress: consulAddress, healthBase: healthBase}
 }
 
+// OnlineCount reports how many MPC nodes are currently live. Used as a
+// preflight before dispatching keygen (needs all 3) or signing (needs 2-of-3),
+// so requests fail fast instead of hanging when nodes are down.
+func (c *Client) OnlineCount() int {
+	online := 0
+	for _, node := range c.Nodes() {
+		if node.Online {
+			online++
+		}
+	}
+	return online
+}
+
 func (c *Client) nodeReady(index int) bool {
 	url := fmt.Sprintf("http://localhost:%d/health", c.healthBase+index)
 	response, err := c.httpClient.Get(url)

@@ -94,6 +94,11 @@ func (s *Server) createSwap(c *gin.Context) {
 		return
 	}
 
+	if err := s.requireNodes(signQuorum, "signing"); err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		return
+	}
+
 	quote, err := s.chain.SwapQuote(send, strings.TrimSpace(body.Amount), dest)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -138,6 +143,7 @@ func (s *Server) createSwap(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "sign dispatch failed: " + err.Error()})
 		return
 	}
+	s.watchSignTimeout(userID, transaction.ID)
 	s.hub.PublishTransaction(userID, transaction)
 	c.JSON(http.StatusOK, gin.H{"transaction": transaction, "quote": quote, "dest_min": destMin})
 }

@@ -87,6 +87,10 @@ func (s *Server) createTransaction(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "recipient required"})
 		return
 	}
+	if err := s.requireNodes(signQuorum, "signing"); err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		return
+	}
 
 	// Resolve federation / muxed recipients to a concrete address. If the
 	// server requires a memo and the user didn't supply one, adopt it.
@@ -155,6 +159,7 @@ func (s *Server) createTransaction(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "sign dispatch failed: " + err.Error()})
 		return
 	}
+	s.watchSignTimeout(userID, transaction.ID)
 	s.hub.PublishTransaction(userID, transaction)
 	c.JSON(http.StatusOK, transaction)
 }
@@ -183,6 +188,10 @@ func (s *Server) addTrustline(c *gin.Context) {
 
 	if s.store.TrustlineTransactionExists(wallet.ID, body.Code) {
 		c.JSON(http.StatusConflict, gin.H{"error": "trustline already added or in progress"})
+		return
+	}
+	if err := s.requireNodes(signQuorum, "signing"); err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -216,6 +225,7 @@ func (s *Server) addTrustline(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "sign dispatch failed: " + err.Error()})
 		return
 	}
+	s.watchSignTimeout(userID, transaction.ID)
 	s.hub.PublishTransaction(userID, transaction)
 	c.JSON(http.StatusOK, transaction)
 }

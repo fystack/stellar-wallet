@@ -37,6 +37,9 @@ func TestRouterPreservesPublicRouteContract(t *testing.T) {
 		"POST /api/v1/transactions":            true,
 		"GET /api/v1/transactions/:id":         true,
 		"GET /api/v1/tx/:hash/chain":           true,
+		"GET /api/v1/resolve":                  true,
+		"GET /api/v1/wallets/:id/swap/quote":   true,
+		"POST /api/v1/wallets/:id/swap":        true,
 	}
 
 	got := map[string]bool{}
