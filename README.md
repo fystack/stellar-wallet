@@ -63,6 +63,7 @@ The Stellar Horizon RPC endpoint is editable at runtime in **Settings → Chains
 
 - **Keygen** — real distributed MPC keygen; Stellar (`G…`) address derived from the EdDSA pubkey.
 - **Send** — builds a Stellar payment / createAccount, signs via the cluster, broadcasts to Horizon (testnet). Address + balance validation, fee estimate, memo on-chain.
+- **Swap** — strict-send path payment on the Stellar DEX with a quote + slippage guard, signed via the cluster.
 - **Receive** — QR + polls Horizon for incoming payments.
 - **Balances** — live per-asset, cached with a background refresher, USD values (CoinGecko).
 - **Custom assets** — register an asset (code+issuer) in Settings, add a trustline per wallet.
@@ -76,5 +77,5 @@ The Stellar Horizon RPC endpoint is editable at runtime in **Settings → Chains
 
 ## Backend API (`/api/v1`)
 
-`auth/register`, `auth/login`, `wallets` (CRUD), `wallets/:id/{balance,fund,sync,trustline,transactions}`,
-`transactions`, `events` (SSE), `cluster`, `chains`, `prices`, `config`, `assets`.
+`auth/register`, `auth/login`, `wallets` (CRUD), `wallets/:id/{balance,fund,sync,trustline,transactions,swap,swap/quote}`,
+`transactions`, `tx/:hash/chain`, `resolve`, `events` (SSE), `cluster`, `chains`, `prices`, `config`, `assets`.
