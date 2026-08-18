@@ -9,62 +9,53 @@ is signed by 2 of 3 nodes.
 stellar-wallet/
 ├── backend/              # Go (Gin) API — links to the cluster over NATS, builds/broadcasts txs
 ├── ui/                   # Vite + React + Tailwind frontend
-├── mpcium/               # node identities + BadgerDB key-shares (mounted into the node containers)
-├── infra/                # mpcium Dockerfile + node config for the Docker stack
+├── mpcium/               # generated node identities + keys (git-ignored, mounted into nodes)
+├── infra/                # mpcium node config for the Docker stack
+├── scripts/gen-keys.sh   # generates identities/peers/initiator key (idempotent)
 ├── docker-compose.yaml   # full stack: NATS + Consul + 3 nodes + backend + UI
-├── start.sh / stop.sh    # local dev (backend + UI against an external cluster)
+├── start.sh / stop.sh    # one-command up / down for the whole stack
 ```
 
-## Run with Docker (everything)
+## Run (one command)
 
-Brings up NATS, Consul, the 3 mpcium nodes, the backend, and the UI — then you
-just open the web:
+Generates the mpcium keys if missing, then builds & starts NATS + Consul + the
+3 mpcium nodes + backend + UI — even on a fresh clone:
 
 ```bash
-docker compose up --build -d
+./start.sh            # up (generates keys on first run)
+./start.sh --fresh    # wipe volumes + regenerate keys, clean start
 ```
 
 Open **http://localhost:8080**, register, and create a wallet. That's it.
 
 - UI on **:8080** (nginx; proxies `/api` + SSE to the backend, so single-origin)
 - Backend on **:8090**, mpcium node health on **:8091–8093**, Consul on **:8500**
-- The nodes reuse the existing key-shares under `mpcium/nodeN/` (bind-mounted);
-  Consul runs in dev mode and each node re-seeds its peer IDs on startup.
-- Wallet data lives in the `backend_data` volume (fresh DB on first run).
+- On first run `scripts/gen-keys.sh` generates node identities, `peers.json` and
+  the event-initiator key into `mpcium/` (git-ignored) via the official
+  `mpcium-cli` image, and injects the initiator pubkey into the node config.
+- Consul runs in dev mode; each node seeds its peer IDs on startup (`--peers`).
+- Key-shares live in per-node Docker volumes; wallet DB in `backend_data`.
 
 ```bash
-docker compose logs -f backend        # follow a service
-docker compose down                   # stop everything (key-shares persist on host)
-docker compose down -v                # also wipe the wallet DB volume
+./stop.sh             # stop (volumes kept: wallet DB + key-shares)
+./stop.sh --all       # stop + remove volumes (wipe everything)
+docker compose logs -f backend
 ```
 
-## Run locally (backend + UI only, external cluster)
-
-For iterating on the app against an already-running mpcium cluster (e.g. the
-shared dev cluster), skip Docker:
-
-```bash
-./start.sh   # checks NATS+Consul reachable, then backend :8090 + UI :5173
-./stop.sh    # stops backend + UI (the cluster is untouched)
-```
-
-Connection settings come from `backend/config.yaml` (the single source of
-truth). Logs are written to `logs/`.
+Requires **Docker** + Compose. If the daemon isn't running, start it first
+(e.g. `colima start`); if a Go build OOMs, give the VM more RAM
+(`colima start --cpu 4 --memory 8`).
 
 ## Prerequisites
 
-- **Docker** + compose (for the full-stack path), or
-- **Go** ≥ 1.21, **Node** ≥ 18 / npm (for the local path).
+- **Docker** + Compose (that's all for the one-command path).
 
-## Configuration (env)
+## Configuration
 
-| Var            | Default            | Used by     |
-| -------------- | ------------------ | ----------- |
-| `UI_PORT`      | `5173`             | start.sh    |
-| `VITE_API_BASE`| `http://localhost:8090` | ui     |
-
-Backend connection settings (`addr`, `nats_url`, `consul_addr`, `db_path`,
-event-initiator key, …) live in `backend/config.yaml`.
+The Docker stack reads its settings from `backend/config.docker.yaml` (backend)
+and `infra/mpcium.docker.yaml` (nodes) — nats/consul service names, node health
+URL, chain code, etc. `scripts/gen-keys.sh` fills in the event-initiator pubkey.
+The non-Docker backend uses `backend/config.yaml`.
 
 The Stellar Horizon RPC endpoint is editable at runtime in **Settings → Chains & RPC**.
 

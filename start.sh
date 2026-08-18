@@ -1,74 +1,77 @@
 #!/usr/bin/env bash
 #
-# Start the Go backend + Vite UI against an already-running mpcium cluster.
+# One-command full stack on Docker Compose: generates the mpcium keys if they're
+# missing, then builds & starts NATS + Consul + 3 mpcium nodes + backend + UI.
+# When it's done, open http://localhost:8080.
 #
-# The mpcium cluster (NATS, Consul, the nodes) is started and operated
-# separately. This script only checks NATS + Consul are reachable, then boots
-# backend + UI. All connection settings come from backend/config.yaml — the
-# single source of truth.
+#   ./start.sh           # up (generate keys if missing)
+#   ./start.sh --fresh   # wipe volumes + regenerate keys, clean start
 #
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-LOGS="$ROOT/logs"
-CFG="$ROOT/backend/config.yaml"
-mkdir -p "$LOGS"
+cd "$ROOT"
 
 say()  { printf "\033[1;34m▶ %s\033[0m\n" "$1"; }
 ok()   { printf "\033[1;32m✓ %s\033[0m\n" "$1"; }
 warn() { printf "\033[1;33m! %s\033[0m\n" "$1"; }
 die()  { printf "\033[1;31m✖ %s\033[0m\n" "$1"; exit 1; }
 
-command -v go  >/dev/null || die "go not found"
-command -v npm >/dev/null || die "npm not found"
-[ -f "$CFG" ] || die "missing $CFG (copy backend/config.example.yaml)"
+# Pick the compose command (plugin form or standalone).
+if docker compose version >/dev/null 2>&1; then
+  COMPOSE=(docker compose)
+elif command -v docker-compose >/dev/null 2>&1; then
+  COMPOSE=(docker-compose)
+else
+  die "docker compose not found (install Docker Compose)"
+fi
 
-# Read a top-level scalar from config.yaml (strips inline comments + quotes).
-cfg() {
-  sed -nE "s|^$1:[[:space:]]*(.*)\$|\1|p" "$CFG" | head -1 \
-    | sed -E 's/[[:space:]]+#.*$//; s/^"//; s/"$//; s/[[:space:]]*$//'
+# Docker daemon must be reachable.
+docker info >/dev/null 2>&1 || die "Docker daemon not reachable — start it first (e.g. 'colima start')"
+
+FRESH=0
+[ "${1:-}" = "--fresh" ] && FRESH=1
+
+if [ "$FRESH" = "1" ]; then
+  say "Fresh start — tearing down stack + volumes"
+  "${COMPOSE[@]}" down -v --remove-orphans 2>/dev/null || true
+  say "Regenerating keys"
+  FORCE=1 ./scripts/gen-keys.sh
+else
+  # Generate keys only if they don't exist yet (idempotent).
+  ./scripts/gen-keys.sh
+fi
+
+say "Building & starting the stack"
+"${COMPOSE[@]}" up -d --build
+
+# Wait for the 3 nodes to report healthy; if Docker DNS was flaky on a fresh
+# VM the nodes may crash-loop once — restart them and re-check.
+healthy() {
+  local up=0
+  for p in 8091 8092 8093; do
+    curl -s -m 2 "http://localhost:$p/health" | grep -q '"live":true' && up=$((up + 1))
+  done
+  [ "$up" -eq 3 ]
 }
 
-CONSUL_ADDR="$(cfg consul_addr)"                  # host:port
-NATS_URL="$(cfg nats_url)"                         # nats://host:port
-ADDR="$(cfg addr)"                                 # :8090
-UI_PORT="${UI_PORT:-5173}"
+say "Waiting for mpcium nodes to become healthy"
+tries=0
+until healthy; do
+  tries=$((tries + 1))
+  if [ "$tries" = "12" ]; then
+    warn "nodes not healthy yet — restarting them (Docker DNS can be flaky on first boot)"
+    "${COMPOSE[@]}" restart node0 node1 node2 >/dev/null 2>&1 || true
+  fi
+  [ "$tries" -gt 30 ] && { warn "nodes still not healthy — check: ${COMPOSE[*]} logs node0"; break; }
+  sleep 2
+done
 
-CONSUL_HOST="${CONSUL_ADDR%%:*}"; CONSUL_PORT="${CONSUL_ADDR##*:}"
-NATS_HOSTPORT="${NATS_URL#nats://}"
-NATS_HOST="${NATS_HOSTPORT%%:*}"; NATS_PORT="${NATS_HOSTPORT##*:}"
+if healthy; then
+  ok "All 3 mpcium nodes healthy"
+fi
 
-reachable() { nc -z -w2 "$1" "$2" >/dev/null 2>&1; }
-
-# --- 1) Check NATS + Consul are reachable -----------------------------------
-# The mpcium cluster is started and operated separately; we only need its
-# NATS + Consul endpoints to be up so the backend can connect.
-say "Checking backend deps (NATS $NATS_HOST:$NATS_PORT, Consul $CONSUL_ADDR)"
-
-hint() {
-  cat <<EOF
-
-  NATS/Consul aren't reachable. Make sure the mpcium cluster is up, then
-  re-run ./start.sh. Connection targets live in $CFG.
-EOF
-}
-
-reachable "$NATS_HOST" "$NATS_PORT"     || { warn "NATS unreachable at $NATS_HOST:$NATS_PORT"; hint; exit 1; }
-reachable "$CONSUL_HOST" "$CONSUL_PORT" || { warn "Consul unreachable at $CONSUL_ADDR";        hint; exit 1; }
-[ -n "$(curl -s "http://$CONSUL_ADDR/v1/status/leader" | tr -d '"')" ] \
-  || { warn "Consul has no leader"; hint; exit 1; }
-ok "NATS + Consul reachable"
-
-# --- 2) Backend (reads backend/config.yaml) ---------------------------------
-say "Building & starting backend on $ADDR"
-pkill -f "backend/stellar-wallet-backend" 2>/dev/null || true
-( cd "$ROOT/backend" && go build -o stellar-wallet-backend . ) || die "backend build failed"
-( cd "$ROOT/backend" && ./stellar-wallet-backend > "$LOGS/backend.log" 2>&1 & )
-sleep 2
-grep -q "listening" "$LOGS/backend.log" || die "backend failed to start (see $LOGS/backend.log)"
-ok "Backend up on $ADDR"
-
-# --- 3) Frontend (foreground) ----------------------------------------------
-[ -d "$ROOT/ui/node_modules" ] || ( say "Installing UI deps"; cd "$ROOT/ui" && npm install )
-ok "Frontend → http://localhost:$UI_PORT   (Ctrl+C stops the UI; backend keeps running)"
-cd "$ROOT/ui" && npm run dev -- --port "$UI_PORT"
+ok "Stack is up → open http://localhost:8080"
+echo "   backend :8090   consul :8500   node health :8091-8093"
+echo "   logs:  ${COMPOSE[*]} logs -f backend"
+echo "   stop:  ./stop.sh        (add --all to also remove volumes)"

@@ -1,16 +1,25 @@
 #!/usr/bin/env bash
 #
-# Stop the backend and UI.
-#
-# The mpcium cluster is started and operated separately — this script does
-# not touch it.
+# Stop the Docker Compose stack.
+#   ./stop.sh          # stop + remove containers (volumes kept: wallet DB + key-shares)
+#   ./stop.sh --all    # also remove volumes (wipes wallet DB + key-shares)
 #
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+cd "$ROOT"
 
-echo "Stopping backend + UI…"
-pkill -f "stellar-wallet-backend" 2>/dev/null || true
-pkill -f "vite" 2>/dev/null || true
-rm -f "$ROOT/logs/backend.pid" 2>/dev/null || true
+if docker compose version >/dev/null 2>&1; then
+  COMPOSE=(docker compose)
+else
+  COMPOSE=(docker-compose)
+fi
+
+if [ "${1:-}" = "--all" ]; then
+  echo "Stopping stack + removing volumes…"
+  "${COMPOSE[@]}" down -v --remove-orphans
+else
+  echo "Stopping stack (volumes kept)…"
+  "${COMPOSE[@]}" down --remove-orphans
+fi
 
 echo "Done."
