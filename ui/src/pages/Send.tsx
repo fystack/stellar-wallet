@@ -97,6 +97,8 @@ export default function Send({
   }, [to])
 
   const fromWallet = wallets.find((w) => w.id === from)
+  // Own wallets available as a recipient — never the one we're sending from.
+  const recipientWallets = wallets.filter((w) => w.id !== from)
   const isSelfSend =
     !!fromWallet && !!resolved && resolved.address === fromWallet.address
   const memoRequired = !!resolved?.memo_type
@@ -218,6 +220,24 @@ export default function Send({
               Scan QR
             </button>
           </div>
+          {recipientWallets.length > 0 && (
+            <select
+              className="field-input text-sm"
+              value=""
+              onChange={(e) => {
+                const w = recipientWallets.find((x) => x.id === e.target.value)
+                if (w) setTo(w.address)
+              }}
+            >
+              <option value="">Send to one of my wallets…</option>
+              {recipientWallets.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name} · {shortAddress(w.address)} ·{' '}
+                  {formatAmount(w.balance)} {w.symbol}
+                </option>
+              ))}
+            </select>
+          )}
           {resolving && (
             <span className="text-xs text-muted">Resolving address…</span>
           )}
