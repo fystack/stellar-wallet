@@ -185,12 +185,12 @@ export const api = {
 
 export function explorerTx(chain: string, hash: string): string {
   if (chain === 'stellar')
-    return `https://stellar.expert/explorer/testnet/tx/${hash}`
+    return `https://testnet.stellarchain.io/transactions/${hash}`
   return ''
 }
 
 export function explorerAddress(chain: string, address: string): string {
   if (chain === 'stellar')
-    return `https://stellar.expert/explorer/testnet/account/${address}`
+    return `https://testnet.stellarchain.io/accounts/${address}`
   return ''
 }

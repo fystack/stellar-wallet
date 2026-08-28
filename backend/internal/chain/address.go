@@ -41,7 +41,7 @@ func crc16XModem(data []byte) [2]byte {
 func ExplorerAddress(chainName, address string) string {
 	switch chainName {
 	case "stellar":
-		return "https://stellar.expert/explorer/testnet/account/" + address
+		return "https://testnet.stellarchain.io/accounts/" + address
 	default:
 		return ""
 	}

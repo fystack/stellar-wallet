@@ -11,7 +11,7 @@ func TestDeriveAddressUsesTheChainEncoding(t *testing.T) {
 }
 
 func TestExplorerAddressMatchesNetwork(t *testing.T) {
-	if got := ExplorerAddress("stellar", "GABC"); got != "https://stellar.expert/explorer/testnet/account/GABC" {
+	if got := ExplorerAddress("stellar", "GABC"); got != "https://testnet.stellarchain.io/accounts/GABC" {
 		t.Fatalf("stellar explorer = %q", got)
 	}
 }
