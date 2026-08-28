@@ -210,7 +210,7 @@ export default function App() {
           <div>
             <div className="font-bold md:text-lg">MPC Stellar Wallet</div>
             <div className="hidden text-[13px] text-muted sm:block">
-              Self-custodial · threshold-signed
+              Keys never assembled
             </div>
           </div>
         </button>
