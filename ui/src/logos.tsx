@@ -3,42 +3,33 @@ import stellarLogo from './assets/stellar-logo.png'
 
 type Props = { size?: number }
 
-// App brand mark — a 3-node mesh forming a triangle: the 2-of-3 MPC cluster.
+// App brand mark — the Fystack logo icon.
 export function AppLogo({ size = 46 }: Props) {
   const id = useId()
-  const glow = useId()
-  // Triangle vertices (the three signing nodes).
-  const nodes = [
-    { x: 22, y: 13.5 },
-    { x: 13, y: 29.5 },
-    { x: 31, y: 29.5 },
-  ]
   return (
-    <svg width={size} height={size} viewBox="0 0 44 44">
+    <svg
+      width={(size * 802.9) / 999.9}
+      height={size}
+      viewBox="0 0 802.9 999.9"
+      fill="none"
+    >
       <defs>
-        <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#3b82ff" />
-          <stop offset="100%" stopColor="#0b53e6" />
+        <linearGradient
+          id={id}
+          x1="-54.99"
+          y1="278.79"
+          x2="733.89"
+          y2="734.28"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop offset="0" stopColor="#0e70df" />
+          <stop offset="1" stopColor="#00b9e6" />
         </linearGradient>
-        <radialGradient id={glow} cx="50%" cy="30%" r="75%">
-          <stop offset="0%" stopColor="#fff" stopOpacity="0.22" />
-          <stop offset="100%" stopColor="#fff" stopOpacity="0" />
-        </radialGradient>
       </defs>
-      <rect width="44" height="44" rx="12" fill={`url(#${id})`} />
-      <rect width="44" height="44" rx="12" fill={`url(#${glow})`} />
-      {/* edges */}
-      <g stroke="#fff" strokeOpacity="0.55" strokeWidth="1.5">
-        <path d={`M${nodes[0].x} ${nodes[0].y}L${nodes[1].x} ${nodes[1].y}`} />
-        <path d={`M${nodes[1].x} ${nodes[1].y}L${nodes[2].x} ${nodes[2].y}`} />
-        <path d={`M${nodes[2].x} ${nodes[2].y}L${nodes[0].x} ${nodes[0].y}`} />
-      </g>
-      {/* nodes */}
-      <g fill="#fff">
-        {nodes.map((n, i) => (
-          <circle key={i} cx={n.x} cy={n.y} r="3.4" />
-        ))}
-      </g>
+      <path
+        fill={`url(#${id})`}
+        d="M802.9,250.9C802.9,112.3,690.6,0,552,0H250.9C112.3,0,0,112.3,0,250.9v698.8c0,27.7,22.5,50.2,50.2,50.2,11.4,0,22.4-3.9,31.3-10.9l184.9-147c35.5-28.3,79.6-43.7,125-43.7h160.7c138.5,0,250.8-112.3,250.8-250.9V250.9Z"
+      />
     </svg>
   )
 }
