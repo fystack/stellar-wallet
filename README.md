@@ -10,6 +10,13 @@ is signed by 2 of 3 nodes.
 > development only. Do not use it with mainnet funds or in production. Use at
 > your own risk.
 
+## Screenshots
+
+| | |
+|---|---|
+| ![Stellar wallet screenshot 1](docs/images/Stellar1.png) | ![Stellar wallet screenshot 2](docs/images/Stellar2.png) |
+| ![Stellar wallet screenshot 3](docs/images/Stellar3.png) | ![Stellar wallet screenshot 4](docs/images/Stellar4.png) |
+
 ```
 stellar-wallet/
 ├── backend/              # Go (Gin) API — links to the cluster over NATS, builds/broadcasts txs
