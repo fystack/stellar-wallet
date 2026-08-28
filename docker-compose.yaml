@@ -11,7 +11,7 @@
 name: stellar-wallet
 
 services:
-  # Only the UI (8080) publishes a port. Everything else talks over the compose
+  # Only the UI (127.0.0.1:8080) publishes a port, loopback-only. Everything else talks over the compose
   # network; the mpcium nodes bind loopback-only for local debugging. Use
   # `docker compose exec <svc>` to reach consul / nats / backend directly.
   consul:
@@ -99,7 +99,7 @@ services:
     build:
       context: ./ui
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     depends_on:
       - backend
 
