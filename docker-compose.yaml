@@ -11,11 +11,12 @@
 name: stellar-wallet
 
 services:
+  # Only the UI (8080) publishes a port. Everything else talks over the compose
+  # network; the mpcium nodes bind loopback-only for local debugging. Use
+  # `docker compose exec <svc>` to reach consul / nats / backend directly.
   consul:
     image: consul:1.15.4
     command: "agent -server -ui -node=server-1 -bootstrap-expect=1 -client=0.0.0.0"
-    ports:
-      - "8500:8500"
     healthcheck:
       test: ["CMD", "consul", "operator", "raft", "list-peers"]
       interval: 5s
@@ -25,8 +26,6 @@ services:
   nats:
     image: nats:2.10-alpine
     command: ["-js", "-m", "8222"]
-    ports:
-      - "4222:4222"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
       interval: 5s
@@ -44,7 +43,7 @@ services:
       - node0_db:/app/db
       - node0_backups:/app/backups
     ports:
-      - "8091:8080"
+      - "127.0.0.1:8091:8080"
     depends_on:
       consul: { condition: service_healthy }
       nats: { condition: service_healthy }
@@ -61,7 +60,7 @@ services:
       - node1_db:/app/db
       - node1_backups:/app/backups
     ports:
-      - "8092:8080"
+      - "127.0.0.1:8092:8080"
     depends_on:
       consul: { condition: service_healthy }
       nats: { condition: service_healthy }
@@ -78,7 +77,7 @@ services:
       - node2_db:/app/db
       - node2_backups:/app/backups
     ports:
-      - "8093:8080"
+      - "127.0.0.1:8093:8080"
     depends_on:
       consul: { condition: service_healthy }
       nats: { condition: service_healthy }
@@ -91,8 +90,6 @@ services:
       - ./backend/config.docker.yaml:/app/config.yaml:ro
       - ./mpcium/event_initiator.key:/run/secrets/event_initiator.key:ro
       - backend_data:/data
-    ports:
-      - "8090:8090"
     depends_on:
       - node0
       - node1

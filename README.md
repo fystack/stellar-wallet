@@ -29,7 +29,9 @@ Generates the mpcium keys if missing, then builds & starts NATS + Consul + the
 Open **http://localhost:8080**, register, and create a wallet. That's it.
 
 - UI on **:8080** (nginx; proxies `/api` + SSE to the backend, so single-origin)
-- Backend on **:8090**, mpcium node health on **:8091–8093**, Consul on **:8500**
+- Only **:8080** is published on all interfaces. mpcium node health is on
+  **:8091–8093** bound to `127.0.0.1` (local debugging); backend, Consul and
+  NATS stay on the internal compose network — reach them via `docker compose exec`
 - On first run `scripts/gen-keys.sh` generates node identities, `peers.json` and
   the event-initiator key into `mpcium/` (git-ignored) via the official
   `mpcium-cli` image, and injects the initiator pubkey into the node config.

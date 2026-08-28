@@ -72,6 +72,6 @@ if healthy; then
 fi
 
 ok "Stack is up → open http://localhost:8080"
-echo "   backend :8090   consul :8500   node health :8091-8093"
+echo "   node health :8091-8093 (loopback only); backend/consul/nats are internal"
 echo "   logs:  ${COMPOSE[*]} logs -f backend"
 echo "   stop:  ./stop.sh        (add --all to also remove volumes)"
