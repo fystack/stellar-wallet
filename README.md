@@ -16,6 +16,8 @@ is signed by 2 of 3 nodes.
 |---|---|
 | ![Stellar wallet screenshot 1](docs/images/Stellar1.png) | ![Stellar wallet screenshot 2](docs/images/Stellar2.png) |
 | ![Stellar wallet screenshot 3](docs/images/Stellar3.png) | ![Stellar wallet screenshot 4](docs/images/Stellar4.png) |
+| ![Stellar wallet screenshot 5](docs/images/Stellar5.png) | ![Stellar wallet screenshot 6](docs/images/Stellar6.png) |
+| ![Stellar wallet screenshot 7](docs/images/Stellar7.png) | ![Stellar wallet screenshot 8](docs/images/Stellar8.png) |
 
 ```
 stellar-wallet/
