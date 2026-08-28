@@ -35,9 +35,9 @@ export default function Login({ onLogin }: { onLogin: (email: string) => void })
           <div className="mx-auto mb-4 w-fit sm:mb-5">
             <FystackLogo height={44} />
           </div>
-          <h1 className="text-2xl font-extrabold">
-            {mode === 'login' ? 'Sign in' : 'Create your account'}
-          </h1>
+          {mode === 'register' && (
+            <h1 className="text-2xl font-extrabold">Create your account</h1>
+          )}
           <p className="mt-1.5 text-[15px] text-muted">
             {mode === 'login'
               ? 'Access your MPC Stellar wallet.'
