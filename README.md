@@ -5,6 +5,11 @@ A threshold-signature (2-of-3 MPC) wallet for Stellar, powered by the
 generated in shares across 3 nodes and **never assembled** — every transaction
 is signed by 2 of 3 nodes.
 
+> ⚠️ **Unaudited — testnet only.** This code has not been security-audited.
+> It targets the Stellar **testnet** and is intended for experimentation and
+> development only. Do not use it with mainnet funds or in production. Use at
+> your own risk.
+
 ```
 stellar-wallet/
 ├── backend/              # Go (Gin) API — links to the cluster over NATS, builds/broadcasts txs
@@ -81,3 +86,8 @@ The Stellar Horizon RPC endpoint is editable at runtime in **Settings → Chains
 
 `auth/register`, `auth/login`, `wallets` (CRUD), `wallets/:id/{balance,fund,sync,trustline,transactions,swap,swap/quote}`,
 `transactions`, `tx/:hash/chain`, `resolve`, `events` (SSE), `cluster`, `chains`, `prices`, `config`, `assets`.
+
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE)
+for attribution.
