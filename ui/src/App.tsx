@@ -208,9 +208,9 @@ export default function App() {
         >
           <AppLogo size={40} />
           <div>
-            <div className="font-bold md:text-lg">Mpcium</div>
+            <div className="font-bold md:text-lg">MPC Stellar Wallet</div>
             <div className="hidden text-[13px] text-muted sm:block">
-              MPC-secured wallet
+              Self-custodial · threshold-signed
             </div>
           </div>
         </button>

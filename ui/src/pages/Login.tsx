@@ -36,12 +36,12 @@ export default function Login({ onLogin }: { onLogin: (email: string) => void })
             <AppLogo size={64} />
           </div>
           <h1 className="text-2xl font-extrabold">
-            {mode === 'login' ? 'Welcome back' : 'Create your account'}
+            {mode === 'login' ? 'Sign in' : 'Create your account'}
           </h1>
           <p className="mt-1.5 text-[15px] text-muted">
             {mode === 'login'
-              ? 'Sign in to your Mpcium wallet.'
-              : 'Set up access to your Mpcium wallet.'}
+              ? 'Access your MPC Stellar wallet.'
+              : 'Set up your MPC Stellar wallet.'}
           </p>
         </div>
 
