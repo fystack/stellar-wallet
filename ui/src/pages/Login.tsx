@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AppLogo } from '../logos.tsx'
+import { FystackLogo } from '../logos.tsx'
 import { api, ApiError } from '../api.ts'
 
 export default function Login({ onLogin }: { onLogin: (email: string) => void }) {
@@ -33,7 +33,7 @@ export default function Login({ onLogin }: { onLogin: (email: string) => void })
       <div className="w-full max-w-[400px]">
         <div className="mb-6 text-center sm:mb-8">
           <div className="mx-auto mb-4 w-fit sm:mb-5">
-            <AppLogo size={64} />
+            <FystackLogo height={44} />
           </div>
           <h1 className="text-2xl font-extrabold">
             {mode === 'login' ? 'Sign in' : 'Create your account'}

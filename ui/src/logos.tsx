@@ -34,6 +34,54 @@ export function AppLogo({ size = 46 }: Props) {
   )
 }
 
+// Full Fystack lockup — icon + wordmark. `color` is the wordmark colour
+// (default suits a light background).
+export function FystackLogo({
+  height = 44,
+  color = '#101828',
+}: {
+  height?: number
+  color?: string
+}) {
+  const id = useId()
+  return (
+    <svg
+      height={height}
+      width={(height * 3921.24) / 999.9}
+      viewBox="0 0 3921.24 999.9"
+      fill="none"
+    >
+      <defs>
+        <linearGradient
+          id={id}
+          x1="-54.99"
+          y1="278.79"
+          x2="733.89"
+          y2="734.28"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop offset="0" stopColor="#0e70df" />
+          <stop offset="1" stopColor="#00b9e6" />
+        </linearGradient>
+      </defs>
+      <path
+        fill={`url(#${id})`}
+        d="M802.9,250.9C802.9,112.3,690.6,0,552,0H250.9C112.3,0,0,112.3,0,250.9v698.8c0,27.7,22.5,50.2,50.2,50.2,11.4,0,22.4-3.9,31.3-10.9l184.9-147c35.5-28.3,79.6-43.7,125-43.7h160.7c138.5,0,250.8-112.3,250.8-250.9V250.9Z"
+      />
+      <text
+        x="1304.7"
+        y="652.3"
+        fill={color}
+        fontFamily="Arial, Helvetica, sans-serif"
+        fontSize="702.5"
+        fontWeight="700"
+      >
+        Fystack
+      </text>
+    </svg>
+  )
+}
+
 // --- Chain / native marks ---
 
 export function StellarLogo({ size = 28 }: Props) {
