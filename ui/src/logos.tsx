@@ -1,4 +1,5 @@
 import { useId } from 'react'
+import stellarLogo from './assets/stellar-logo.png'
 
 type Props = { size?: number }
 
@@ -45,15 +46,15 @@ export function AppLogo({ size = 46 }: Props) {
 // --- Chain / native marks ---
 
 export function StellarLogo({ size = 28 }: Props) {
-  // Black disc with a clean 4-point sparkle.
+  // Official Stellar mark, exactly as published in trustwallet/assets.
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40">
-      <circle cx="20" cy="20" r="20" fill="#0d0d12" />
-      <path
-        d="M20 8c1 7.2 3.8 10 11 11-7.2 1-10 3.8-11 11-1-7.2-3.8-10-11-11 7.2-1 10-3.8 11-11z"
-        fill="#fff"
-      />
-    </svg>
+    <img
+      src={stellarLogo}
+      width={size}
+      height={size}
+      alt="Stellar"
+      style={{ display: 'block' }}
+    />
   )
 }
 
