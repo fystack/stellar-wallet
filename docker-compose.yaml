@@ -10,11 +10,19 @@
 # node startup via --peers.
 name: stellar-wallet
 
+# Cap container logs: 3 rotated files x 10 MB per service (~30 MB max).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   # Only the UI (127.0.0.1:8080) publishes a port, loopback-only. Everything else talks over the compose
   # network; the mpcium nodes bind loopback-only for local debugging. Use
   # `docker compose exec <svc>` to reach consul / nats / backend directly.
   consul:
+    logging: *default-logging
     image: consul:1.15.4
     command: "agent -server -ui -node=server-1 -bootstrap-expect=1 -client=0.0.0.0"
     healthcheck:
@@ -24,6 +32,7 @@ services:
       retries: 10
 
   nats:
+    logging: *default-logging
     image: nats:2.10-alpine
     command: ["-js", "-m", "8222"]
     healthcheck:
@@ -33,6 +42,7 @@ services:
       retries: 10
 
   node0:
+    logging: *default-logging
     image: docker.io/fystacklabs/mpcium:0.3.5
     user: "0:0"
     command: ["start", "-n", "node0", "--peers", "/app/peers.json"]
@@ -50,6 +60,7 @@ services:
     restart: unless-stopped
 
   node1:
+    logging: *default-logging
     image: docker.io/fystacklabs/mpcium:0.3.5
     user: "0:0"
     command: ["start", "-n", "node1", "--peers", "/app/peers.json"]
@@ -67,6 +78,7 @@ services:
     restart: unless-stopped
 
   node2:
+    logging: *default-logging
     image: docker.io/fystacklabs/mpcium:0.3.5
     user: "0:0"
     command: ["start", "-n", "node2", "--peers", "/app/peers.json"]
@@ -84,6 +96,7 @@ services:
     restart: unless-stopped
 
   backend:
+    logging: *default-logging
     build:
       context: ./backend
     volumes:
@@ -94,14 +107,31 @@ services:
       - node0
       - node1
       - node2
+    # Runtime hardening: non-root comes from the image; only /data is writable.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
 
   ui:
+    logging: *default-logging
     build:
       context: ./ui
     ports:
-      - "127.0.0.1:8080:80"
+      - "127.0.0.1:8080:8080"
     depends_on:
       - backend
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    # nginx scratch dirs (temp files, pid) since the root fs is read-only.
+    tmpfs:
+      - /tmp
+      - /run
+      - /var/lib/nginx/tmp
 
 volumes:
   node0_db:
