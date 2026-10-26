@@ -27,6 +27,7 @@ func (c *paymentChainStub) BuildPayment(_ domain.Wallet, _ string, amount, _, _,
 	c.builtAmount, c.builtMemo, c.builtMemoType = amount, memo, memoType
 	return "unsigned-envelope", []byte("payment-hash"), c.buildErr
 }
+func (c *paymentChainStub) TransactionOnChain(string) (map[string]any, error) { return nil, nil }
 func (c *paymentChainStub) Submit(envelope, _ string, _ []byte) (string, error) {
 	c.submittedEnvelope = envelope
 	return "stellar-tx-hash", c.submitErr
@@ -47,7 +48,7 @@ type paymentClusterStub int
 
 func (c paymentClusterStub) OnlineCount() int { return int(c) }
 
-func newTestPaymentService(t *testing.T) (*PaymentService, *paymentChainStub, *paymentSignerStub) {
+func newTestTransactionService(t *testing.T) (*TransactionService, *paymentChainStub, *paymentSignerStub) {
 	t.Helper()
 	db, err := sqlite.Open(t.TempDir() + "/wallet.db")
 	if err != nil {
@@ -60,19 +61,19 @@ func newTestPaymentService(t *testing.T) (*PaymentService, *paymentChainStub, *p
 	}
 	c := &paymentChainStub{resolved: chain.Resolved{Address: "resolved-address", Memo: "42", MemoType: "id"}}
 	signer := &paymentSignerStub{}
-	service := &PaymentService{wallets: wallets, payments: sqlite.NewPaymentRepository(db), chain: c, mpc: signer, cluster: paymentClusterStub(3), hub: realtime.NewHub()}
+	service := &TransactionService{wallets: wallets, transactions: sqlite.NewTransactionRepository(db), chain: c, mpc: signer, cluster: paymentClusterStub(3), hub: realtime.NewHub()}
 	return service, c, signer
 }
 
 func TestPaymentCreatePersistsResolvedPaymentAndDispatchesHash(t *testing.T) {
-	s, c, signer := newTestPaymentService(t)
+	s, c, signer := newTestTransactionService(t)
 	events := s.hub.Subscribe("owner")
 	defer s.hub.Unsubscribe("owner", events)
 	tx, err := s.Create("owner", PaymentInput{WalletID: "wallet-1", To: "name*example.com", Amount: "12.345"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	stored, ok := s.payments.TransactionForUser(tx.ID, "owner")
+	stored, ok := s.transactions.TransactionForUser(tx.ID, "owner")
 	if !ok || stored.Status != "signing" || stored.EnvelopeXDR != "unsigned-envelope" || stored.Counterparty != "resolved-address" || stored.Memo != "42" {
 		t.Fatalf("stored payment = %#v, found=%v", stored, ok)
 	}
@@ -91,21 +92,21 @@ func TestPaymentCreatePersistsResolvedPaymentAndDispatchesHash(t *testing.T) {
 }
 
 func TestPaymentCreateDispatchFailurePersistsFailedStatus(t *testing.T) {
-	s, _, signer := newTestPaymentService(t)
+	s, _, signer := newTestTransactionService(t)
 	signer.err = errors.New("NATS unavailable")
 	_, err := s.Create("owner", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
 	var failure *apperror.Error
 	if !errors.As(err, &failure) || failure.Kind != apperror.Upstream || failure.Code != "sign_dispatch_failed" || !errors.Is(err, signer.err) {
 		t.Fatalf("error = %v", err)
 	}
-	tx, ok := s.payments.TransactionByID(signer.transactionID)
+	tx, ok := s.transactions.TransactionByID(signer.transactionID)
 	if !ok || tx.Status != "failed" {
 		t.Fatalf("transaction = %#v, found=%v", tx, ok)
 	}
 }
 
 func TestPaymentCreateRejectsOtherUsersWalletBeforeSigning(t *testing.T) {
-	s, _, signer := newTestPaymentService(t)
+	s, _, signer := newTestTransactionService(t)
 	_, err := s.Create("other-user", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
 	var failure *apperror.Error
 	if !errors.As(err, &failure) || failure.Kind != apperror.NotFound || failure.Code != "wallet_not_found" {
@@ -117,13 +118,13 @@ func TestPaymentCreateRejectsOtherUsersWalletBeforeSigning(t *testing.T) {
 }
 
 func TestPaymentSignResultBroadcastsPersistedEnvelope(t *testing.T) {
-	s, c, _ := newTestPaymentService(t)
+	s, c, _ := newTestTransactionService(t)
 	tx, err := s.Create("owner", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	completed := s.OnSign(mpc.SignResult{TransactionID: tx.ID, Successful: true, Signature: []byte{1, 2}})
-	stored, _ := s.payments.TransactionByID(tx.ID)
+	stored, _ := s.transactions.TransactionByID(tx.ID)
 	if completed == nil || stored.Status != "confirmed" || stored.TxHash != "stellar-tx-hash" || stored.Signature != "0102" || c.submittedEnvelope != "unsigned-envelope" {
 		t.Fatalf("transaction = %#v, refresh = %#v", stored, completed)
 	}
@@ -132,7 +133,7 @@ func TestPaymentSignResultBroadcastsPersistedEnvelope(t *testing.T) {
 func TestPaymentSignResultFailuresPersistReason(t *testing.T) {
 	for _, stage := range []string{"signing", "broadcast"} {
 		t.Run(stage, func(t *testing.T) {
-			s, c, _ := newTestPaymentService(t)
+			s, c, _ := newTestTransactionService(t)
 			tx, err := s.Create("owner", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
 			if err != nil {
 				t.Fatal(err)
@@ -146,7 +147,7 @@ func TestPaymentSignResultFailuresPersistReason(t *testing.T) {
 			if completed := s.OnSign(result); completed != nil {
 				t.Fatal("failed transaction requested refresh")
 			}
-			stored, _ := s.payments.TransactionByID(tx.ID)
+			stored, _ := s.transactions.TransactionByID(tx.ID)
 			if stored.Status != "failed" || stored.Error != want {
 				t.Fatalf("transaction = %#v", stored)
 			}
@@ -155,14 +156,14 @@ func TestPaymentSignResultFailuresPersistReason(t *testing.T) {
 }
 
 func TestPaymentReconcileFailsPendingPaymentsBelowQuorum(t *testing.T) {
-	s, _, _ := newTestPaymentService(t)
+	s, _, _ := newTestTransactionService(t)
 	tx, err := s.Create("owner", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.cluster = paymentClusterStub(1)
 	s.ReconcilePending()
-	stored, _ := s.payments.TransactionByID(tx.ID)
+	stored, _ := s.transactions.TransactionByID(tx.ID)
 	if stored.Status != "failed" || stored.Error != "signing aborted — MPC cluster below quorum" {
 		t.Fatalf("transaction = %#v", stored)
 	}
@@ -171,19 +172,19 @@ func TestPaymentReconcileFailsPendingPaymentsBelowQuorum(t *testing.T) {
 func TestPaymentSignResultAlsoBroadcastsSwapAndTrustline(t *testing.T) {
 	for _, kind := range []string{"swap", "trustline"} {
 		t.Run(kind, func(t *testing.T) {
-			s, c, _ := newTestPaymentService(t)
+			s, c, _ := newTestTransactionService(t)
 			tx := domain.Transaction{ID: kind, WalletID: "wallet-1", UserID: "owner", Type: "swap", Status: "signing", EnvelopeXDR: kind + "-envelope"}
 			if kind == "trustline" {
 				tx.Type = "out"
 				tx.Memo = "Add trustline"
 			}
-			if err := s.payments.CreateTransaction(tx); err != nil {
+			if err := s.transactions.CreateTransaction(tx); err != nil {
 				t.Fatal(err)
 			}
 			if s.OnSign(mpc.SignResult{TransactionID: tx.ID, Successful: true, Signature: []byte{1}}) == nil {
 				t.Fatal("missing balance refresh")
 			}
-			stored, _ := s.payments.TransactionByID(tx.ID)
+			stored, _ := s.transactions.TransactionByID(tx.ID)
 			if stored.Status != "confirmed" || stored.TxHash != "stellar-tx-hash" || c.submittedEnvelope != tx.EnvelopeXDR {
 				t.Fatalf("transaction = %#v", stored)
 			}

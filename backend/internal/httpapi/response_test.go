@@ -46,8 +46,8 @@ func TestWrappedErrorsMapWithoutExposingCause(t *testing.T) {
 		want   string
 	}{
 		{"unknown", fmt.Errorf("create session: %w", cause), 500, `{"error":{"code":"internal_error","message":"An unexpected error occurred."}}`},
-		{"conflict", fmt.Errorf("link identity: %w", apperror.Wrap(cause, apperror.Conflict, "identity_already_linked", "This login method belongs to another account.")), 409, `{"error":{"code":"identity_already_linked","message":"This login method belongs to another account."}}`},
-		{"upstream", apperror.Wrap(cause, apperror.Upstream, "sign_dispatch_failed", "Unable to start transaction signing."), 502, `{"error":{"code":"sign_dispatch_failed","message":"Unable to start transaction signing."}}`},
+		{"conflict", fmt.Errorf("link identity: %w", apperror.IdentityAlreadyLinked.Wrap(cause)), 409, `{"error":{"code":"identity_already_linked","message":"This login method is already linked to an account."}}`},
+		{"upstream", apperror.SignDispatchFailed.Wrap(cause), 502, `{"error":{"code":"sign_dispatch_failed","message":"Unable to start transaction signing."}}`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if !errors.Is(tt.err, cause) {

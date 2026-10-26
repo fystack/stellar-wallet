@@ -13,16 +13,16 @@ MPC nodes, this backend, and the UI:
 ./start.sh
 ```
 
-To run only the backend against an existing cluster:
+To run only the backend against an existing cluster, copy
+`config.example.yaml` to `config.yaml`, point `nats_url`, `consul_addr` and
+`initiator_key` at the cluster, then:
 
 ```bash
 cd backend
-ADDR=:8090 \
-NATS_URL=nats://127.0.0.1:14222 \
-CONSUL_ADDR=127.0.0.1:18500 \
-INITIATOR_KEY=../mpcium/event_initiator.key \
 go run .
 ```
+
+Settings come only from `config.yaml`; environment variables are not read.
 
 ## Architecture
 
@@ -34,47 +34,63 @@ internal/
   app/
     server.go                # Wiring and startup only
   handler/                   # HTTP: bind requests, call services, return responses
-    router.go
-    auth.go
-    wallet.go
-    payment.go
-    swap.go
-    config.go
-    events.go
+    router.go                # Route table: wires every area handler in one place
+    middleware.go            # Logging, panic recovery, CORS, CSRF
+    auth.go                  # AuthHandler
+    wallet.go                # WalletHandler (incl. trustlines)
+    transaction.go           # TransactionHandler
+    swap.go                  # SwapHandler
+    settings.go              # SettingsHandler (config, assets, chains, prices, cluster)
+    events.go                # EventsHandler (SSE)
   service/                   # Business logic and background work; no Gin/HTTP
-    payment.go               # Create, sign, broadcast and recover payments
-    wallet.go                # Keygen callbacks and incoming payment sync
+    auth.go                  # Password/social login, linking and sessions
+    wallet.go                # Wallet lifecycle, keygen callbacks, funding and incoming sync
+    transaction.go           # Payments, transaction reads and the shared sign/broadcast lifecycle
+    swap.go                  # DEX quotes and path-payment swaps
+    trustline.go             # Trustline transactions
+    settings.go              # Horizon RPC, custom assets, chain status and prices
     balances.go              # Balance refresh jobs
-    mpc_policy.go            # Node quorum and keygen timeout/recovery
+    mpc_policy.go            # Node quorum and keygen/sign timeout recovery
+    ownership.go             # Wallet ownership/readiness checks
   repository/
     store.go                 # Existing user/wallet/settings persistence contract
     sqlite/
-      payment_repository.go  # Concrete transaction repository
+      auth.go                # Accounts, identities, sessions and OAuth state
+      transactions.go        # Concrete transaction repository
       store.go               # Existing user/wallet/settings SQL
       database.go            # Schema and database setup
   apperror/                  # Business errors and wrapped causes
   httpapi/                   # JSON envelopes and HTTP error mapping
   domain/                    # Data models
-  auth/                      # JWT and auth middleware
+  auth/                      # OAuth/OIDC providers and cookie-session middleware
   chain/                     # Stellar RPC, transaction builders and prices
   mpc/                       # mpcium/NATS adapter
   cluster/                   # MPC node health and discovery
   realtime/                  # Per-user SSE hub
 ```
 
-Payment requests follow `handler/payment.go → service/payment.go →
-repository/sqlite/payment_repository.go`. The payment handler binds JSON and maps
-service errors to HTTP responses. `PaymentService` checks wallet ownership and
+Payment requests follow `handler/transaction.go → service/transaction.go →
+repository/sqlite/transactions.go`. The handler binds JSON and maps service
+errors to HTTP responses. `TransactionService` checks wallet ownership and
 signing quorum, resolves the recipient, builds and persists the payment, and
-dispatches MPC signing. It also owns signing timeouts, pending-payment recovery,
-and the shared result/broadcast lifecycle used by sends, swaps, and trustlines.
-`WalletService` refreshes balances after a successful broadcast.
+dispatches MPC signing. It also owns signing timeouts, pending-transaction
+recovery, and the shared result/broadcast lifecycle used by sends, swaps and
+trustlines. `WalletService` refreshes balances after a successful broadcast.
 
-The payment repository is concrete; interfaces cover the external Stellar,
-cluster and signer boundaries used in tests. Existing auth, wallet creation,
-swap, trustline and settings handlers still contain their original orchestration;
-their service/repository extraction can happen incrementally. REST paths and the
-SQLite schema remain unchanged. JSON envelopes follow the contract below.
+Each API area has its own small handler struct holding only the services it
+uses; `router.go` builds them and lists every route. Every handler method
+follows the same shape: bind the request, call one service method, write the
+response. Swaps and trustlines build their own envelopes, then reuse
+`TransactionService`'s dispatch to persist, sign and broadcast.
+
+Wallet and transaction statuses and transaction types are typed constants in
+`domain/status.go`. Repository writes return errors: request paths return them
+to the client, and background paths (MPC callbacks, timeouts, balance refresh)
+log them.
+
+The repositories are concrete; interfaces cover the external Stellar
+(`PaymentChain`, `SwapChain`, `TrustlineChain`), cluster and signer boundaries,
+so services are tested with stubs. JSON envelopes follow the contract below.
 
 ## JSON response contract
 
@@ -103,7 +119,7 @@ same wallet/transaction objects and arrays. Older clients consuming unwrapped
 JSON must migrate with this change; no legacy-response fallback is provided.
 
 - Resource creation (register, wallet, payment, swap, trustline): `201`.
-- Reads, login and other successful actions: `200`.
+- Reads, login and other successful actions: `200`. Logout/reauthentication: `204`.
 - Invalid input: `400`; authentication: `401`; permissions: `403`.
 - Missing resource/route: `404`; unsupported method: `405`; conflict: `409`.
 - Dependency failure: `502`; insufficient MPC availability: `503`.
@@ -111,7 +127,7 @@ JSON must migrate with this change; no legacy-response fallback is provided.
 - `204` and CORS preflight responses have no body.
 - SSE keeps its `data: {"type": ..., "data": ...}` event format. Authentication
   failures before the stream opens use the JSON error envelope.
-- OAuth redirects, when implemented, will remain redirects rather than JSON.
+- OAuth start/callback use redirects rather than JSON. See [OAuth setup](../docs/oauth.md).
 
 `apperror.Error` carries a transport-independent kind, stable code, public message
 and optional cause. Services can wrap technical causes with `%w`; `httpapi.Error`
@@ -120,6 +136,13 @@ Unexpected SQL, SDK or provider details are never copied into HTTP error message
 Repositories use `repository.ErrNotFound` / `ErrConflict` for known failures and
 preserve underlying errors when wrapping. Existing legacy lookup/update methods
 that do not return errors retain their current signatures for now.
+
+## Social login and sessions
+
+Google/GitHub OAuth, password login, explicit account linking and revocable
+HttpOnly cookie sessions are supported. See [setup and reproduction](../docs/oauth.md)
+for callback URLs, private configuration, migration and tests. Existing users keep
+their user IDs and wallets; old JWT sessions require signing in again.
 
 ## Verify
 
@@ -141,8 +164,8 @@ npm run build
 
 | Method | Path                          | Auth | Body / notes                          |
 | ------ | ----------------------------- | ---- | ------------------------------------- |
-| POST   | `/auth/register`              | –    | `{email, password}` → `data.access_token`|
-| POST   | `/auth/login`                 | –    | `{email, password}` → `data.access_token`|
+| POST   | `/auth/register`              | –    | `{email, password}` → `data` account + session cookie|
+| POST   | `/auth/login`                 | –    | `{email, password}` → `data` account + session cookie|
 | GET    | `/wallets`                    | ✓    | list wallets                          |
 | POST   | `/wallets`                    | ✓    | `{name, chain}` (`stellar`)           |
 | GET    | `/wallets/:id`                | ✓    | one wallet                            |

@@ -5,18 +5,21 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
-
-	"stellar-wallet-backend/internal/auth"
 
 	"github.com/gin-gonic/gin"
 )
 
 func TestRouterPreservesPublicRouteContract(t *testing.T) {
-	server := New(Dependencies{Auth: auth.New([]byte("test-secret"), time.Hour)})
-	router := server.Router("http://localhost:5173")
+	router := NewRouter(Dependencies{Auth: testAuthManager(t)}, "http://localhost:5173")
 
 	want := map[string]bool{
+		"GET /api/v1/auth/providers":           true,
+		"GET /api/v1/auth/:provider/start":     true,
+		"GET /api/v1/auth/:provider/callback":  true,
+		"POST /api/v1/auth/logout":             true,
+		"GET /api/v1/auth/me":                  true,
+		"POST /api/v1/auth/reauthenticate":     true,
+		"POST /api/v1/auth/:provider/link":     true,
 		"GET /health":                          true,
 		"GET /api/v1/cluster":                  true,
 		"POST /api/v1/auth/register":           true,
@@ -60,8 +63,7 @@ func TestRouterPreservesPublicRouteContract(t *testing.T) {
 }
 
 func TestHealthAndCORSContract(t *testing.T) {
-	server := New(Dependencies{Auth: auth.New([]byte("test-secret"), time.Hour)})
-	router := server.Router("http://localhost:5173")
+	router := NewRouter(Dependencies{Auth: testAuthManager(t)}, "http://localhost:5173")
 	request := httptest.NewRequest(http.MethodGet, "/health", nil)
 	response := httptest.NewRecorder()
 
@@ -82,8 +84,7 @@ func TestHealthAndCORSContract(t *testing.T) {
 }
 
 func TestRouterFormatsUnknownRoutesMethodsAndPanics(t *testing.T) {
-	s := New(Dependencies{Auth: auth.New([]byte("test-secret"), time.Hour)})
-	r := s.Router("http://localhost")
+	r := NewRouter(Dependencies{Auth: testAuthManager(t)}, "http://localhost")
 	r.GET("/panic", func(c *gin.Context) { panic("private panic details") })
 	for _, tt := range []struct {
 		method, path string
@@ -94,10 +95,12 @@ func TestRouterFormatsUnknownRoutesMethodsAndPanics(t *testing.T) {
 		{"POST", "/health", 405, "method_not_allowed"},
 		{"GET", "/panic", 500, "internal_error"},
 		{"GET", "/api/v1/wallets", 401, "authentication_required"},
-		{"GET", "/api/v1/events", 401, "invalid_token"},
+		{"GET", "/api/v1/events", 401, "authentication_required"},
 	} {
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, httptest.NewRequest(tt.method, tt.path, nil))
+		req := httptest.NewRequest(tt.method, tt.path, nil)
+		req.Header.Set("X-CSRF-Protection", "1")
+		r.ServeHTTP(w, req)
 		if w.Code != tt.status || !strings.Contains(w.Body.String(), `"code":"`+tt.code+`"`) || strings.Contains(w.Body.String(), "private") {
 			t.Errorf("%s %s: %d %s", tt.method, tt.path, w.Code, w.Body)
 		}

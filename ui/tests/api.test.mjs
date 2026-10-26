@@ -66,3 +66,19 @@ test('rejects successful responses that violate the envelope contract', async (t
     t.mock.restoreAll()
   }
 })
+
+test('auth uses credentialed cookies and CSRF headers without bearer tokens', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(options.credentials, 'include')
+    assert.equal(options.headers['X-CSRF-Protection'], '1')
+    assert.equal(options.headers.Authorization, undefined)
+    assert.equal(url, 'http://api.test/api/v1/auth/login')
+    return new Response(JSON.stringify({ data: { id: 'user-1', email: 'owner@example.com', has_password: true, identities: [] } }))
+  })
+  assert.equal(await api.login('owner@example.com', 'password123'), 'owner@example.com')
+})
+
+test('logout accepts an empty 204 response', async (t) => {
+  respond(t, null, 204)
+  assert.equal(await api.logout(), undefined)
+})

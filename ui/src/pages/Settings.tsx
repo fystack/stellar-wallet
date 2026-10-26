@@ -3,6 +3,7 @@ import { CheckShieldIcon } from '../icons.tsx'
 import { TokenLogo, ChainLogo } from '../logos.tsx'
 import { api } from '../api.ts'
 import { toast } from '../toast.tsx'
+import LinkedAccounts from '../components/LinkedAccounts.tsx'
 
 type ChainStat = { chain: string; online: boolean }
 
@@ -203,6 +204,7 @@ export default function Settings() {
           Manage your MPC cluster, security, and preferences.
         </p>
       </header>
+      <LinkedAccounts />
 
       <section className="surface mb-5">
         <h3 className="mb-[18px] text-[17px] font-bold">MPC nodes</h3>

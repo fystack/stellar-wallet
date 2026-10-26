@@ -30,7 +30,9 @@ func TestCreatePaymentHTTPContract(t *testing.T) {
 		{name: "wrong field type", body: `{"amount":1}`, status: 400, message: "Invalid request body.", code: "invalid_request"},
 		{name: "other owner", body: `{"wallet_id":"wallet-1","to":"destination","amount":"1"}`, userID: "other-user", status: 404, message: "Wallet not found.", code: "wallet_not_found"},
 		{name: "wallet generating", body: `{"wallet_id":"wallet-1","to":"destination","amount":"1"}`, setup: func(s *paymentFixture, _ *paymentChainStub, _ *paymentSignerStub) {
-			s.wallets.SetWalletStatus("wallet-1", "generating")
+			if err := s.wallets.SetWalletStatus("wallet-1", "generating"); err != nil {
+				t.Fatal(err)
+			}
 		}, status: 409, message: "Wallet is not ready yet.", code: "wallet_not_ready"},
 		{name: "invalid amount", body: `{"wallet_id":"wallet-1","to":"destination","amount":"0"}`, status: 400, message: "Amount must be positive.", code: "invalid_amount"},
 		{name: "missing recipient", body: `{"wallet_id":"wallet-1","amount":"1"}`, status: 400, message: "Recipient is required.", code: "recipient_required"},
@@ -42,26 +44,33 @@ func TestCreatePaymentHTTPContract(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service, c, signer := newTestPaymentService(t)
+			service, c, signer := newTestTransactionService(t)
 			if tt.setup != nil {
 				tt.setup(service, c, signer)
 			}
-			manager := auth.New([]byte("test-secret"), time.Hour)
-			server := New(Dependencies{Store: service.wallets, Payments: service.payments, Auth: manager, Hub: service.hub})
-			server.paymentService = service.service
+			manager := auth.New(service.authRepo, false)
+			router := NewRouter(Dependencies{Auth: manager, Hub: service.hub, TransactionService: service.service}, "http://localhost")
 			userID := tt.userID
 			if userID == "" {
 				userID = "owner"
 			}
-			token, _, err := manager.MakeToken(userID)
+			if err := service.authRepo.CreateUser(domain.User{ID: userID, Email: userID + "@example.com", PasswordHash: "hash"}); err != nil {
+				t.Fatal(err)
+			}
+			token, err := auth.RandomToken()
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = service.authRepo.CreateSession(domain.Session{Hash: auth.HashToken(token), UserID: userID, CreatedAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()})
 			if err != nil {
 				t.Fatal(err)
 			}
 			request := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBufferString(tt.body))
-			request.Header.Set("Authorization", "Bearer "+token)
+			request.AddCookie(&http.Cookie{Name: auth.SessionCookie, Value: token})
+			request.Header.Set("X-CSRF-Protection", "1")
 			request.Header.Set("Content-Type", "application/json")
 			response := httptest.NewRecorder()
-			server.Router("http://localhost").ServeHTTP(response, request)
+			router.ServeHTTP(response, request)
 			if response.Code != tt.status {
 				t.Fatalf("response = %d %s", response.Code, response.Body)
 			}
@@ -107,6 +116,7 @@ func (c *paymentChainStub) BuildPayment(_ domain.Wallet, _ string, amount, _, _,
 	c.builtAmount, c.builtMemo, c.builtMemoType = amount, memo, memoType
 	return "unsigned-envelope", []byte("payment-hash"), c.buildErr
 }
+func (c *paymentChainStub) TransactionOnChain(string) (map[string]any, error) { return nil, nil }
 func (c *paymentChainStub) Submit(envelope, _ string, _ []byte) (string, error) {
 	c.submittedEnvelope = envelope
 	return "stellar-tx-hash", c.submitErr
@@ -128,14 +138,15 @@ type paymentClusterStub struct{ online int }
 func (c *paymentClusterStub) OnlineCount() int { return c.online }
 
 type paymentFixture struct {
+	authRepo *sqlite.AuthRepository
 	wallets  *sqlite.Store
-	payments *sqlite.PaymentRepository
+	payments *sqlite.TransactionRepository
 	hub      *realtime.Hub
 	cluster  *paymentClusterStub
-	service  *service.PaymentService
+	service  *service.TransactionService
 }
 
-func newTestPaymentService(t *testing.T) (*paymentFixture, *paymentChainStub, *paymentSignerStub) {
+func newTestTransactionService(t *testing.T) (*paymentFixture, *paymentChainStub, *paymentSignerStub) {
 	t.Helper()
 	db, err := sqlite.Open(t.TempDir() + "/wallet.db")
 	if err != nil {
@@ -146,12 +157,12 @@ func newTestPaymentService(t *testing.T) (*paymentFixture, *paymentChainStub, *p
 	if err := wallets.CreateWallet(domain.Wallet{ID: "wallet-1", UserID: "owner", Chain: "stellar", Symbol: "XLM", Status: "ready"}); err != nil {
 		t.Fatal(err)
 	}
-	payments := sqlite.NewPaymentRepository(db)
+	payments := sqlite.NewTransactionRepository(db)
 	hub := realtime.NewHub()
 	cluster := &paymentClusterStub{online: 3}
 	chain := &paymentChainStub{resolved: chain.Resolved{Address: "resolved-address"}}
 	signer := &paymentSignerStub{}
-	svc := service.NewPaymentService(wallets, payments, chain, cluster, hub)
+	svc := service.NewTransactionService(wallets, payments, chain, cluster, hub)
 	svc.SetMPC(signer)
-	return &paymentFixture{wallets: wallets, payments: payments, hub: hub, cluster: cluster, service: svc}, chain, signer
+	return &paymentFixture{authRepo: sqlite.NewAuthRepository(db), wallets: wallets, payments: payments, hub: hub, cluster: cluster, service: svc}, chain, signer
 }

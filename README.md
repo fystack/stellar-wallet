@@ -89,7 +89,7 @@ The Stellar Horizon RPC endpoint is editable at runtime in **Settings → Chains
 ## Notes / limits
 
 - **Testnet only** — Horizon testnet + Friendbot. Mainnet not enabled.
-- Dev auth (hardcoded JWT secret). Harden (env secret, HTTPS, rate-limit) before any real deployment.
+- Google/GitHub social login, account linking and revocable cookie sessions. Configure provider credentials and public HTTPS URLs using the [OAuth setup guide](docs/oauth.md).
 
 ## Backend API (`/api/v1`)
 

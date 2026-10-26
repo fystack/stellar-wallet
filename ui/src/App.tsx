@@ -10,7 +10,8 @@ import Login from './pages/Login.tsx'
 import CreateWalletModal from './components/CreateWalletModal.tsx'
 import { AppLogo } from './logos.tsx'
 import { Toaster, toast } from './toast.tsx'
-import { api, getEmail, getToken, clearSession, BASE } from './api.ts'
+import { api, ApiError, clearLegacySession, BASE } from './api.ts'
+import { consumeAuthError } from './authErrors.ts'
 import type { Chain, Transaction, Wallet } from './types.ts'
 
 type PageKey = 'wallets' | 'send' | 'swap' | 'settings'
@@ -41,9 +42,11 @@ function initialRoute(): { page: PageKey; openId: string | null } {
 }
 
 export default function App() {
-  const [user, setUser] = useState<string | null>(
-    getToken() ? getEmail() : null,
-  )
+  const [user, setUser] = useState<string | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [authError, setAuthError] = useState('')
+  const [authNotice, setAuthNotice] = useState('')
+  const [signingOut, setSigningOut] = useState(false)
   const [page, setPage] = useState<PageKey>(() => initialRoute().page)
   const [wallets, setWallets] = useState<Wallet[]>([])
   const [showCreate, setShowCreate] = useState(false)
@@ -59,11 +62,30 @@ export default function App() {
   async function loadWallets() {
     try {
       setWallets(await api.listWallets())
-    } catch {
-      // token likely expired
-      handleSignOut()
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) clearUserState()
+      else toast.error('Unable to load wallets. Please try again.')
     }
   }
+
+  async function restoreSession() {
+    setAuthLoading(true)
+    setAuthError('')
+    try {
+      const account = await api.me()
+      setUser(account.email)
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) setUser(null)
+      else setAuthError('Unable to reach the wallet service. Please try again.')
+    } finally { setAuthLoading(false) }
+  }
+
+  useEffect(() => {
+    const notice = consumeAuthError()
+    if (notice) setAuthNotice(notice)
+    clearLegacySession()
+    void restoreSession()
+  }, [])
 
   useEffect(() => {
     if (user) loadWallets()
@@ -72,9 +94,13 @@ export default function App() {
 
   // Subscribe to the SSE stream for live transaction status updates.
   useEffect(() => {
-    const token = getToken()
-    if (!user || !token) return
-    const es = new EventSource(`${BASE}/api/v1/events?token=${token}`)
+    if (!user) return
+    const es = new EventSource(`${BASE}/api/v1/events`, { withCredentials: true })
+    es.onerror = () => {
+      void api.me().catch((error: unknown) => {
+        if (error instanceof ApiError && error.status === 401) clearUserState()
+      })
+    }
     es.onmessage = (e) => {
       try {
         const env = JSON.parse(e.data) as { type: string; data: unknown }
@@ -178,8 +204,21 @@ export default function App() {
     toast.success('Wallet deleted')
   }
 
-  function handleSignOut() {
-    clearSession()
+  async function handleSignOut() {
+    setSigningOut(true)
+    try {
+      await api.logout()
+      clearUserState()
+    } catch {
+      toast.error('Unable to sign out. Please try again.')
+    } finally { setSigningOut(false) }
+  }
+
+  function clearUserState() {
+    setLiveTxns({})
+    setFocusTxId(null)
+    setShowCreate(false)
+    setAuthNotice('')
     setUser(null)
     setWallets([])
     setOpenWalletId(null)
@@ -187,8 +226,10 @@ export default function App() {
     setPage('wallets')
   }
 
+  if (authLoading) return <div className="grid min-h-screen place-items-center" role="status">Checking your session…</div>
+  if (authError) return <div className="grid min-h-screen place-items-center p-6"><div role="alert"><p>{authError}</p><button className="cta mt-4" onClick={() => void restoreSession()}>Try again</button></div></div>
   if (!user) {
-    return <Login onLogin={setUser} />
+    return <Login initialError={authNotice} onLogin={(email) => { setAuthNotice(''); setUser(email) }} />
   }
 
   const openWallet = wallets.find((w) => w.id === openWalletId) ?? null
@@ -241,7 +282,8 @@ export default function App() {
         </nav>
 
         <button
-          onClick={handleSignOut}
+          onClick={() => void handleSignOut()}
+          disabled={signingOut}
           aria-label={`Sign out ${user}`}
           className="ml-auto flex items-center gap-3 text-left text-[15px] text-ink-soft transition-colors hover:text-ink md:ml-0 md:mt-auto md:px-2 md:py-3"
         >
@@ -258,6 +300,7 @@ export default function App() {
       </aside>
 
       <main className="min-w-0 flex-1 overflow-y-auto px-4 pb-24 pt-5 sm:px-6 md:px-10 md:pb-16 md:pt-6">
+        {authNotice && <div role="alert" className="mb-5 border border-line bg-white p-4 text-sm">{authNotice}<button className="ml-3 font-semibold underline" onClick={() => setAuthNotice('')}>Dismiss</button></div>}
         {openWallet ? (
           <WalletDetail
             wallet={openWallet}

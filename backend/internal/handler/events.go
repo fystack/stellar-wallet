@@ -3,31 +3,44 @@ package handler
 import (
 	"fmt"
 	"io"
+	"time"
 
-	"stellar-wallet-backend/internal/apperror"
-	"stellar-wallet-backend/internal/httpapi"
+	"stellar-wallet-backend/internal/auth"
+	"stellar-wallet-backend/internal/realtime"
 
 	"github.com/gin-gonic/gin"
 )
 
-func (s *Handler) events(c *gin.Context) {
-	userID, ok := s.auth.ParseToken(c.Query("token"))
-	if !ok {
-		httpapi.Error(c, apperror.New(apperror.Unauthorized, "invalid_token", "Invalid or expired authentication token."))
-		return
-	}
+type EventsHandler struct {
+	sessions *auth.Manager
+	hub      *realtime.Hub
+}
 
-	channel := s.hub.Subscribe(userID)
-	defer s.hub.Unsubscribe(userID, channel)
-
-	c.Writer.Header().Set("Content-Type", "text/event-stream")
-	c.Writer.Header().Set("Cache-Control", "no-cache")
-	c.Writer.Header().Set("Connection", "keep-alive")
-	c.Writer.Header().Set("X-Accel-Buffering", "no")
+func (h *EventsHandler) stream(c *gin.Context) {
+	// The route is protected by the same cookie-session middleware as other APIs.
+	channel := h.hub.Subscribe(c.GetString("userID"))
+	defer h.hub.Unsubscribe(c.GetString("userID"), channel)
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+	fmt.Fprint(c.Writer, ": connected\n\n")
+	c.Writer.Flush()
+	heartbeat := time.NewTicker(15 * time.Second)
+	defer heartbeat.Stop()
 	c.Stream(func(writer io.Writer) bool {
 		select {
 		case message := <-channel:
+			if _, err := h.sessions.Session(c.Request); err != nil {
+				return false
+			}
 			_, _ = fmt.Fprintf(writer, "data: %s\n\n", message)
+			return true
+		case <-heartbeat.C:
+			if _, err := h.sessions.Session(c.Request); err != nil {
+				return false
+			}
+			_, _ = fmt.Fprint(writer, ": heartbeat\n\n")
 			return true
 		case <-c.Request.Context().Done():
 			return false

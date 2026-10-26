@@ -40,7 +40,8 @@ func SuccessWithMeta(c *gin.Context, status int, data, meta any) {
 // Error aborts the request. Only explicitly public messages reach the client.
 func Error(c *gin.Context, err error) {
 	status := http.StatusInternalServerError
-	detail := ErrorDetail{Code: "internal_error", Message: "An unexpected error occurred."}
+	internal := apperror.InternalFailure.New()
+	detail := ErrorDetail{Code: internal.Code, Message: internal.Message}
 	var failure *apperror.Error
 	if errors.As(err, &failure) && failure.Kind != apperror.Internal {
 		switch failure.Kind {
@@ -60,6 +61,8 @@ func Error(c *gin.Context, err error) {
 			status = http.StatusBadGateway
 		case apperror.MethodNotAllowed:
 			status = http.StatusMethodNotAllowed
+		case apperror.TooManyRequests:
+			status = http.StatusTooManyRequests
 		}
 		if status != http.StatusInternalServerError {
 			detail = ErrorDetail{Code: failure.Code, Message: failure.Message}

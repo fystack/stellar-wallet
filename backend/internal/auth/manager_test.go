@@ -7,41 +7,60 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"stellar-wallet-backend/internal/domain"
+	"stellar-wallet-backend/internal/repository/sqlite"
 )
 
-func TestManagerRoundTripsUserID(t *testing.T) {
-	manager := New([]byte("test-secret"), time.Hour)
-
-	token, ttl, err := manager.MakeToken("user-123")
+func TestSessionsAreOpaqueRevocableAndExpire(t *testing.T) {
+	db, err := sqlite.Open(t.TempDir() + "/auth.db")
 	if err != nil {
-		t.Fatalf("MakeToken() error = %v", err)
+		t.Fatal(err)
 	}
-	if ttl != 3600 {
-		t.Fatalf("MakeToken() ttl = %d, want 3600", ttl)
+	defer db.Close()
+	repo := sqlite.NewAuthRepository(db)
+	manager := New(repo, true)
+	if err := repo.CreateUser(domain.User{ID: "user", Email: "user@example.com", PasswordHash: "hash"}); err != nil {
+		t.Fatal(err)
 	}
-	userID, ok := manager.ParseToken(token)
-	if !ok || userID != "user-123" {
-		t.Fatalf("ParseToken() = %q, %v, want user-123, true", userID, ok)
+	token, err := RandomToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.CreateSession(domain.Session{Hash: HashToken(token), UserID: "user", CreatedAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()}); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest("GET", "/", nil)
+	request.AddCookie(&http.Cookie{Name: SessionCookie, Value: token})
+	got, err := manager.Session(request)
+	if err != nil || got.UserID != "user" {
+		t.Fatalf("session = %#v %v", got, err)
+	}
+	repo.RevokeSession(HashToken(token))
+	if _, err := manager.Session(request); err == nil {
+		t.Fatal("revoked cookie accepted")
+	}
+	repo.CreateSession(domain.Session{Hash: HashToken(token), UserID: "user", ExpiresAt: time.Now().Add(-time.Second).Unix()})
+	if _, err := manager.Session(request); err == nil {
+		t.Fatal("expired cookie accepted")
+	}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	manager.SetSession(c, token)
+	cookie := w.Result().Cookies()[0]
+	if !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteLaxMode || cookie.Path != "/" {
+		t.Fatalf("cookie flags = %#v", cookie)
 	}
 }
-
-func TestMiddlewareRejectsMissingBearerToken(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	manager := New([]byte("test-secret"), time.Hour)
+func TestMiddlewareRejectsMissingCookieAndBearerTokens(t *testing.T) {
+	manager := New(nil, false)
 	router := gin.New()
 	router.Use(manager.Middleware())
-	router.GET("/protected", func(c *gin.Context) {
-		c.Status(http.StatusNoContent)
-	})
-
-	request := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	router.GET("/", func(c *gin.Context) { t.Fatal("unauthenticated handler executed") })
+	request := httptest.NewRequest("GET", "/", nil)
+	request.Header.Set("Authorization", "Bearer old-jwt")
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
-
-	if response.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
-	}
-	if response.Body.String() != "{\"error\":{\"code\":\"authentication_required\",\"message\":\"Authentication is required.\"}}" {
-		t.Fatalf("body = %q", response.Body.String())
+	if response.Code != 401 || response.Body.String() != `{"error":{"code":"authentication_required","message":"Sign in to continue."}}` {
+		t.Fatalf("response = %d %s", response.Code, response.Body)
 	}
 }

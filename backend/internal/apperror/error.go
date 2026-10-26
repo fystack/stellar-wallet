@@ -13,7 +13,16 @@ const (
 	Unavailable
 	Upstream
 	MethodNotAllowed
+	TooManyRequests
 )
+
+// Spec is the single source of truth for a public API failure.
+// Keep codes and user-facing messages in catalog.go, not at call sites.
+type Spec struct {
+	kind    Kind
+	code    string
+	message string
+}
 
 // Error separates a safe public message from the underlying technical cause.
 // Callers can add context with fmt.Errorf("operation: %w", err).
@@ -24,13 +33,15 @@ type Error struct {
 	cause   error
 }
 
-func New(kind Kind, code, message string) *Error {
-	return &Error{Kind: kind, Code: code, Message: message}
+func (s Spec) New() *Error {
+	return &Error{Kind: s.kind, Code: s.code, Message: s.message}
 }
 
-func Wrap(cause error, kind Kind, code, message string) *Error {
-	return &Error{Kind: kind, Code: code, Message: message, cause: cause}
+func (s Spec) Wrap(cause error) *Error {
+	return &Error{Kind: s.kind, Code: s.code, Message: s.message, cause: cause}
 }
+
+func (s Spec) Code() string { return s.code }
 
 func (e *Error) Error() string {
 	if e.cause != nil {

@@ -7,13 +7,39 @@ import (
 )
 
 func Open(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
+	db, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
 	if err != nil {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
 
 	const schema = `
+ CREATE TABLE IF NOT EXISTS auth_identities (
+  provider TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  email TEXT NOT NULL,
+  PRIMARY KEY(provider,subject),
+  UNIQUE(user_id,provider)
+ );
+ CREATE TABLE IF NOT EXISTS auth_sessions (
+  token_hash TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+ );
+ CREATE INDEX IF NOT EXISTS auth_sessions_expiry ON auth_sessions(expires_at);
+ CREATE TABLE IF NOT EXISTS oauth_flows (
+  state_hash TEXT PRIMARY KEY,
+  browser_hash TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  verifier TEXT NOT NULL,
+  nonce TEXT NOT NULL,
+  session_hash TEXT NOT NULL DEFAULT '',
+  user_id TEXT NOT NULL DEFAULT '',
+  expires_at INTEGER NOT NULL
+ );
+ CREATE INDEX IF NOT EXISTS oauth_flows_expiry ON oauth_flows(expires_at);
 	CREATE TABLE IF NOT EXISTS users (
 		id            TEXT PRIMARY KEY,
 		email         TEXT UNIQUE NOT NULL,

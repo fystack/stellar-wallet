@@ -1,131 +1,101 @@
 package handler
 
 import (
-	"fmt"
 	"net/http"
+	"strings"
 
 	"stellar-wallet-backend/internal/apperror"
 	"stellar-wallet-backend/internal/auth"
-	"stellar-wallet-backend/internal/chain"
 	"stellar-wallet-backend/internal/cluster"
 	"stellar-wallet-backend/internal/httpapi"
 	"stellar-wallet-backend/internal/realtime"
-	"stellar-wallet-backend/internal/repository"
-	"stellar-wallet-backend/internal/repository/sqlite"
 	"stellar-wallet-backend/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-type MPCClient interface {
-	CreateWallet(walletID string) error
-	Sign(walletID, transactionID, network string, payload []byte) error
-}
-
 type Dependencies struct {
-	WalletService  *service.WalletService
-	PaymentService *service.PaymentService
-	Payments       *sqlite.PaymentRepository
-	Store          repository.Store
-	Auth           *auth.Manager
-	Chain          *chain.Client
-	Cluster        *cluster.Client
-	Hub            *realtime.Hub
+	Auth               *auth.Manager
+	AuthService        *service.AuthService
+	WalletService      *service.WalletService
+	TransactionService *service.TransactionService
+	SwapService        *service.SwapService
+	TrustlineService   *service.TrustlineService
+	SettingsService    *service.SettingsService
+	Cluster            *cluster.Client
+	Hub                *realtime.Hub
+	FrontendURL        string
+	PublicURL          string
 }
 
-type Handler struct {
-	payments       *sqlite.PaymentRepository
-	walletService  *service.WalletService
-	paymentService *service.PaymentService
-	store          repository.Store
-	auth           *auth.Manager
-	chain          *chain.Client
-	cluster        *cluster.Client
-	hub            *realtime.Hub
-	mpc            MPCClient
-}
-
-func New(dependencies Dependencies) *Handler {
-	return &Handler{
-		store:          dependencies.Store,
-		payments:       dependencies.Payments,
-		auth:           dependencies.Auth,
-		chain:          dependencies.Chain,
-		cluster:        dependencies.Cluster,
-		hub:            dependencies.Hub,
-		paymentService: dependencies.PaymentService,
-		walletService:  dependencies.WalletService,
+func NewRouter(d Dependencies, corsOrigin string) *gin.Engine {
+	corsOrigin = strings.TrimRight(corsOrigin, "/")
+	if d.FrontendURL == "" {
+		d.FrontendURL = corsOrigin
 	}
-}
 
-// SetMPC supplies the signing client to the remaining wallet/swap handlers.
-func (s *Handler) SetMPC(client MPCClient) { s.mpc = client }
+	authHandler := &AuthHandler{sessions: d.Auth, accounts: d.AuthService, frontendURL: d.FrontendURL}
+	wallets := &WalletHandler{wallets: d.WalletService, trustlines: d.TrustlineService}
+	transactions := &TransactionHandler{transactions: d.TransactionService}
+	swaps := &SwapHandler{swaps: d.SwapService}
+	settings := &SettingsHandler{settings: d.SettingsService, cluster: d.Cluster}
+	events := &EventsHandler{sessions: d.Auth, hub: d.Hub}
 
-func (s *Handler) Router(corsOrigin string) *gin.Engine {
 	router := gin.New()
-	router.Use(gin.Logger(), gin.CustomRecovery(func(c *gin.Context, recovered any) {
-		httpapi.Error(c, fmt.Errorf("request panic: %v", recovered))
-	}))
 	router.HandleMethodNotAllowed = true
-	router.NoRoute(func(c *gin.Context) {
-		httpapi.Error(c, apperror.New(apperror.NotFound, "route_not_found", "Route not found."))
-	})
-	router.NoMethod(func(c *gin.Context) {
-		httpapi.Error(c, apperror.New(apperror.MethodNotAllowed, "method_not_allowed", "Method not allowed."))
-	})
-	router.Use(corsMiddleware(corsOrigin))
+	router.NoRoute(func(c *gin.Context) { httpapi.Error(c, apperror.RouteNotFound.New()) })
+	router.NoMethod(func(c *gin.Context) { httpapi.Error(c, apperror.UnsupportedMethod.New()) })
+	router.Use(
+		requestLogger(),
+		recoverPanics(),
+		corsMiddleware(corsOrigin),
+		authRateLimit(),
+		csrfProtection(d.FrontendURL, d.PublicURL),
+	)
 
 	router.GET("/health", func(c *gin.Context) {
 		httpapi.Success(c, http.StatusOK, gin.H{"status": "ok"})
 	})
-	router.GET("/api/v1/cluster", func(c *gin.Context) {
-		httpapi.Success(c, http.StatusOK, gin.H{
-			"threshold": "2-of-3",
-			"nodes":     s.cluster.Nodes(),
-		})
-	})
 
 	v1 := router.Group("/api/v1")
-	v1.POST("/auth/register", s.register)
-	v1.POST("/auth/login", s.login)
-	v1.GET("/events", s.events)
-	v1.GET("/prices", s.getPrices)
+	v1.GET("/cluster", settings.clusterStatus)
+	v1.POST("/auth/register", authHandler.register)
+	v1.POST("/auth/login", authHandler.login)
+	v1.GET("/auth/providers", authHandler.providers)
+	v1.GET("/auth/:provider/start", authHandler.oauthStart)
+	v1.GET("/auth/:provider/callback", authHandler.oauthCallback)
+	v1.POST("/auth/logout", authHandler.logout)
+	v1.GET("/prices", settings.getPrices)
 
 	protected := v1.Group("")
-	protected.Use(s.auth.Middleware())
-	protected.GET("/wallets", s.listWallets)
-	protected.POST("/wallets", s.createWallet)
-	protected.GET("/wallets/:id", s.getWallet)
-	protected.DELETE("/wallets/:id", s.deleteWallet)
-	protected.GET("/wallets/:id/balance", s.walletBalance)
-	protected.POST("/wallets/:id/fund", s.fundWallet)
-	protected.POST("/wallets/:id/trustline", s.addTrustline)
-	protected.GET("/wallets/:id/sync", s.syncWallet)
-	protected.GET("/chains", s.getChains)
-	protected.GET("/config", s.getConfig)
-	protected.PUT("/config", s.putConfig)
-	protected.POST("/assets", s.addAsset)
-	protected.DELETE("/assets", s.removeAsset)
-	protected.GET("/wallets/:id/transactions", s.listWalletTransactions)
-	protected.POST("/transactions", s.createTransaction)
-	protected.GET("/transactions/:id", s.getTransaction)
-	protected.GET("/tx/:hash/chain", s.transactionOnChain)
-	protected.GET("/resolve", s.resolveRecipient)
-	protected.GET("/wallets/:id/swap/quote", s.swapQuote)
-	protected.POST("/wallets/:id/swap", s.createSwap)
+	protected.Use(d.Auth.Middleware())
+	protected.GET("/auth/me", authHandler.me)
+	protected.POST("/auth/reauthenticate", authHandler.reauthenticate)
+	protected.POST("/auth/:provider/link", authHandler.oauthLink)
+	protected.GET("/events", events.stream)
+
+	protected.GET("/wallets", wallets.list)
+	protected.POST("/wallets", wallets.create)
+	protected.GET("/wallets/:id", wallets.get)
+	protected.DELETE("/wallets/:id", wallets.delete)
+	protected.GET("/wallets/:id/balance", wallets.balance)
+	protected.POST("/wallets/:id/fund", wallets.fund)
+	protected.GET("/wallets/:id/sync", wallets.sync)
+	protected.POST("/wallets/:id/trustline", wallets.addTrustline)
+	protected.GET("/wallets/:id/transactions", transactions.listForWallet)
+	protected.GET("/wallets/:id/swap/quote", swaps.quote)
+	protected.POST("/wallets/:id/swap", swaps.create)
+
+	protected.POST("/transactions", transactions.create)
+	protected.GET("/transactions/:id", transactions.get)
+	protected.GET("/tx/:hash/chain", transactions.onChain)
+	protected.GET("/resolve", transactions.resolveRecipient)
+
+	protected.GET("/chains", settings.getChains)
+	protected.GET("/config", settings.getConfig)
+	protected.PUT("/config", settings.putConfig)
+	protected.POST("/assets", settings.addAsset)
+	protected.DELETE("/assets", settings.removeAsset)
 
 	return router
-}
-
-func corsMiddleware(origin string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", origin)
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
-		if c.Request.Method == http.MethodOptions {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
-		c.Next()
-	}
 }

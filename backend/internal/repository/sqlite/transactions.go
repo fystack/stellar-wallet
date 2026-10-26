@@ -7,11 +7,11 @@ import (
 	"stellar-wallet-backend/internal/domain"
 )
 
-// PaymentRepository persists transactions, including sends, swaps and trustlines.
-type PaymentRepository struct{ db *sql.DB }
+// TransactionRepository persists sends, swaps, trustlines and incoming payments.
+type TransactionRepository struct{ db *sql.DB }
 
-func NewPaymentRepository(db *sql.DB) *PaymentRepository {
-	return &PaymentRepository{db: db}
+func NewTransactionRepository(db *sql.DB) *TransactionRepository {
+	return &TransactionRepository{db: db}
 }
 
 const transactionColumns = `id, wallet_id, user_id, type, counterparty, amount, symbol, COALESCE(recv_amount, ''), COALESCE(recv_symbol, ''), COALESCE(memo, ''), status, signature, envelope_xdr, tx_hash, error, created_at`
@@ -28,7 +28,7 @@ func scanTransaction(scanner interface{ Scan(...any) error }) (domain.Transactio
 	return transaction, err
 }
 
-func (s *PaymentRepository) CreateTransaction(transaction domain.Transaction) error {
+func (s *TransactionRepository) CreateTransaction(transaction domain.Transaction) error {
 	_, err := s.db.Exec(
 		`INSERT INTO transactions (id, wallet_id, user_id, type, counterparty, amount, symbol, recv_amount, recv_symbol, memo, status, signature, envelope_xdr, tx_hash, error, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -44,32 +44,33 @@ func (s *PaymentRepository) CreateTransaction(transaction domain.Transaction) er
 	return nil
 }
 
-func (s *PaymentRepository) IncomingTransactionExists(hash string) bool {
+func (s *TransactionRepository) IncomingTransactionExists(hash string) bool {
 	var count int
 	_ = s.db.QueryRow(
-		`SELECT COUNT(1) FROM transactions WHERE tx_hash = ? AND type = 'in'`, hash,
+		`SELECT COUNT(1) FROM transactions WHERE tx_hash = ? AND type = ?`, hash, domain.TransactionIn,
 	).Scan(&count)
 	return count > 0
 }
 
-func (s *PaymentRepository) TrustlineTransactionExists(walletID, symbol string) bool {
+func (s *TransactionRepository) TrustlineTransactionExists(walletID, symbol string) bool {
 	var count int
 	_ = s.db.QueryRow(
 		`SELECT COUNT(1) FROM transactions
-		 WHERE wallet_id = ? AND symbol = ? AND memo = 'Add trustline'
-		   AND status IN ('signing','broadcast','confirmed')`, walletID, symbol,
+		 WHERE wallet_id = ? AND symbol = ? AND memo = ? AND status IN (?, ?, ?)`,
+		walletID, symbol, domain.TrustlineMemo,
+		domain.TransactionSigning, domain.TransactionBroadcast, domain.TransactionConfirmed,
 	).Scan(&count)
 	return count > 0
 }
 
-func (s *PaymentRepository) TransactionsByWallet(userID, walletID string) []domain.Transaction {
+func (s *TransactionRepository) TransactionsByWallet(userID, walletID string) []domain.Transaction {
 	return s.transactions(
 		`SELECT `+transactionColumns+` FROM transactions
 		 WHERE wallet_id = ? AND user_id = ? ORDER BY created_at DESC`, walletID, userID,
 	)
 }
 
-func (s *PaymentRepository) TransactionForUser(transactionID, userID string) (domain.Transaction, bool) {
+func (s *TransactionRepository) TransactionForUser(transactionID, userID string) (domain.Transaction, bool) {
 	transaction, err := scanTransaction(s.db.QueryRow(
 		`SELECT `+transactionColumns+` FROM transactions WHERE id = ? AND user_id = ?`,
 		transactionID, userID,
@@ -77,14 +78,14 @@ func (s *PaymentRepository) TransactionForUser(transactionID, userID string) (do
 	return transaction, err == nil
 }
 
-func (s *PaymentRepository) TransactionByID(transactionID string) (domain.Transaction, bool) {
+func (s *TransactionRepository) TransactionByID(transactionID string) (domain.Transaction, bool) {
 	transaction, err := scanTransaction(s.db.QueryRow(
 		`SELECT `+transactionColumns+` FROM transactions WHERE id = ?`, transactionID,
 	))
 	return transaction, err == nil
 }
 
-func (s *PaymentRepository) transactions(query string, args ...any) []domain.Transaction {
+func (s *TransactionRepository) transactions(query string, args ...any) []domain.Transaction {
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return []domain.Transaction{}
@@ -100,30 +101,30 @@ func (s *PaymentRepository) transactions(query string, args ...any) []domain.Tra
 	return transactions
 }
 
-func (s *PaymentRepository) PendingTransactions() []domain.Transaction {
+func (s *TransactionRepository) PendingTransactions() []domain.Transaction {
 	return s.transactions(
-		`SELECT ` + transactionColumns + ` FROM transactions WHERE status = 'signing'`,
+		`SELECT `+transactionColumns+` FROM transactions WHERE status = ?`, domain.TransactionSigning,
 	)
 }
 
-func (s *PaymentRepository) SetTransactionStatus(transactionID, status string) {
-	_, _ = s.db.Exec(`UPDATE transactions SET status = ? WHERE id = ?`, status, transactionID)
+func (s *TransactionRepository) SetTransactionStatus(transactionID string, status domain.TransactionStatus) error {
+	return exec(s.db, "set transaction status", `UPDATE transactions SET status = ? WHERE id = ?`, status, transactionID)
 }
 
-func (s *PaymentRepository) FailTransaction(transactionID, reason string) {
-	_, _ = s.db.Exec(
-		`UPDATE transactions SET status = 'failed', error = ? WHERE id = ?`, reason, transactionID,
+func (s *TransactionRepository) FailTransaction(transactionID, reason string) error {
+	return exec(s.db, "fail transaction",
+		`UPDATE transactions SET status = ?, error = ? WHERE id = ?`, domain.TransactionFailed, reason, transactionID,
 	)
 }
 
-func (s *PaymentRepository) SetTransactionSignature(transactionID, signature string) {
-	_, _ = s.db.Exec(
+func (s *TransactionRepository) SetTransactionSignature(transactionID, signature string) error {
+	return exec(s.db, "set transaction signature",
 		`UPDATE transactions SET signature = ? WHERE id = ?`, signature, transactionID,
 	)
 }
 
-func (s *PaymentRepository) BroadcastTransaction(transactionID, hash string) {
-	_, _ = s.db.Exec(
-		`UPDATE transactions SET status = 'broadcast', tx_hash = ? WHERE id = ?`, hash, transactionID,
+func (s *TransactionRepository) BroadcastTransaction(transactionID, hash string) error {
+	return exec(s.db, "broadcast transaction",
+		`UPDATE transactions SET status = ?, tx_hash = ? WHERE id = ?`, domain.TransactionBroadcast, hash, transactionID,
 	)
 }

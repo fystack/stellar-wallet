@@ -1,12 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FystackLogo } from '../logos.tsx'
-import { api, ApiError } from '../api.ts'
+import { api, ApiError, type SocialProvider } from '../api.ts'
 
-export default function Login({ onLogin }: { onLogin: (email: string) => void }) {
+export default function Login({ onLogin, initialError = '' }: { onLogin: (email: string) => void; initialError?: string }) {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState(initialError)
+  const [providers, setProviders] = useState<SocialProvider[]>([])
+  const [providerError, setProviderError] = useState('')
+  useEffect(() => {
+    void api.providers().then(setProviders).catch(() => setProviderError('Social sign-in is unavailable. You can still sign in with email.'))
+  }, [])
   const [busy, setBusy] = useState(false)
 
   const canSubmit = /\S+@\S+\.\S+/.test(email) && password.length >= 6
@@ -57,6 +62,7 @@ export default function Login({ onLogin }: { onLogin: (email: string) => void })
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
               autoFocus
             />
           </label>
@@ -67,13 +73,14 @@ export default function Login({ onLogin }: { onLogin: (email: string) => void })
               className="field-input"
               type="password"
               placeholder="At least 6 characters"
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </label>
 
           {error && (
-            <div className="bg-[#fdecec] px-3 py-2 text-sm text-[#d33a3a]">
+            <div role="alert" className="bg-[#fdecec] px-3 py-2 text-sm text-[#d33a3a]">
               {error}
             </div>
           )}
@@ -86,6 +93,17 @@ export default function Login({ onLogin }: { onLogin: (email: string) => void })
             {busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
           </button>
         </form>
+
+        <div className="mt-4 flex flex-col gap-3" aria-label="Social sign-in">
+          {(['google', 'github'] as const).map((provider) => {
+            const enabled = providers.some((entry) => entry.id === provider && entry.enabled)
+            return <button key={provider} type="button" className="border border-line bg-white px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50" disabled={!enabled || busy} onClick={() => window.location.assign(api.oauthStartURL(provider))}>
+              Continue with {provider === 'google' ? 'Google' : 'GitHub'}
+            </button>
+          })}
+          {providerError && <p role="status" className="text-sm text-muted">{providerError}</p>}
+          {!providerError && providers.length > 0 && providers.every((provider) => !provider.enabled) && <p className="text-sm text-muted">Social sign-in is not configured on this deployment.</p>}
+        </div>
 
         <p className="mt-5 text-center text-sm text-muted">
           {mode === 'login' ? "No account? " : 'Already have an account? '}

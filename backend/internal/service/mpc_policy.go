@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"log"
 	"time"
+
+	"stellar-wallet-backend/internal/apperror"
+	"stellar-wallet-backend/internal/domain"
 )
 
 // MPC quorum + timeout policy.
@@ -20,13 +23,11 @@ const (
 	keygenTimeout = 90 * time.Second
 )
 
-// RequireNodes checks the live node count against a quorum. It returns a
-// user-facing error when the cluster is short, so handlers can fail fast
-// before creating a record that would otherwise get stuck.
-func (s *WalletService) RequireNodes(quorum int, action string) error {
-	online := s.cluster.OnlineCount()
+// requireQuorum fails fast before creating a record that would otherwise get stuck.
+func requireQuorum(cluster SigningCluster, quorum int, action string) error {
+	online := cluster.OnlineCount()
 	if online < quorum {
-		return fmt.Errorf("%s needs at least %d MPC nodes online (%d up)", action, quorum, online)
+		return apperror.MPCUnavailable.Wrap(fmt.Errorf("%s needs at least %d MPC nodes online (%d up)", action, quorum, online))
 	}
 	return nil
 }
@@ -43,7 +44,7 @@ func (s *WalletService) ReconcilePending() {
 			s.WatchKeygenTimeout(wallet.UserID, wallet.ID)
 			continue
 		}
-		s.store.SetWalletStatus(wallet.ID, "failed")
+		logError("reconcile wallet="+wallet.ID, s.store.SetWalletStatus(wallet.ID, domain.WalletFailed))
 		if updated, found := s.store.WalletByID(wallet.ID); found {
 			s.hub.PublishWallet(wallet.UserID, updated)
 		}
@@ -55,10 +56,10 @@ func (s *WalletService) ReconcilePending() {
 func (s *WalletService) WatchKeygenTimeout(userID, walletID string) {
 	time.AfterFunc(keygenTimeout, func() {
 		wallet, ok := s.store.WalletByID(walletID)
-		if !ok || wallet.Status != "generating" {
+		if !ok || wallet.Status != domain.WalletGenerating {
 			return
 		}
-		s.store.SetWalletStatus(walletID, "failed")
+		logError("keygen timeout wallet="+walletID, s.store.SetWalletStatus(walletID, domain.WalletFailed))
 		if updated, found := s.store.WalletByID(walletID); found {
 			s.hub.PublishWallet(userID, updated)
 		}

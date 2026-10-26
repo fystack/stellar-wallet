@@ -18,10 +18,10 @@ func TestStorePersistsUsersWalletsAndTransactions(t *testing.T) {
 	store := NewStore(db)
 
 	user := domain.User{ID: "user-1", Email: "user@example.com", PasswordHash: "hash", CreatedAt: "2026-08-14T00:00:00Z"}
-	if err := store.CreateUser(user); err != nil {
+	if err := NewAuthRepository(db).CreateUser(user); err != nil {
 		t.Fatalf("CreateUser() error = %v", err)
 	}
-	userID, hash, err := store.UserCredentials(user.Email)
+	userID, hash, err := NewAuthRepository(db).UserCredentials(user.Email)
 	if err != nil || userID != user.ID || hash != user.PasswordHash {
 		t.Fatalf("UserCredentials() = %q, %q, %v", userID, hash, err)
 	}
@@ -42,10 +42,10 @@ func TestStorePersistsUsersWalletsAndTransactions(t *testing.T) {
 		ID: "tx-1", WalletID: wallet.ID, UserID: user.ID, Type: "out", Counterparty: "GDEST",
 		Amount: "1.00", Symbol: "XLM", Status: "signing", CreatedAt: "2026-08-14T00:00:00Z",
 	}
-	if err := NewPaymentRepository(db).CreateTransaction(transaction); err != nil {
+	if err := NewTransactionRepository(db).CreateTransaction(transaction); err != nil {
 		t.Fatalf("CreateTransaction() error = %v", err)
 	}
-	stored, ok := NewPaymentRepository(db).TransactionForUser(transaction.ID, user.ID)
+	stored, ok := NewTransactionRepository(db).TransactionForUser(transaction.ID, user.ID)
 	if !ok || stored.ID != transaction.ID || stored.UserID != user.ID {
 		t.Fatalf("TransactionForUser() = %#v, %v", stored, ok)
 	}
@@ -58,7 +58,7 @@ func TestStoreTranslatesMissingUserToPortableError(t *testing.T) {
 	}
 	defer db.Close()
 
-	_, _, err = NewStore(db).UserCredentials("missing@example.com")
+	_, _, err = NewAuthRepository(db).UserCredentials("missing@example.com")
 	if !errors.Is(err, storecontract.ErrNotFound) {
 		t.Fatalf("UserCredentials() error = %v, want store.ErrNotFound", err)
 	}
@@ -70,7 +70,7 @@ func TestCreateUserDistinguishesConflictFromDatabaseFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	repo := NewStore(db)
+	repo := NewAuthRepository(db)
 	user := domain.User{ID: "user-1", Email: "owner@example.com", PasswordHash: "hash"}
 	if err := repo.CreateUser(user); err != nil {
 		t.Fatal(err)

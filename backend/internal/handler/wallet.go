@@ -1,46 +1,24 @@
 package handler
 
 import (
-	"fmt"
 	"net/http"
-	"strings"
-	"time"
 
 	"stellar-wallet-backend/internal/apperror"
-	"stellar-wallet-backend/internal/chain"
-	"stellar-wallet-backend/internal/domain"
 	"stellar-wallet-backend/internal/httpapi"
 	"stellar-wallet-backend/internal/service"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
-func (s *Handler) syncWallet(c *gin.Context) {
-	wallet, ok := s.store.WalletFor(c.GetString("userID"), c.Param("id"))
-	if !ok {
-		httpapi.Error(c, apperror.New(apperror.NotFound, "wallet_not_found", "Wallet not found."))
-		return
-	}
-	if wallet.Status != "ready" {
-		httpapi.Error(c, apperror.New(apperror.Conflict, "wallet_not_ready", "Wallet is not ready yet."))
-		return
-	}
-	httpapi.Success(c, http.StatusOK, gin.H{"synced": s.walletService.SyncIncoming(wallet)})
+type WalletHandler struct {
+	wallets    *service.WalletService
+	trustlines *service.TrustlineService
 }
 
-func capitalize(value string) string {
-	if value == "" {
-		return value
-	}
-	return strings.ToUpper(value[:1]) + value[1:]
-}
-
-func (s *Handler) listWallets(c *gin.Context) {
-	userID := c.GetString("userID")
-	wallets, err := s.store.ListWallets(userID)
+func (h *WalletHandler) list(c *gin.Context) {
+	wallets, err := h.wallets.List(c.GetString("userID"))
 	if err != nil {
-		httpapi.Error(c, fmt.Errorf("list wallets: %w", err))
+		httpapi.Error(c, err)
 		return
 	}
 	httpapi.Success(c, http.StatusOK, wallets)
@@ -51,110 +29,79 @@ type createWalletBody struct {
 	Chain string `json:"chain"`
 }
 
-func (s *Handler) createWallet(c *gin.Context) {
-	userID := c.GetString("userID")
+func (h *WalletHandler) create(c *gin.Context) {
 	var body createWalletBody
 	if err := c.ShouldBindJSON(&body); err != nil {
-		httpapi.Error(c, apperror.New(apperror.Invalid, "invalid_request", "Invalid request body."))
+		httpapi.Error(c, apperror.InvalidRequest.New())
 		return
 	}
-	metadata, ok := domain.Chains[body.Chain]
-	if !ok {
-		httpapi.Error(c, apperror.New(apperror.Invalid, "unsupported_chain", "Unsupported chain."))
-		return
-	}
-	name := strings.TrimSpace(body.Name)
-	if name == "" {
-		name = capitalize(body.Chain) + " Wallet"
-	}
-
-	if err := s.walletService.RequireNodes(service.KeygenQuorum, "keygen"); err != nil {
-		httpapi.Error(c, apperror.Wrap(err, apperror.Unavailable, "mpc_unavailable", "Not enough MPC nodes are online. Please try again later."))
-		return
-	}
-
-	wallet := domain.Wallet{
-		ID:        uuid.NewString(),
-		UserID:    userID,
-		Name:      name,
-		Chain:     body.Chain,
-		Symbol:    metadata.Symbol,
-		Address:   "",
-		Balance:   "0.00",
-		Status:    "generating",
-		CreatedAt: time.Now().UTC().Format(time.RFC3339),
-	}
-	err := s.store.CreateWallet(wallet)
+	wallet, err := h.wallets.Create(c.GetString("userID"), body.Name, body.Chain)
 	if err != nil {
-		httpapi.Error(c, fmt.Errorf("persist wallet: %w", err))
+		httpapi.Error(c, err)
 		return
 	}
-	if err := s.mpc.CreateWallet(wallet.ID); err != nil {
-		s.store.SetWalletStatus(wallet.ID, "failed")
-		httpapi.Error(c, apperror.Wrap(err, apperror.Upstream, "keygen_dispatch_failed", "Unable to start wallet creation."))
-		return
-	}
-	s.walletService.WatchKeygenTimeout(userID, wallet.ID)
 	httpapi.Success(c, http.StatusCreated, wallet)
 }
 
-func (s *Handler) getWallet(c *gin.Context) {
-	wallet, ok := s.store.WalletFor(c.GetString("userID"), c.Param("id"))
-	if !ok {
-		httpapi.Error(c, apperror.New(apperror.NotFound, "wallet_not_found", "Wallet not found."))
+func (h *WalletHandler) get(c *gin.Context) {
+	wallet, err := h.wallets.Get(c.GetString("userID"), c.Param("id"))
+	if err != nil {
+		httpapi.Error(c, err)
 		return
 	}
 	httpapi.Success(c, http.StatusOK, wallet)
 }
 
-func (s *Handler) walletBalance(c *gin.Context) {
-	wallet, ok := s.store.WalletFor(c.GetString("userID"), c.Param("id"))
-	if !ok {
-		httpapi.Error(c, apperror.New(apperror.NotFound, "wallet_not_found", "Wallet not found."))
+func (h *WalletHandler) delete(c *gin.Context) {
+	if err := h.wallets.Delete(c.GetString("userID"), c.Param("id")); err != nil {
+		httpapi.Error(c, err)
 		return
 	}
-	if wallet.Status != "ready" {
-		httpapi.Error(c, apperror.New(apperror.Conflict, "wallet_not_ready", "Wallet is not ready yet."))
-		return
-	}
-	httpapi.Success(c, http.StatusOK, gin.H{
-		"assets":   s.chain.Balances(wallet.Chain, wallet.Address),
-		"symbol":   wallet.Symbol,
-		"explorer": chain.ExplorerAddress(wallet.Chain, wallet.Address),
-	})
-	go s.walletService.RefreshWallet(wallet.ID)
+	httpapi.Success(c, http.StatusOK, gin.H{"ok": true})
 }
 
-func (s *Handler) fundWallet(c *gin.Context) {
-	wallet, ok := s.store.WalletFor(c.GetString("userID"), c.Param("id"))
-	if !ok {
-		httpapi.Error(c, apperror.New(apperror.NotFound, "wallet_not_found", "Wallet not found."))
+func (h *WalletHandler) balance(c *gin.Context) {
+	balance, err := h.wallets.Balance(c.GetString("userID"), c.Param("id"))
+	if err != nil {
+		httpapi.Error(c, err)
 		return
 	}
-	if wallet.Status != "ready" {
-		httpapi.Error(c, apperror.New(apperror.Conflict, "wallet_not_ready", "Wallet is not ready yet."))
+	httpapi.Success(c, http.StatusOK, balance)
+}
+
+func (h *WalletHandler) fund(c *gin.Context) {
+	balance, err := h.wallets.Fund(c.GetString("userID"), c.Param("id"))
+	if err != nil {
+		httpapi.Error(c, err)
 		return
 	}
-	if err := s.chain.Fund(wallet.Chain, wallet.Address); err != nil {
-		httpapi.Error(c, apperror.Wrap(err, apperror.Upstream, "funding_failed", "Unable to fund the wallet. Please try again later."))
-		return
-	}
-	balance, _ := s.chain.Balance(wallet.Chain, wallet.Address)
-	s.store.SetWalletBalance(wallet.ID, balance)
-	if updated, found := s.store.WalletByID(wallet.ID); found {
-		s.hub.PublishWallet(c.GetString("userID"), updated)
-	}
-	s.walletService.SyncIncoming(wallet)
 	httpapi.Success(c, http.StatusOK, gin.H{"balance": balance})
 }
 
-func (s *Handler) deleteWallet(c *gin.Context) {
-	userID := c.GetString("userID")
-	walletID := c.Param("id")
-	if _, ok := s.store.WalletFor(userID, walletID); !ok {
-		httpapi.Error(c, apperror.New(apperror.NotFound, "wallet_not_found", "Wallet not found."))
+func (h *WalletHandler) sync(c *gin.Context) {
+	synced, err := h.wallets.Sync(c.GetString("userID"), c.Param("id"))
+	if err != nil {
+		httpapi.Error(c, err)
 		return
 	}
-	s.store.DeleteWallet(userID, walletID)
-	httpapi.Success(c, http.StatusOK, gin.H{"ok": true})
+	httpapi.Success(c, http.StatusOK, gin.H{"synced": synced})
+}
+
+type trustlineBody struct {
+	Code   string `json:"code"`
+	Issuer string `json:"issuer"`
+}
+
+func (h *WalletHandler) addTrustline(c *gin.Context) {
+	var body trustlineBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		httpapi.Error(c, apperror.InvalidAsset.New())
+		return
+	}
+	transaction, err := h.trustlines.Add(c.GetString("userID"), c.Param("id"), body.Code, body.Issuer)
+	if err != nil {
+		httpapi.Error(c, err)
+		return
+	}
+	httpapi.Success(c, http.StatusCreated, transaction)
 }

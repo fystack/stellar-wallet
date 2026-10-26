@@ -1,18 +1,17 @@
 import type { SwapQuote, Transaction, Wallet } from './types.ts'
 
 export const BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8090'
-const TOKEN_KEY = 'wallet_token'
-const EMAIL_KEY = 'wallet_email'
+export type Account = {
+  id: string
+  email: string
+  has_password: boolean
+  identities: { provider: string; email: string }[]
+}
+export type SocialProvider = { id: 'google' | 'github'; enabled: boolean }
 
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY)
-}
-export function getEmail(): string | null {
-  return localStorage.getItem(EMAIL_KEY)
-}
-export function clearSession() {
-  localStorage.removeItem(TOKEN_KEY)
-  localStorage.removeItem(EMAIL_KEY)
+export function clearLegacySession() {
+  localStorage.removeItem('wallet_token')
+  localStorage.removeItem('wallet_email')
 }
 
 export type ApiResponse<T> = { data: T; meta?: Record<string, unknown> }
@@ -32,13 +31,13 @@ async function req<T>(path: string, opts: RequestInit & { json?: unknown } = {})
   const { json, ...rest } = opts
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'X-CSRF-Protection': '1',
     ...(rest.headers as Record<string, string>),
   }
-  const token = getToken()
-  if (token) headers.Authorization = `Bearer ${token}`
 
   const res = await fetch(`${BASE}${path}`, {
     ...rest,
+    credentials: 'include',
     headers,
     body: json !== undefined ? JSON.stringify(json) : rest.body,
   })
@@ -68,19 +67,20 @@ async function req<T>(path: string, opts: RequestInit & { json?: unknown } = {})
   return (body as ApiResponse<T>).data
 }
 
-type AuthResp = { access_token: string; expires_in: number; email: string }
-
 async function auth(kind: 'login' | 'register', email: string, password: string) {
-  const data = await req<AuthResp>(`/api/v1/auth/${kind}`, {
-    method: 'POST',
-    json: { email, password },
+  const account = await req<Account>(`/api/v1/auth/${kind}`, {
+    method: 'POST', json: { email, password },
   })
-  localStorage.setItem(TOKEN_KEY, data.access_token)
-  localStorage.setItem(EMAIL_KEY, data.email)
-  return data.email
+  return account.email
 }
 
 export const api = {
+  me: () => req<Account>('/api/v1/auth/me'),
+  logout: () => req<void>('/api/v1/auth/logout', { method: 'POST' }),
+  providers: () => req<SocialProvider[]>('/api/v1/auth/providers'),
+  oauthStartURL: (provider: SocialProvider['id']) => `${BASE}/api/v1/auth/${provider}/start`,
+  linkProvider: (provider: SocialProvider['id']) => req<{ url: string }>(`/api/v1/auth/${provider}/link`, { method: 'POST' }),
+  reauthenticate: (password: string) => req<void>('/api/v1/auth/reauthenticate', { method: 'POST', json: { password } }),
   login: (email: string, password: string) => auth('login', email, password),
   register: (email: string, password: string) => auth('register', email, password),
 

@@ -7,21 +7,20 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("repository: not found")
-	ErrConflict = errors.New("repository: conflict")
+	ErrNotFound       = errors.New("repository: not found")
+	ErrConflict       = errors.New("repository: conflict")
+	ErrIdentityLinked = errors.New("repository: identity already linked")
 )
 
 // Store is the persistence port consumed by the application layer.
 // Database adapters implement this contract without leaking driver-specific
 // types, queries, or transaction details into handlers and use cases.
 type Store interface {
-	CreateUser(domain.User) error
-	UserCredentials(email string) (userID, passwordHash string, err error)
 	Setting(key string) (string, bool)
-	SetSetting(key, value string)
+	SetSetting(key, value string) error
 	CustomAssets() []domain.CustomAsset
-	AddAsset(domain.CustomAsset)
-	RemoveAsset(code, issuer string)
+	AddAsset(domain.CustomAsset) error
+	RemoveAsset(code, issuer string) error
 	ListWallets(userID string) ([]domain.Wallet, error)
 	CreateWallet(domain.Wallet) error
 	WalletFor(userID, walletID string) (domain.Wallet, bool)
@@ -29,8 +28,8 @@ type Store interface {
 	WalletByAddress(address string) (domain.Wallet, bool)
 	ReadyWallets() []domain.Wallet
 	GeneratingWallets() []domain.Wallet
-	SetWalletStatus(walletID, status string)
-	CompleteWalletKeygen(walletID, address, publicKey string)
-	SetWalletBalance(walletID, balance string)
-	DeleteWallet(userID, walletID string)
+	SetWalletStatus(walletID string, status domain.WalletStatus) error
+	CompleteWalletKeygen(walletID, address, publicKey string) error
+	SetWalletBalance(walletID, balance string) error
+	DeleteWallet(userID, walletID string) error
 }

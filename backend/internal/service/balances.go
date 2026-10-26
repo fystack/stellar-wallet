@@ -63,7 +63,10 @@ func (s *WalletService) refreshOne(wallet domain.Wallet) {
 	if err != nil || balance == wallet.Balance {
 		return
 	}
-	s.store.SetWalletBalance(wallet.ID, balance)
+	if err := s.store.SetWalletBalance(wallet.ID, balance); err != nil {
+		logError("refresh balance wallet="+wallet.ID, err)
+		return
+	}
 	if updated, ok := s.store.WalletByID(wallet.ID); ok {
 		s.hub.PublishWallet(wallet.UserID, updated)
 	}
