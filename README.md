@@ -73,7 +73,7 @@ and `infra/mpcium.docker.yaml` (nodes) — nats/consul service names, node healt
 URL, chain code, etc. `scripts/gen-keys.sh` fills in the event-initiator pubkey.
 The non-Docker backend uses `backend/config.yaml`.
 
-The Stellar Horizon RPC endpoint is editable at runtime in **Settings → Chains & RPC**.
+The Stellar Horizon RPC endpoint is set with `horizon_url` in the backend config; **Settings → Chains & RPC** shows it read-only.
 
 ## What works
 

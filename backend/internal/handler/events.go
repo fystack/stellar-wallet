@@ -31,12 +31,10 @@ func (h *EventsHandler) stream(c *gin.Context) {
 	c.Stream(func(writer io.Writer) bool {
 		select {
 		case message := <-channel:
-			if _, err := h.sessions.Session(c.Request); err != nil {
-				return false
-			}
 			_, _ = fmt.Fprintf(writer, "data: %s\n\n", message)
 			return true
 		case <-heartbeat.C:
+			// Revoked sessions are dropped here, at most one heartbeat after logout.
 			if _, err := h.sessions.Session(c.Request); err != nil {
 				return false
 			}

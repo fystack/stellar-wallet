@@ -18,36 +18,25 @@ func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
-func (s *Store) Setting(key string) (string, bool) {
-	var value string
-	if err := s.db.QueryRow(`SELECT value FROM settings WHERE key = ?`, key).Scan(&value); err != nil || value == "" {
-		return "", false
-	}
-	return value, true
-}
-
-func (s *Store) SetSetting(key, value string) error {
-	return exec(s.db, "set setting",
-		`INSERT INTO settings (key, value) VALUES (?, ?)
-		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value,
-	)
-}
-
-func (s *Store) CustomAssets() []domain.CustomAsset {
+func (s *Store) CustomAssets() ([]domain.CustomAsset, error) {
 	rows, err := s.db.Query(`SELECT code, issuer FROM custom_assets ORDER BY code`)
 	if err != nil {
-		return []domain.CustomAsset{}
+		return nil, fmt.Errorf("list custom assets: %w", err)
 	}
 	defer rows.Close()
 
 	assets := []domain.CustomAsset{}
 	for rows.Next() {
 		var asset domain.CustomAsset
-		if rows.Scan(&asset.Code, &asset.Issuer) == nil {
-			assets = append(assets, asset)
+		if err := rows.Scan(&asset.Code, &asset.Issuer); err != nil {
+			return nil, fmt.Errorf("scan custom asset: %w", err)
 		}
+		assets = append(assets, asset)
 	}
-	return assets
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate custom assets: %w", err)
+	}
+	return assets, nil
 }
 
 func (s *Store) AddAsset(asset domain.CustomAsset) error {
@@ -72,26 +61,7 @@ func scanWallet(scanner interface{ Scan(...any) error }) (domain.Wallet, error) 
 }
 
 func (s *Store) ListWallets(userID string) ([]domain.Wallet, error) {
-	rows, err := s.db.Query(
-		`SELECT `+walletColumns+` FROM wallets WHERE user_id = ? ORDER BY created_at`, userID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("list wallets: %w", err)
-	}
-	defer rows.Close()
-
-	wallets := []domain.Wallet{}
-	for rows.Next() {
-		wallet, scanErr := scanWallet(rows)
-		if scanErr != nil {
-			return nil, fmt.Errorf("scan wallet: %w", scanErr)
-		}
-		wallets = append(wallets, wallet)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate wallets: %w", err)
-	}
-	return wallets, nil
+	return s.wallets(`SELECT `+walletColumns+` FROM wallets WHERE user_id = ? ORDER BY created_at`, userID)
 }
 
 func (s *Store) CreateWallet(wallet domain.Wallet) error {
@@ -128,28 +98,33 @@ func (s *Store) WalletByAddress(address string) (domain.Wallet, bool) {
 	return wallet, err == nil
 }
 
-func (s *Store) ReadyWallets() []domain.Wallet {
-	return s.walletsWithStatus(domain.WalletReady)
+func (s *Store) ReadyWallets() ([]domain.Wallet, error) {
+	return s.wallets(`SELECT `+walletColumns+` FROM wallets WHERE status = ?`, domain.WalletReady)
 }
 
-func (s *Store) GeneratingWallets() []domain.Wallet {
-	return s.walletsWithStatus(domain.WalletGenerating)
+func (s *Store) GeneratingWallets() ([]domain.Wallet, error) {
+	return s.wallets(`SELECT `+walletColumns+` FROM wallets WHERE status = ?`, domain.WalletGenerating)
 }
 
-func (s *Store) walletsWithStatus(status domain.WalletStatus) []domain.Wallet {
-	rows, err := s.db.Query(`SELECT `+walletColumns+` FROM wallets WHERE status = ?`, status)
+func (s *Store) wallets(query string, args ...any) ([]domain.Wallet, error) {
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("list wallets: %w", err)
 	}
 	defer rows.Close()
 
 	wallets := []domain.Wallet{}
 	for rows.Next() {
-		if wallet, scanErr := scanWallet(rows); scanErr == nil {
-			wallets = append(wallets, wallet)
+		wallet, err := scanWallet(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan wallet: %w", err)
 		}
+		wallets = append(wallets, wallet)
 	}
-	return wallets
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate wallets: %w", err)
+	}
+	return wallets, nil
 }
 
 func (s *Store) SetWalletStatus(walletID string, status domain.WalletStatus) error {

@@ -7,9 +7,7 @@ import (
 	"stellar-wallet-backend/internal/repository"
 )
 
-const horizonURLSetting = "horizon_url"
-
-// SettingsService owns runtime chain settings: the Horizon RPC and custom assets.
+// SettingsService exposes chain status and manages custom assets. The Horizon URL comes from config.yaml only.
 type SettingsService struct {
 	store repository.Store
 	chain *chain.Client
@@ -33,28 +31,17 @@ type ChainStatus struct {
 	Online  bool   `json:"online"`
 }
 
-func (s *SettingsService) Get() Settings {
-	return Settings{HorizonURL: s.horizonURL(), Assets: s.store.CustomAssets()}
-}
-
-func (s *SettingsService) SetHorizonURL(url string) (Settings, error) {
-	if url != "" {
-		if err := s.store.SetSetting(horizonURLSetting, url); err != nil {
-			return Settings{}, err
-		}
+func (s *SettingsService) Get() (Settings, error) {
+	assets, err := s.store.CustomAssets()
+	if err != nil {
+		return Settings{}, err
 	}
-	s.ApplyRPC()
-	return s.Get(), nil
-}
-
-// ApplyRPC points the chain client at the stored Horizon URL.
-func (s *SettingsService) ApplyRPC() {
-	s.chain.SetRPC(s.horizonURL())
+	return Settings{HorizonURL: s.chain.HorizonURL(), Assets: assets}, nil
 }
 
 func (s *SettingsService) Chains() []ChainStatus {
 	return []ChainStatus{
-		{Chain: "stellar", Name: "Stellar", Symbol: "XLM", Network: "testnet", RPC: s.horizonURL(), Online: s.chain.PingHorizon()},
+		{Chain: "stellar", Name: "Stellar", Symbol: "XLM", Network: "testnet", RPC: s.chain.HorizonURL(), Online: s.chain.PingHorizon()},
 	}
 }
 
@@ -65,23 +52,16 @@ func (s *SettingsService) AddAsset(asset domain.CustomAsset) ([]domain.CustomAss
 	if err := s.store.AddAsset(asset); err != nil {
 		return nil, err
 	}
-	return s.store.CustomAssets(), nil
+	return s.store.CustomAssets()
 }
 
 func (s *SettingsService) RemoveAsset(code, issuer string) ([]domain.CustomAsset, error) {
 	if err := s.store.RemoveAsset(code, issuer); err != nil {
 		return nil, err
 	}
-	return s.store.CustomAssets(), nil
+	return s.store.CustomAssets()
 }
 
 func (s *SettingsService) Prices() map[string]float64 {
 	return s.chain.Prices()
-}
-
-func (s *SettingsService) horizonURL() string {
-	if value, ok := s.store.Setting(horizonURLSetting); ok {
-		return value
-	}
-	return chain.DefaultHorizonURL
 }

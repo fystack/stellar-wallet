@@ -93,7 +93,6 @@ func NewRouter(d Dependencies, corsOrigin string) *gin.Engine {
 
 	protected.GET("/chains", settings.getChains)
 	protected.GET("/config", settings.getConfig)
-	protected.PUT("/config", settings.putConfig)
 	protected.POST("/assets", settings.addAsset)
 	protected.DELETE("/assets", settings.removeAsset)
 

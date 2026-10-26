@@ -177,11 +177,6 @@ export const api = {
       horizonUrl: string
       assets: { code: string; issuer: string }[]
     }>(`/api/v1/config`),
-  putConfig: (horizonUrl: string) =>
-    req<{ assets: { code: string; issuer: string }[] }>(`/api/v1/config`, {
-      method: 'PUT',
-      json: { horizonUrl },
-    }),
   addAsset: (code: string, issuer: string) =>
     req<{ assets: { code: string; issuer: string }[] }>(`/api/v1/assets`, {
       method: 'POST',

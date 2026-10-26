@@ -44,26 +44,28 @@ func (s *TransactionRepository) CreateTransaction(transaction domain.Transaction
 	return nil
 }
 
-func (s *TransactionRepository) IncomingTransactionExists(hash string) bool {
-	var count int
-	_ = s.db.QueryRow(
-		`SELECT COUNT(1) FROM transactions WHERE tx_hash = ? AND type = ?`, hash, domain.TransactionIn,
-	).Scan(&count)
-	return count > 0
+func (s *TransactionRepository) IncomingTransactionExists(hash string) (bool, error) {
+	return s.exists(`SELECT COUNT(1) FROM transactions WHERE tx_hash = ? AND type = ?`, hash, domain.TransactionIn)
 }
 
-func (s *TransactionRepository) TrustlineTransactionExists(walletID, symbol string) bool {
-	var count int
-	_ = s.db.QueryRow(
+func (s *TransactionRepository) TrustlineTransactionExists(walletID, symbol string) (bool, error) {
+	return s.exists(
 		`SELECT COUNT(1) FROM transactions
 		 WHERE wallet_id = ? AND symbol = ? AND memo = ? AND status IN (?, ?, ?)`,
 		walletID, symbol, domain.TrustlineMemo,
 		domain.TransactionSigning, domain.TransactionBroadcast, domain.TransactionConfirmed,
-	).Scan(&count)
-	return count > 0
+	)
 }
 
-func (s *TransactionRepository) TransactionsByWallet(userID, walletID string) []domain.Transaction {
+func (s *TransactionRepository) exists(query string, args ...any) (bool, error) {
+	var count int
+	if err := s.db.QueryRow(query, args...).Scan(&count); err != nil {
+		return false, fmt.Errorf("count transactions: %w", err)
+	}
+	return count > 0, nil
+}
+
+func (s *TransactionRepository) TransactionsByWallet(userID, walletID string) ([]domain.Transaction, error) {
 	return s.transactions(
 		`SELECT `+transactionColumns+` FROM transactions
 		 WHERE wallet_id = ? AND user_id = ? ORDER BY created_at DESC`, walletID, userID,
@@ -85,30 +87,54 @@ func (s *TransactionRepository) TransactionByID(transactionID string) (domain.Tr
 	return transaction, err == nil
 }
 
-func (s *TransactionRepository) transactions(query string, args ...any) []domain.Transaction {
-	rows, err := s.db.Query(query, args...)
-	if err != nil {
-		return []domain.Transaction{}
-	}
-	defer rows.Close()
-
-	transactions := []domain.Transaction{}
-	for rows.Next() {
-		if transaction, scanErr := scanTransaction(rows); scanErr == nil {
-			transactions = append(transactions, transaction)
-		}
-	}
-	return transactions
-}
-
-func (s *TransactionRepository) PendingTransactions() []domain.Transaction {
+func (s *TransactionRepository) PendingTransactions() ([]domain.Transaction, error) {
 	return s.transactions(
 		`SELECT `+transactionColumns+` FROM transactions WHERE status = ?`, domain.TransactionSigning,
 	)
 }
 
-func (s *TransactionRepository) SetTransactionStatus(transactionID string, status domain.TransactionStatus) error {
-	return exec(s.db, "set transaction status", `UPDATE transactions SET status = ? WHERE id = ?`, status, transactionID)
+func (s *TransactionRepository) transactions(query string, args ...any) ([]domain.Transaction, error) {
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query transactions: %w", err)
+	}
+	defer rows.Close()
+
+	transactions := []domain.Transaction{}
+	for rows.Next() {
+		transaction, err := scanTransaction(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan transaction: %w", err)
+		}
+		transactions = append(transactions, transaction)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate transactions: %w", err)
+	}
+	return transactions, nil
+}
+
+// ClaimSignature stores the signature and moves a signing transaction to broadcast.
+// It returns false when the transaction already left signing (timed out, failed or a duplicate result).
+func (s *TransactionRepository) ClaimSignature(transactionID, signature string) (bool, error) {
+	return s.transition("claim signature",
+		`UPDATE transactions SET signature = ?, status = ? WHERE id = ? AND status = ?`,
+		signature, domain.TransactionBroadcast, transactionID, domain.TransactionSigning,
+	)
+}
+
+// FailSigning fails a transaction only if it is still waiting for its signature.
+func (s *TransactionRepository) FailSigning(transactionID, reason string) (bool, error) {
+	return s.transition("fail signing",
+		`UPDATE transactions SET status = ?, error = ? WHERE id = ? AND status = ?`,
+		domain.TransactionFailed, reason, transactionID, domain.TransactionSigning,
+	)
+}
+
+func (s *TransactionRepository) ConfirmTransaction(transactionID, hash string) error {
+	return exec(s.db, "confirm transaction",
+		`UPDATE transactions SET status = ?, tx_hash = ? WHERE id = ?`, domain.TransactionConfirmed, hash, transactionID,
+	)
 }
 
 func (s *TransactionRepository) FailTransaction(transactionID, reason string) error {
@@ -117,14 +143,14 @@ func (s *TransactionRepository) FailTransaction(transactionID, reason string) er
 	)
 }
 
-func (s *TransactionRepository) SetTransactionSignature(transactionID, signature string) error {
-	return exec(s.db, "set transaction signature",
-		`UPDATE transactions SET signature = ? WHERE id = ?`, signature, transactionID,
-	)
-}
-
-func (s *TransactionRepository) BroadcastTransaction(transactionID, hash string) error {
-	return exec(s.db, "broadcast transaction",
-		`UPDATE transactions SET status = ?, tx_hash = ? WHERE id = ?`, domain.TransactionBroadcast, hash, transactionID,
-	)
+func (s *TransactionRepository) transition(action, query string, args ...any) (bool, error) {
+	result, err := s.db.Exec(query, args...)
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", action, err)
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", action, err)
+	}
+	return changed == 1, nil
 }

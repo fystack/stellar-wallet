@@ -48,7 +48,7 @@ internal/
     transaction.go           # Payments, transaction reads and the shared sign/broadcast lifecycle
     swap.go                  # DEX quotes and path-payment swaps
     trustline.go             # Trustline transactions
-    settings.go              # Horizon RPC, custom assets, chain status and prices
+    settings.go              # Custom assets, chain status (Horizon URL from config) and prices
     balances.go              # Balance refresh jobs
     mpc_policy.go            # Node quorum and keygen/sign timeout recovery
     ownership.go             # Wallet ownership/readiness checks

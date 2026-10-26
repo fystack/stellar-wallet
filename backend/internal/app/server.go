@@ -15,15 +15,16 @@ import (
 )
 
 type Dependencies struct {
-	AuthService  *service.AuthService
-	FrontendURL  string
-	PublicURL    string
-	Store        repository.Store
-	Transactions *sqlite.TransactionRepository
-	Auth         *auth.Manager
-	Chain        *chain.Client
-	Cluster      *cluster.Client
-	Hub          *realtime.Hub
+	FrontendURL    string
+	PublicURL      string
+	Store          repository.Store
+	Transactions   *sqlite.TransactionRepository
+	AuthRepository *sqlite.AuthRepository
+	OAuthProviders map[string]auth.OAuthProvider
+	Auth           *auth.Manager
+	Chain          *chain.Client
+	Cluster        *cluster.Client
+	Hub            *realtime.Hub
 }
 
 type MPCClient interface {
@@ -45,7 +46,7 @@ func NewServer(d Dependencies) *Server {
 	settings := service.NewSettingsService(d.Store, d.Chain)
 	routes := handler.Dependencies{
 		Auth:               d.Auth,
-		AuthService:        d.AuthService,
+		AuthService:        service.NewAuthService(d.AuthRepository, d.OAuthProviders),
 		WalletService:      wallets,
 		TransactionService: transactions,
 		SwapService:        service.NewSwapService(d.Store, d.Chain, transactions),
@@ -70,14 +71,13 @@ func (s *Server) SetMPC(client MPCClient) {
 
 func (s *Server) MPCCallbacks() mpc.Callbacks {
 	return mpc.Callbacks{OnKeygen: s.wallets.OnKeygen, OnSign: func(result mpc.SignResult) {
-		if tx := s.transactions.OnSign(result); tx != nil {
-			go s.wallets.RefreshAfterTransaction(tx.WalletID, tx.Counterparty)
+		if transaction := s.transactions.OnSign(result); transaction != nil {
+			go s.wallets.RefreshAfterTransaction(transaction.WalletID, transaction.Counterparty)
 		}
 	}}
 }
 
 func (s *Server) Start() {
-	s.settings.ApplyRPC()
 	s.wallets.StartBalanceRefresher()
 	s.transactions.ReconcilePending()
 	s.wallets.ReconcilePending()

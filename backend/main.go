@@ -13,7 +13,6 @@ import (
 	"stellar-wallet-backend/internal/mpc"
 	"stellar-wallet-backend/internal/realtime"
 	"stellar-wallet-backend/internal/repository/sqlite"
-	"stellar-wallet-backend/internal/service"
 )
 
 func main() {
@@ -32,16 +31,18 @@ func main() {
 	chainClient := chain.NewClient(cfg.HorizonURL, httpClient)
 	authRepo := sqlite.NewAuthRepository(db)
 	authManager := auth.New(authRepo, cfg.CookieSecure)
-	authService := service.NewAuthService(authRepo, auth.NewProviders(cfg.OAuth, cfg.PublicURL, httpClient))
 	clusterClient := cluster.NewClient(httpClient, cfg.ConsulAddr, cfg.HealthBasePort, cfg.NodeHealthURL, cfg.AssumePeersOnline)
 	server := app.NewServer(app.Dependencies{
-		Store:       sqlite.NewStore(db),
-		AuthService: authService, FrontendURL: cfg.FrontendURL, PublicURL: cfg.PublicURL,
-		Transactions: sqlite.NewTransactionRepository(db),
-		Auth:         authManager,
-		Chain:        chainClient,
-		Cluster:      clusterClient,
-		Hub:          realtime.NewHub(),
+		FrontendURL:    cfg.FrontendURL,
+		PublicURL:      cfg.PublicURL,
+		Store:          sqlite.NewStore(db),
+		Transactions:   sqlite.NewTransactionRepository(db),
+		AuthRepository: authRepo,
+		OAuthProviders: auth.NewProviders(cfg.OAuth, cfg.PublicURL, httpClient),
+		Auth:           authManager,
+		Chain:          chainClient,
+		Cluster:        clusterClient,
+		Hub:            realtime.NewHub(),
 	})
 
 	mpcClient, err := mpc.New(cfg.NATSURL, cfg.InitiatorKey, server.MPCCallbacks())

@@ -126,10 +126,20 @@ func (s *WalletService) Fund(userID, walletID string) (string, error) {
 	if err := s.chain.Fund(wallet.Chain, wallet.Address); err != nil {
 		return "", apperror.FundingFailed.Wrap(err)
 	}
-	s.SyncIncoming(wallet)
-	s.RefreshWallet(wallet.ID)
-	updated, _ := s.store.WalletByID(wallet.ID)
-	return updated.Balance, nil
+	if _, err := s.SyncIncoming(wallet); err != nil {
+		logError("sync after funding wallet="+wallet.ID, err)
+	}
+	balance, err := s.chain.Balance(wallet.Chain, wallet.Address)
+	if err != nil {
+		return "", apperror.BalanceUnavailable.Wrap(err)
+	}
+	if err := s.store.SetWalletBalance(wallet.ID, balance); err != nil {
+		return "", err
+	}
+	if updated, found := s.store.WalletByID(wallet.ID); found {
+		s.hub.PublishWallet(userID, updated)
+	}
+	return balance, nil
 }
 
 func (s *WalletService) Sync(userID, walletID string) (int, error) {
@@ -137,7 +147,7 @@ func (s *WalletService) Sync(userID, walletID string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	return s.SyncIncoming(wallet), nil
+	return s.SyncIncoming(wallet)
 }
 
 func capitalize(value string) string {
@@ -169,18 +179,23 @@ func (s *WalletService) OnKeygen(result mpc.KeygenResult) {
 	}
 }
 
-func (s *WalletService) SyncIncoming(wallet domain.Wallet) int {
+// SyncIncoming records new incoming payments from Horizon and returns how many were added.
+func (s *WalletService) SyncIncoming(wallet domain.Wallet) (int, error) {
 	if wallet.Chain != "stellar" {
-		return 0
+		return 0, nil
 	}
 	payments, err := s.chain.Incoming(wallet.Address)
 	if err != nil {
-		return 0
+		return 0, apperror.SyncFailed.Wrap(err)
 	}
 
 	added := 0
 	for _, payment := range payments {
-		if s.transactions.IncomingTransactionExists(payment.Hash) {
+		exists, err := s.transactions.IncomingTransactionExists(payment.Hash)
+		if err != nil {
+			return added, err
+		}
+		if exists {
 			continue
 		}
 		createdAt := payment.At
@@ -209,5 +224,5 @@ func (s *WalletService) SyncIncoming(wallet domain.Wallet) int {
 	if added > 0 {
 		s.RefreshWallet(wallet.ID)
 	}
-	return added
+	return added, nil
 }

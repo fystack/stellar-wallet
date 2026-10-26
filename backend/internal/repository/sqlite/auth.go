@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"time"
 
+	"stellar-wallet-backend/internal/domain"
+	storecontract "stellar-wallet-backend/internal/repository"
+
 	"github.com/google/uuid"
 	modernsqlite "modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
-	"stellar-wallet-backend/internal/domain"
-	storecontract "stellar-wallet-backend/internal/repository"
 )
 
 // AuthRepository owns account, identity, session and short-lived OAuth state SQL.
@@ -48,34 +49,34 @@ func (s *AuthRepository) UserCredentials(email string) (string, string, error) {
 }
 
 func (s *AuthRepository) UserByID(id string) (domain.User, error) {
-	var u domain.User
-	err := s.db.QueryRow(`SELECT id,email,password_hash,created_at FROM users WHERE id=?`, id).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.CreatedAt)
+	var user domain.User
+	err := s.db.QueryRow(`SELECT id,email,password_hash,created_at FROM users WHERE id=?`, id).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
-		return u, storecontract.ErrNotFound
+		return user, storecontract.ErrNotFound
 	}
 	if err != nil {
-		return u, fmt.Errorf("read user: %w", err)
+		return user, fmt.Errorf("read user: %w", err)
 	}
-	return u, nil
+	return user, nil
 }
 
 func (s *AuthRepository) Account(userID string) (domain.Account, error) {
-	u, err := s.UserByID(userID)
+	user, err := s.UserByID(userID)
 	if err != nil {
 		return domain.Account{}, err
 	}
-	account := domain.Account{ID: u.ID, Email: u.Email, HasPassword: u.PasswordHash != "", Identities: []domain.Identity{}}
+	account := domain.Account{ID: user.ID, Email: user.Email, HasPassword: user.PasswordHash != "", Identities: []domain.Identity{}}
 	rows, err := s.db.Query(`SELECT provider,subject,email FROM auth_identities WHERE user_id=? ORDER BY provider`, userID)
 	if err != nil {
 		return account, fmt.Errorf("list identities: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var i domain.Identity
-		if err := rows.Scan(&i.Provider, &i.Subject, &i.Email); err != nil {
+		var identity domain.Identity
+		if err := rows.Scan(&identity.Provider, &identity.Subject, &identity.Email); err != nil {
 			return account, fmt.Errorf("scan identity: %w", err)
 		}
-		account.Identities = append(account.Identities, i)
+		account.Identities = append(account.Identities, identity)
 	}
 	return account, rows.Err()
 }
@@ -122,14 +123,14 @@ func (s *AuthRepository) SocialUser(identity domain.Identity, linkUserID string)
 			return domain.User{}, fmt.Errorf("link identity: %w", err)
 		}
 	}
-	var u domain.User
-	if err := tx.QueryRow(`SELECT id,email,password_hash,created_at FROM users WHERE id=?`, userID).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.CreatedAt); err != nil {
-		return u, fmt.Errorf("read social user: %w", err)
+	var user domain.User
+	if err := tx.QueryRow(`SELECT id,email,password_hash,created_at FROM users WHERE id=?`, userID).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.CreatedAt); err != nil {
+		return user, fmt.Errorf("read social user: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
-		return u, fmt.Errorf("commit social login: %w", err)
+		return user, fmt.Errorf("commit social login: %w", err)
 	}
-	return u, nil
+	return user, nil
 }
 
 func (s *AuthRepository) CreateSession(session domain.Session) error {
@@ -171,13 +172,13 @@ func (s *AuthRepository) CreateFlow(flow domain.OAuthFlow) error {
 	return nil
 }
 func (s *AuthRepository) ConsumeFlow(stateHash, browserHash, provider string) (domain.OAuthFlow, error) {
-	var f domain.OAuthFlow
-	err := s.db.QueryRow(`DELETE FROM oauth_flows WHERE state_hash=? AND browser_hash=? AND provider=? AND expires_at>? RETURNING state_hash,browser_hash,provider,verifier,nonce,session_hash,user_id,expires_at`, stateHash, browserHash, provider, time.Now().Unix()).Scan(&f.StateHash, &f.BrowserHash, &f.Provider, &f.Verifier, &f.Nonce, &f.SessionHash, &f.UserID, &f.ExpiresAt)
+	var flow domain.OAuthFlow
+	err := s.db.QueryRow(`DELETE FROM oauth_flows WHERE state_hash=? AND browser_hash=? AND provider=? AND expires_at>? RETURNING state_hash,browser_hash,provider,verifier,nonce,session_hash,user_id,expires_at`, stateHash, browserHash, provider, time.Now().Unix()).Scan(&flow.StateHash, &flow.BrowserHash, &flow.Provider, &flow.Verifier, &flow.Nonce, &flow.SessionHash, &flow.UserID, &flow.ExpiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
-		return f, storecontract.ErrNotFound
+		return flow, storecontract.ErrNotFound
 	}
 	if err != nil {
-		return f, fmt.Errorf("consume OAuth state: %w", err)
+		return flow, fmt.Errorf("consume OAuth state: %w", err)
 	}
-	return f, nil
+	return flow, nil
 }

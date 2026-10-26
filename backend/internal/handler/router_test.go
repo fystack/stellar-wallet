@@ -36,7 +36,6 @@ func TestRouterPreservesPublicRouteContract(t *testing.T) {
 		"GET /api/v1/wallets/:id/sync":         true,
 		"GET /api/v1/chains":                   true,
 		"GET /api/v1/config":                   true,
-		"PUT /api/v1/config":                   true,
 		"POST /api/v1/assets":                  true,
 		"DELETE /api/v1/assets":                true,
 		"GET /api/v1/wallets/:id/transactions": true,

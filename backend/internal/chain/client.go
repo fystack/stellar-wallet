@@ -19,10 +19,7 @@ import (
 	"github.com/stellar/go/xdr"
 )
 
-const (
-	DefaultHorizonURL = "https://horizon-testnet.stellar.org"
-	friendbotURL      = "https://friendbot.stellar.org"
-)
+const friendbotURL = "https://friendbot.stellar.org"
 
 type IncomingPayment struct {
 	Hash   string
@@ -34,8 +31,6 @@ type IncomingPayment struct {
 
 type Client struct {
 	httpClient *http.Client
-
-	rpcMu      sync.RWMutex
 	horizonURL string
 
 	priceMu     sync.Mutex
@@ -50,15 +45,7 @@ func NewClient(horizonURL string, httpClient *http.Client) *Client {
 	}
 }
 
-func (c *Client) SetRPC(horizonURL string) {
-	c.rpcMu.Lock()
-	defer c.rpcMu.Unlock()
-	c.horizonURL = horizonURL
-}
-
 func (c *Client) HorizonURL() string {
-	c.rpcMu.RLock()
-	defer c.rpcMu.RUnlock()
 	return c.horizonURL
 }
 

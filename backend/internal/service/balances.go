@@ -22,7 +22,11 @@ func (s *WalletService) StartBalanceRefresher() {
 }
 
 func (s *WalletService) refreshAllBalances() {
-	wallets := s.store.ReadyWallets()
+	wallets, err := s.store.ReadyWallets()
+	if err != nil {
+		logError("refresh balances", err)
+		return
+	}
 
 	semaphore := make(chan struct{}, balanceConcurrency)
 	var waitGroup sync.WaitGroup

@@ -78,9 +78,10 @@ func TestSwapCreateAppliesDefaultSlippageAndDispatches(t *testing.T) {
 
 func TestSwapCreateRejectsBeforeSigning(t *testing.T) {
 	tests := []struct {
-		name  string
-		setup func(*TransactionService, *swapChainStub)
-		code  string
+		name     string
+		setup    func(*TransactionService, *swapChainStub)
+		slippage int
+		code     string
 	}{
 		{name: "quote failed", setup: func(_ *TransactionService, c *swapChainStub) { c.quoteErr = errors.New("no path") }, code: "swap_quote_failed"},
 		{name: "wallet not ready", setup: func(s *TransactionService, _ *swapChainStub) {
@@ -88,6 +89,8 @@ func TestSwapCreateRejectsBeforeSigning(t *testing.T) {
 				t.Fatal(err)
 			}
 		}, code: "wallet_not_ready"},
+		{name: "slippage above cap", setup: func(_ *TransactionService, _ *swapChainStub) {}, slippage: 1001, code: "invalid_slippage"},
+		{name: "negative slippage", setup: func(_ *TransactionService, _ *swapChainStub) {}, slippage: -1, code: "invalid_slippage"},
 		{name: "below quorum", setup: func(s *TransactionService, _ *swapChainStub) { s.cluster = paymentClusterStub(1) }, code: "mpc_unavailable"},
 	}
 	for _, tt := range tests {
@@ -95,7 +98,7 @@ func TestSwapCreateRejectsBeforeSigning(t *testing.T) {
 			transactions, _, signer := newTestTransactionService(t)
 			stub := &swapChainStub{quote: chain.SwapQuote{DestAmount: "1"}}
 			tt.setup(transactions, stub)
-			_, err := NewSwapService(transactions.wallets, stub, transactions).Create("owner", "wallet-1", SwapInput{To: "USDC:GISSUER", Amount: "1"})
+			_, err := NewSwapService(transactions.wallets, stub, transactions).Create("owner", "wallet-1", SwapInput{To: "USDC:GISSUER", Amount: "1", SlippageBps: tt.slippage})
 			var failure *apperror.Error
 			if !errors.As(err, &failure) || failure.Code != tt.code {
 				t.Fatalf("err = %v, want %s", err, tt.code)

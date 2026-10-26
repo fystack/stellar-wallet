@@ -37,9 +37,13 @@ func requireQuorum(cluster SigningCluster, quorum int, action string) error {
 // the cluster is below quorum they can never complete — fail them immediately.
 // If quorum is met, arm a fresh watchdog (mpcium may re-deliver from JetStream).
 func (s *WalletService) ReconcilePending() {
+	generating, err := s.store.GeneratingWallets()
+	if err != nil {
+		logError("reconcile generating wallets", err)
+		return
+	}
 	keygenOK := s.cluster.OnlineCount() >= KeygenQuorum
-
-	for _, wallet := range s.store.GeneratingWallets() {
+	for _, wallet := range generating {
 		if keygenOK {
 			s.WatchKeygenTimeout(wallet.UserID, wallet.ID)
 			continue

@@ -22,20 +22,7 @@ func (h *SettingsHandler) getChains(c *gin.Context) {
 }
 
 func (h *SettingsHandler) getConfig(c *gin.Context) {
-	httpapi.Success(c, http.StatusOK, h.settings.Get())
-}
-
-type configBody struct {
-	HorizonURL string `json:"horizonUrl"`
-}
-
-func (h *SettingsHandler) putConfig(c *gin.Context) {
-	var body configBody
-	if err := c.ShouldBindJSON(&body); err != nil {
-		httpapi.Error(c, apperror.InvalidRequest.New())
-		return
-	}
-	settings, err := h.settings.SetHorizonURL(body.HorizonURL)
+	settings, err := h.settings.Get()
 	if err != nil {
 		httpapi.Error(c, err)
 		return

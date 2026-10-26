@@ -37,7 +37,11 @@ func (s *TrustlineService) Add(userID, walletID, code, issuer string) (domain.Tr
 	if code == "" || issuer == "" {
 		return domain.Transaction{}, apperror.InvalidAsset.New()
 	}
-	if s.transactions.TrustlineTransactionExists(wallet.ID, code) {
+	exists, err := s.transactions.TrustlineTransactionExists(wallet.ID, code)
+	if err != nil {
+		return domain.Transaction{}, err
+	}
+	if exists {
 		return domain.Transaction{}, apperror.TrustlineExists.New()
 	}
 	if err := s.transactionService.requireSigning(); err != nil {

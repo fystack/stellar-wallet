@@ -20,6 +20,8 @@ import (
 	"golang.org/x/oauth2"
 )
 
+var dummyPasswordHash, _ = bcrypt.GenerateFromPassword([]byte("dummy-password"), bcrypt.DefaultCost)
+
 type AuthService struct {
 	repo      *sqlite.AuthRepository
 	providers map[string]auth.OAuthProvider
@@ -63,7 +65,12 @@ func (s *AuthService) Login(email, password, oldToken string) (domain.User, stri
 	if err != nil && !errors.Is(err, repository.ErrNotFound) {
 		return domain.User{}, "", fmt.Errorf("read login credentials: %w", err)
 	}
-	if errors.Is(err, repository.ErrNotFound) || hash == "" || bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
+	if hash == "" {
+		// Compare against a dummy hash so unknown emails take as long as wrong passwords.
+		_ = bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(password))
+		return domain.User{}, "", apperror.InvalidLoginCredentials.New()
+	}
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
 		return domain.User{}, "", apperror.InvalidLoginCredentials.New()
 	}
 	user, err := s.repo.UserByID(id)

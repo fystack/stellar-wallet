@@ -16,9 +16,7 @@ var (
 // Database adapters implement this contract without leaking driver-specific
 // types, queries, or transaction details into handlers and use cases.
 type Store interface {
-	Setting(key string) (string, bool)
-	SetSetting(key, value string) error
-	CustomAssets() []domain.CustomAsset
+	CustomAssets() ([]domain.CustomAsset, error)
 	AddAsset(domain.CustomAsset) error
 	RemoveAsset(code, issuer string) error
 	ListWallets(userID string) ([]domain.Wallet, error)
@@ -26,8 +24,8 @@ type Store interface {
 	WalletFor(userID, walletID string) (domain.Wallet, bool)
 	WalletByID(walletID string) (domain.Wallet, bool)
 	WalletByAddress(address string) (domain.Wallet, bool)
-	ReadyWallets() []domain.Wallet
-	GeneratingWallets() []domain.Wallet
+	ReadyWallets() ([]domain.Wallet, error)
+	GeneratingWallets() ([]domain.Wallet, error)
 	SetWalletStatus(walletID string, status domain.WalletStatus) error
 	CompleteWalletKeygen(walletID, address, publicKey string) error
 	SetWalletBalance(walletID, balance string) error

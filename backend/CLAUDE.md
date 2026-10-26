@@ -26,6 +26,7 @@ Go (Gin) + SQLite API. Testnet only. Follow these when adding or changing backen
 - Use the typed constants in `domain/status.go` (`domain.WalletReady`, `domain.TransactionSigning`, `domain.TransactionSwap`, ...). Never write status/type strings by hand, in Go or in SQL; pass them as query parameters.
 - Check wallet access with `ownedWallet` / `readyWallet` (`service/ownership.go`); every wallet-scoped query is also filtered by `user_id`.
 - Check MPC quorum with `requireQuorum` before creating any record that needs signing or keygen.
+- MPC results and timeouts can arrive late or more than once. Change transaction state only through the conditional repository transitions (`ClaimSignature`, `FailSigning`), never by reading the status and then writing it.
 - Anything that needs signing builds its envelope, then goes through `TransactionService.dispatch`. Do not re-implement persist/sign/timeout/publish.
 - Amounts are decimal strings. Never round a user amount through `float64` before building a transaction; Stellar supports 7 decimal places.
 
@@ -41,9 +42,14 @@ Go (Gin) + SQLite API. Testnet only. Follow these when adding or changing backen
 - Never log OAuth codes, state, tokens, cookies, signatures or raw provider bodies.
 - Unsafe methods stay behind the CSRF middleware; do not add routes that bypass it.
 - Secrets live only in the git-ignored `config.yaml`. Config comes from `config.yaml` only, not environment variables.
+- Settings that affect every user (such as the Horizon URL) come from config, never from an API endpoint a regular user can call.
 
 ## Style
 
-- Names are full words matching the domain (`transaction`, not `tx`; `wallet`, not `w`), except receivers (`s` for services, `h` for handlers).
+- Names are full words matching the domain (`transaction`, not `tx`; `wallet`, not `w`). Exceptions: receivers (`s` for services and repositories, `h` for handlers) and `tx` for a `*sql.Tx`.
 - Import groups: stdlib, then `stellar-wallet-backend/...`, then third-party.
 - Keep `backend/README.md` in sync when you add a service, handler or convention.
+
+## Commits
+
+- Never add `Co-Authored-By` or any other trailer, and no tool footer ("Generated with ..."). The message ends with its last line of content.

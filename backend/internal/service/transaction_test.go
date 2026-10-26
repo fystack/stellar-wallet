@@ -17,6 +17,7 @@ type paymentChainStub struct {
 	buildErr          error
 	submitErr         error
 	submittedEnvelope string
+	submitCount       int
 	builtAmount       string
 	builtMemo         string
 	builtMemoType     string
@@ -30,6 +31,7 @@ func (c *paymentChainStub) BuildPayment(_ domain.Wallet, _ string, amount, _, _,
 func (c *paymentChainStub) TransactionOnChain(string) (map[string]any, error) { return nil, nil }
 func (c *paymentChainStub) Submit(envelope, _ string, _ []byte) (string, error) {
 	c.submittedEnvelope = envelope
+	c.submitCount++
 	return "stellar-tx-hash", c.submitErr
 }
 
@@ -190,4 +192,40 @@ func TestPaymentSignResultAlsoBroadcastsSwapAndTrustline(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSignResultIsAppliedOnlyWhileSigning(t *testing.T) {
+	t.Run("duplicate result broadcasts once", func(t *testing.T) {
+		s, c, _ := newTestTransactionService(t)
+		transaction, err := s.Create("owner", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		result := mpc.SignResult{TransactionID: transaction.ID, Successful: true, Signature: []byte{1}}
+		if s.OnSign(result) == nil {
+			t.Fatal("first result was not broadcast")
+		}
+		if s.OnSign(result) != nil {
+			t.Fatal("duplicate result was broadcast")
+		}
+		stored, _ := s.transactions.TransactionByID(transaction.ID)
+		if c.submitCount != 1 || stored.Status != domain.TransactionConfirmed {
+			t.Fatalf("submits = %d, stored = %#v", c.submitCount, stored)
+		}
+	})
+	t.Run("late result after timeout is ignored", func(t *testing.T) {
+		s, c, _ := newTestTransactionService(t)
+		transaction, err := s.Create("owner", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.failSigning(transaction.UserID, transaction.ID, "signing timed out")
+		if s.OnSign(mpc.SignResult{TransactionID: transaction.ID, Successful: true, Signature: []byte{1}}) != nil {
+			t.Fatal("late result was broadcast")
+		}
+		stored, _ := s.transactions.TransactionByID(transaction.ID)
+		if c.submitCount != 0 || stored.Status != domain.TransactionFailed || stored.Signature != "" {
+			t.Fatalf("submits = %d, stored = %#v", c.submitCount, stored)
+		}
+	})
 }

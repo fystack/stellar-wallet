@@ -126,7 +126,6 @@ export default function Settings() {
   // Chain / RPC config + custom asset registry.
   const [horizonUrl, setHorizonUrl] = useState('')
   const [assets, setAssets] = useState<{ code: string; issuer: string }[]>([])
-  const [savingRpc, setSavingRpc] = useState(false)
   const [newCode, setNewCode] = useState('')
   const [newIssuer, setNewIssuer] = useState('')
   const [chains, setChains] = useState<ChainStat[]>([])
@@ -166,17 +165,6 @@ export default function Settings() {
       .catch(() => {})
   }, [])
 
-  async function saveRpc() {
-    setSavingRpc(true)
-    try {
-      await api.putConfig(horizonUrl.trim())
-      toast.success('RPC endpoints saved')
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Save failed')
-    } finally {
-      setSavingRpc(false)
-    }
-  }
 
   async function addAsset() {
     if (!newCode.trim() || !newIssuer.trim()) return
@@ -259,22 +247,14 @@ export default function Settings() {
               </span>
               <ChainBadge chain="stellar" chains={chains} />
             </div>
-            <input
-              className="field-input w-full font-mono text-sm"
-              value={horizonUrl}
-              onChange={(e) => setHorizonUrl(e.target.value)}
-              spellCheck={false}
-            />
+            <div className="field-input w-full break-all font-mono text-sm text-ink-soft">
+              {horizonUrl}
+            </div>
           </div>
         </div>
-
-        <button
-          onClick={saveRpc}
-          disabled={savingRpc}
-          className="w-full bg-brand px-4 py-2.5 font-semibold text-white transition-colors hover:bg-brand-deep disabled:opacity-50 sm:w-auto"
-        >
-          {savingRpc ? 'Saving…' : 'Save endpoints'}
-        </button>
+        <div className="text-sm text-muted">
+          The Horizon endpoint is set by the server operator in config.yaml.
+        </div>
       </section>
 
       <section className="surface mb-5">

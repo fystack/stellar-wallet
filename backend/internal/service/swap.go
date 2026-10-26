@@ -12,7 +12,10 @@ import (
 	"github.com/google/uuid"
 )
 
-const defaultSlippageBps = 100
+const (
+	defaultSlippageBps = 100
+	maxSlippageBps     = 1000
+)
 
 type SwapChain interface {
 	SwapQuote(send chain.SwapAsset, sendAmount string, dest chain.SwapAsset) (chain.SwapQuote, error)
@@ -71,16 +74,16 @@ func (s *SwapService) Create(userID, walletID string, input SwapInput) (SwapResu
 	if err != nil {
 		return SwapResult{}, err
 	}
+	slippage, err := slippageBps(input.SlippageBps)
+	if err != nil {
+		return SwapResult{}, err
+	}
 	if err := s.transactionService.requireSigning(); err != nil {
 		return SwapResult{}, err
 	}
 	quote, err := s.quote(send, amount, dest)
 	if err != nil {
 		return SwapResult{}, err
-	}
-	slippage := input.SlippageBps
-	if slippage <= 0 {
-		slippage = defaultSlippageBps
 	}
 	destMin := chain.ApplySlippage(quote.DestAmount, slippage)
 
@@ -114,6 +117,17 @@ func (s *SwapService) quote(send chain.SwapAsset, amount string, dest chain.Swap
 		return chain.SwapQuote{}, apperror.SwapQuoteFailed.Wrap(err)
 	}
 	return quote, nil
+}
+
+// slippageBps defaults an unset slippage and caps it so a swap always keeps a meaningful minimum output.
+func slippageBps(requested int) (int, error) {
+	if requested == 0 {
+		return defaultSlippageBps, nil
+	}
+	if requested < 0 || requested > maxSlippageBps {
+		return 0, apperror.InvalidSlippage.New()
+	}
+	return requested, nil
 }
 
 func parseSwap(input SwapInput) (string, chain.SwapAsset, chain.SwapAsset, error) {

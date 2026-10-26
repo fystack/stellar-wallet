@@ -130,7 +130,7 @@ func (s *TransactionService) dispatch(wallet domain.Wallet, transaction domain.T
 		return fmt.Errorf("persist %s transaction: %w", transaction.Type, err)
 	}
 	if err := s.mpc.Sign(wallet.ID, transaction.ID, domain.Chains[wallet.Chain].Network, hash); err != nil {
-		logError("dispatch tx="+transaction.ID, s.transactions.SetTransactionStatus(transaction.ID, domain.TransactionFailed))
+		s.failSigning(transaction.UserID, transaction.ID, "signing could not be started")
 		return apperror.SignDispatchFailed.Wrap(fmt.Errorf("dispatch signing: %w", err))
 	}
 	s.WatchSignTimeout(transaction.UserID, transaction.ID)
@@ -146,7 +146,7 @@ func (s *TransactionService) ListForWallet(userID, walletID string) ([]domain.Tr
 	if _, err := ownedWallet(s.wallets, userID, walletID); err != nil {
 		return nil, err
 	}
-	return s.transactions.TransactionsByWallet(userID, walletID), nil
+	return s.transactions.TransactionsByWallet(userID, walletID)
 }
 
 func (s *TransactionService) Get(userID, transactionID string) (domain.Transaction, error) {
@@ -174,7 +174,9 @@ func (s *TransactionService) OnChain(hash string) (map[string]any, error) {
 	return metadata, nil
 }
 
-// OnSign returns a broadcast transaction when balances should be refreshed.
+// OnSign broadcasts a signed transaction. Only the first result for a transaction that is
+// still signing is applied, so late or duplicate results can never broadcast twice.
+// It returns the transaction when balances should be refreshed.
 func (s *TransactionService) OnSign(result mpc.SignResult) *domain.Transaction {
 	transaction, ok := s.transactions.TransactionByID(result.TransactionID)
 	if !ok {
@@ -183,37 +185,53 @@ func (s *TransactionService) OnSign(result mpc.SignResult) *domain.Transaction {
 	userID := transaction.UserID
 
 	if !result.Successful {
-		log.Printf("sign failed tx=%s reason=%s", result.TransactionID, result.Error)
 		reason := result.Error
 		if reason == "" {
 			reason = "MPC signing failed"
 		}
-		logError("sign failed tx="+result.TransactionID, s.transactions.FailTransaction(result.TransactionID, reason))
-		s.publishTransactionByID(userID, result.TransactionID)
+		log.Printf("sign failed tx=%s reason=%s", transaction.ID, reason)
+		s.failSigning(userID, transaction.ID, reason)
 		return nil
 	}
 
-	signature := hex.EncodeToString(result.Signature)
-	logError("store signature tx="+result.TransactionID, s.transactions.SetTransactionSignature(result.TransactionID, signature))
-	if transaction.EnvelopeXDR != "" {
-		wallet, _ := s.wallets.WalletByID(transaction.WalletID)
-		hash, err := s.chain.Submit(transaction.EnvelopeXDR, wallet.Pubkey, result.Signature)
-		if err != nil {
-			log.Printf("broadcast failed tx=%s: %v", result.TransactionID, err)
-			logError("broadcast failed tx="+result.TransactionID, s.transactions.FailTransaction(result.TransactionID, "broadcast: "+err.Error()))
-			s.publishTransactionByID(userID, result.TransactionID)
-			return nil
-		}
-		logError("broadcast tx="+result.TransactionID, s.transactions.BroadcastTransaction(result.TransactionID, hash))
-		s.publishTransactionByID(userID, result.TransactionID)
-		logError("confirm tx="+result.TransactionID, s.transactions.SetTransactionStatus(result.TransactionID, domain.TransactionConfirmed))
-		s.publishTransactionByID(userID, result.TransactionID)
-		return &transaction
+	claimed, err := s.transactions.ClaimSignature(transaction.ID, hex.EncodeToString(result.Signature))
+	if err != nil {
+		logError("claim signature tx="+transaction.ID, err)
+		return nil
 	}
+	if !claimed {
+		log.Printf("ignored sign result tx=%s: transaction is no longer signing", transaction.ID)
+		return nil
+	}
+	s.publishTransactionByID(userID, transaction.ID)
 
-	logError("confirm tx="+result.TransactionID, s.transactions.SetTransactionStatus(result.TransactionID, domain.TransactionConfirmed))
-	s.publishTransactionByID(userID, result.TransactionID)
-	return nil
+	wallet, ok := s.wallets.WalletByID(transaction.WalletID)
+	if !ok {
+		logError("broadcast tx="+transaction.ID, s.transactions.FailTransaction(transaction.ID, "wallet not found"))
+		s.publishTransactionByID(userID, transaction.ID)
+		return nil
+	}
+	hash, err := s.chain.Submit(transaction.EnvelopeXDR, wallet.Pubkey, result.Signature)
+	if err != nil {
+		log.Printf("broadcast failed tx=%s: %v", transaction.ID, err)
+		logError("broadcast failed tx="+transaction.ID, s.transactions.FailTransaction(transaction.ID, "broadcast: "+err.Error()))
+		s.publishTransactionByID(userID, transaction.ID)
+		return nil
+	}
+	logError("confirm tx="+transaction.ID, s.transactions.ConfirmTransaction(transaction.ID, hash))
+	s.publishTransactionByID(userID, transaction.ID)
+	return &transaction
+}
+
+func (s *TransactionService) failSigning(userID, transactionID, reason string) {
+	failed, err := s.transactions.FailSigning(transactionID, reason)
+	if err != nil {
+		logError("fail signing tx="+transactionID, err)
+		return
+	}
+	if failed {
+		s.publishTransactionByID(userID, transactionID)
+	}
 }
 
 func (s *TransactionService) publishTransactionByID(userID, transactionID string) {
@@ -222,28 +240,27 @@ func (s *TransactionService) publishTransactionByID(userID, transactionID string
 	}
 }
 
-// WatchSignTimeout fails a transaction still stuck in "signing" after the
-// timeout — covers nodes that die (or never respond) after dispatch.
+// WatchSignTimeout fails a transaction still signing after the timeout,
+// covering nodes that die or never respond after dispatch.
 func (s *TransactionService) WatchSignTimeout(userID, transactionID string) {
 	time.AfterFunc(signTimeout, func() {
-		transaction, ok := s.transactions.TransactionByID(transactionID)
-		if !ok || transaction.Status != domain.TransactionSigning {
-			return
-		}
-		logError("sign timeout tx="+transactionID, s.transactions.FailTransaction(transactionID, "signing timed out — MPC nodes did not respond"))
-		s.publishTransactionByID(userID, transactionID)
+		s.failSigning(userID, transactionID, "signing timed out — MPC nodes did not respond")
 	})
 }
 
 func (s *TransactionService) ReconcilePending() {
+	pending, err := s.transactions.PendingTransactions()
+	if err != nil {
+		logError("reconcile pending transactions", err)
+		return
+	}
 	signOK := s.cluster.OnlineCount() >= SignQuorum
-	for _, transaction := range s.transactions.PendingTransactions() {
+	for _, transaction := range pending {
 		if signOK {
 			s.WatchSignTimeout(transaction.UserID, transaction.ID)
 			continue
 		}
-		logError("reconcile tx="+transaction.ID, s.transactions.FailTransaction(transaction.ID, "signing aborted — MPC cluster below quorum"))
-		s.publishTransactionByID(transaction.UserID, transaction.ID)
+		s.failSigning(transaction.UserID, transaction.ID, "signing aborted — MPC cluster below quorum")
 		log.Printf("reconcile: failed stuck tx=%s (cluster below quorum)", transaction.ID)
 	}
 }
