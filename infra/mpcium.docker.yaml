@@ -7,14 +7,14 @@
 # (badger_password, chain_code, initiator pubkey) MUST stay identical to the
 # host config or existing key-shares won't decrypt.
 nats:
-  url: nats://nats:4222
+  url: nats://10.8.0.1:4222
 consul:
-  address: consul:8500
+  address: 10.8.0.1:8500
 mpc_threshold: 2
 environment: development
 badger_password: "65e720b32a1b3780178aa883"
 event_initiator_algorithm: "ed25519"
-event_initiator_pubkey: "5f61619dd429d4a291e40d8854c6ac01045ecbd6db91ac8029f366626852fe61"
+event_initiator_pubkey: "21f14ab843cb71647100020cd8a5a51a82c3e1f55280bd0f8d734aca4244ac0a"
 chain_code: "13ddc491b3dcda986ece9cf777efd0b627d7f190f1349eaf427fda37e19aa723"
 db_path: "/app/db"
 backup_enabled: true
