@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError, type Account, type SocialProvider } from '../api.ts'
 import { authErrorCode } from '../lib/authErrors.ts'
+import { GithubLogo, GoogleLogo } from '../logos.tsx'
+import { MailIcon } from '../icons.tsx'
+
+function StatusDot({ on, label }: { on: boolean; label: string }) {
+  return (
+    <span className={'flex shrink-0 items-center gap-1.5 text-[13px] font-semibold ' + (on ? 'text-success' : 'text-muted')}>
+      <span className={'h-2 w-2 rounded-full ' + (on ? 'bg-green-600' : 'bg-[#cbd3de]')} />
+      {label}
+    </span>
+  )
+}
 
 export default function LinkedAccounts() {
   const [account, setAccount] = useState<Account | null>(null)
@@ -47,28 +58,79 @@ export default function LinkedAccounts() {
     }
   }
 
-  return <section className="mb-6 border border-line bg-white p-5 sm:p-6" aria-labelledby="linked-accounts-title">
-    <h2 id="linked-accounts-title" className="text-lg font-bold">Linked accounts</h2>
-    <p className="mt-1 text-sm text-muted">Connect a social login to access the same account and wallets.</p>
-    {account && <p className="mt-3 text-sm">{account.email}{account.has_password ? ' · Password login enabled' : ' · Social login'}</p>}
-    {!account && !error && <p className="mt-4 text-sm" role="status">Loading linked accounts…</p>}
-    <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-      {providers.map((provider) => {
-        const identity = account?.identities.find((entry) => entry.provider === provider.id)
-        const name = provider.id === 'google' ? 'Google' : 'GitHub'
-        return <button key={provider.id} className="border border-line px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50" disabled={busy || !provider.enabled || !!identity} onClick={() => void link(provider.id)}>
-          {identity ? `${name} connected` : provider.enabled ? `Connect ${name}` : `${name} not configured`}
-        </button>
-      })}
-    </div>
-    {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
-    {!account && error && <button className="mt-3 text-sm font-semibold underline" onClick={() => void load()}>Try again</button>}
-    {reauthProvider && account?.has_password && <form className="mt-4 flex max-w-md flex-col gap-3" onSubmit={(event) => void confirmPassword(event)}>
-      <label className="text-sm font-semibold">Confirm your password
-        <input className="field-input mt-2 w-full" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-      </label>
-      <button className="cta" type="submit" disabled={busy || !password}>Confirm and connect</button>
-    </form>}
-    {reauthProvider && !account?.has_password && <p className="mt-3 text-sm text-muted">Sign out and sign in again, then return here to connect another provider.</p>}
-  </section>
+  return (
+    <section className="surface mb-5" aria-labelledby="linked-accounts-title">
+      <h3 id="linked-accounts-title" className="mb-1 text-[17px] font-bold">Linked accounts</h3>
+      <p className="mb-[18px] text-sm text-muted">Connect a social login to access the same account and wallets.</p>
+
+      {!account && !error && <p className="mb-4 text-sm text-muted" role="status">Loading linked accounts…</p>}
+
+      <div className="flex flex-col">
+        {account && (
+          <div className="flex items-center gap-3 border-b border-line py-3 last:border-none">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center border border-line bg-white text-ink-soft">
+              <MailIcon />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold">Email &amp; password</div>
+              <div className="truncate text-[13px] text-muted">{account.email}</div>
+            </div>
+            <StatusDot on={account.has_password} label={account.has_password ? 'Enabled' : 'Not set'} />
+          </div>
+        )}
+        {providers.map((provider) => {
+          const identity = account?.identities.find((entry) => entry.provider === provider.id)
+          const name = provider.id === 'google' ? 'Google' : 'GitHub'
+          return (
+            <div key={provider.id} className="flex items-center gap-3 border-b border-line py-3 last:border-none">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center border border-line bg-white">
+                {provider.id === 'google' ? <GoogleLogo /> : <GithubLogo />}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold">{name}</div>
+                <div className="text-[13px] text-muted">
+                  {identity ? 'Signed in with ' + name : provider.enabled ? 'Not connected' : 'Not available on this deployment'}
+                </div>
+              </div>
+              {identity ? (
+                <StatusDot on label="Connected" />
+              ) : provider.enabled ? (
+                <button
+                  className="shrink-0 border border-line bg-white px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={busy}
+                  onClick={() => void link(provider.id)}
+                >
+                  Connect
+                </button>
+              ) : (
+                <StatusDot on={false} label="Unavailable" />
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {error && <div role="alert" className="mt-4 bg-[#fdecec] px-3 py-2 text-sm text-[#d33a3a]">{error}</div>}
+      {!account && error && (
+        <button className="mt-3 text-sm font-semibold text-brand hover:underline" onClick={() => void load()}>Try again</button>
+      )}
+
+      {reauthProvider && account?.has_password && (
+        <form className="mt-4 flex flex-col gap-2 border-t border-line pt-4" onSubmit={(event) => void confirmPassword(event)}>
+          <label className="flex flex-col gap-2">
+            <span className="text-sm font-semibold text-ink-soft">Confirm your password to continue</span>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input className="field-input min-w-0 flex-1" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+              <button className="bg-brand px-4 py-2.5 font-semibold text-white transition-colors hover:bg-brand-deep disabled:cursor-not-allowed disabled:opacity-50" type="submit" disabled={busy || !password}>
+                Confirm and connect
+              </button>
+            </div>
+          </label>
+        </form>
+      )}
+      {reauthProvider && !account?.has_password && (
+        <p className="mt-4 text-sm text-muted">Sign out and sign in again, then return here to connect another provider.</p>
+      )}
+    </section>
+  )
 }
