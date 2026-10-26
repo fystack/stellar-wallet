@@ -1,4 +1,4 @@
-import type { SwapQuote, Transaction, Wallet } from './types.ts'
+import type { ResolvedRecipient, SwapQuote, Transaction, Wallet } from './types.ts'
 
 export const BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8090'
 export type Account = {
@@ -110,12 +110,7 @@ export const api = {
       },
     }),
   resolve: (q: string) =>
-    req<{
-      address: string
-      memo_type?: string
-      memo?: string
-      federation?: string
-    }>(`/api/v1/resolve?q=${encodeURIComponent(q)}`),
+    req<ResolvedRecipient>(`/api/v1/resolve?q=${encodeURIComponent(q)}`),
   swapQuote: (walletId: string, from: string, to: string, amount: string) =>
     req<SwapQuote>(
       `/api/v1/wallets/${walletId}/swap/quote?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&amount=${encodeURIComponent(amount)}`,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError, type Account, type SocialProvider } from '../api.ts'
-import { authErrorCode } from '../authErrors.ts'
+import { authErrorCode } from '../lib/authErrors.ts'
 
 export default function LinkedAccounts() {
   const [account, setAccount] = useState<Account | null>(null)

@@ -47,3 +47,29 @@ export type Transaction = {
   error?: string
   createdAt: string
 }
+
+export type ResolvedRecipient = {
+  address: string
+  memo_type?: string
+  memo?: string
+  federation?: string
+}
+
+export type SendInput = {
+  walletId: string
+  to: string
+  amount: string
+  memo: string
+  memoType?: string
+  asset?: { code: string; issuer: string }
+}
+
+export type SwapInput = {
+  walletId: string
+  from: string
+  to: string
+  amount: string
+  slippageBps: number
+}
+
+export type CustomAsset = { code: string; issuer: string }
