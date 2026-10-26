@@ -3,8 +3,10 @@ package handler
 import (
 	"net/http"
 
+	"stellar-wallet-backend/internal/apperror"
 	"stellar-wallet-backend/internal/chain"
 	"stellar-wallet-backend/internal/domain"
+	"stellar-wallet-backend/internal/httpapi"
 
 	"github.com/gin-gonic/gin"
 )
@@ -38,13 +40,13 @@ type chainStatus struct {
 }
 
 func (s *Handler) getChains(c *gin.Context) {
-	c.JSON(http.StatusOK, []chainStatus{
+	httpapi.Success(c, http.StatusOK, []chainStatus{
 		{"stellar", "Stellar", "XLM", "testnet", s.horizonURL(), s.chain.PingHorizon()},
 	})
 }
 
 func (s *Handler) getConfig(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
+	httpapi.Success(c, http.StatusOK, gin.H{
 		"horizonUrl": s.horizonURL(),
 		"assets":     s.customAssets(),
 	})
@@ -57,7 +59,7 @@ type configBody struct {
 func (s *Handler) putConfig(c *gin.Context) {
 	var body configBody
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		httpapi.Error(c, apperror.New(apperror.Invalid, "invalid_request", "Invalid request body."))
 		return
 	}
 	if body.HorizonURL != "" {
@@ -74,18 +76,18 @@ func (s *Handler) ApplyRPCConfig() {
 func (s *Handler) addAsset(c *gin.Context) {
 	var asset domain.CustomAsset
 	if err := c.ShouldBindJSON(&asset); err != nil || asset.Code == "" || asset.Issuer == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "code and issuer required"})
+		httpapi.Error(c, apperror.New(apperror.Invalid, "invalid_asset", "Asset code and issuer are required."))
 		return
 	}
 	s.store.AddAsset(asset)
-	c.JSON(http.StatusOK, gin.H{"assets": s.customAssets()})
+	httpapi.Success(c, http.StatusOK, gin.H{"assets": s.customAssets()})
 }
 
 func (s *Handler) removeAsset(c *gin.Context) {
 	s.store.RemoveAsset(c.Query("code"), c.Query("issuer"))
-	c.JSON(http.StatusOK, gin.H{"assets": s.customAssets()})
+	httpapi.Success(c, http.StatusOK, gin.H{"assets": s.customAssets()})
 }
 
 func (s *Handler) getPrices(c *gin.Context) {
-	c.JSON(http.StatusOK, s.chain.Prices())
+	httpapi.Success(c, http.StatusOK, s.chain.Prices())
 }

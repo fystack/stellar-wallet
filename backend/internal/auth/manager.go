@@ -1,9 +1,11 @@
 package auth
 
 import (
-	"net/http"
 	"strings"
 	"time"
+
+	"stellar-wallet-backend/internal/apperror"
+	"stellar-wallet-backend/internal/httpapi"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -47,12 +49,12 @@ func (m *Manager) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		parts := strings.SplitN(c.GetHeader("Authorization"), " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
+			httpapi.Error(c, apperror.New(apperror.Unauthorized, "authentication_required", "Authentication is required."))
 			return
 		}
 		userID, ok := m.ParseToken(parts[1])
 		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			httpapi.Error(c, apperror.New(apperror.Unauthorized, "invalid_token", "Invalid or expired authentication token."))
 			return
 		}
 		c.Set("userID", userID)

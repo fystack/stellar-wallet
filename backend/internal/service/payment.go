@@ -8,13 +8,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
+	"stellar-wallet-backend/internal/apperror"
 	"stellar-wallet-backend/internal/chain"
 	"stellar-wallet-backend/internal/domain"
 	"stellar-wallet-backend/internal/mpc"
 	"stellar-wallet-backend/internal/realtime"
 	"stellar-wallet-backend/internal/repository"
 	"stellar-wallet-backend/internal/repository/sqlite"
+
+	"github.com/google/uuid"
 )
 
 // PaymentChain is the Stellar boundary used by payment creation and broadcast.
@@ -47,11 +49,6 @@ func NewPaymentService(wallets repository.Store, payments *sqlite.PaymentReposit
 
 func (s *PaymentService) SetMPC(client PaymentSigner) { s.mpc = client }
 
-// PaymentError lets the HTTP layer map a business failure to its existing status.
-type PaymentError struct{ Kind, Message string }
-
-func (e *PaymentError) Error() string { return e.Message }
-
 type PaymentInput struct {
 	WalletID    string `json:"wallet_id"`
 	To          string `json:"to"`
@@ -65,20 +62,20 @@ type PaymentInput struct {
 func (s *PaymentService) Create(userID string, body PaymentInput) (domain.Transaction, error) {
 	wallet, ok := s.wallets.WalletFor(userID, body.WalletID)
 	if !ok {
-		return domain.Transaction{}, &PaymentError{Kind: "not_found", Message: "wallet not found"}
+		return domain.Transaction{}, apperror.New(apperror.NotFound, "wallet_not_found", "Wallet not found.")
 	}
 	if wallet.Status != "ready" {
-		return domain.Transaction{}, &PaymentError{Kind: "not_ready", Message: "wallet is not ready yet"}
+		return domain.Transaction{}, apperror.New(apperror.Conflict, "wallet_not_ready", "Wallet is not ready yet.")
 	}
 	amount, err := strconv.ParseFloat(strings.TrimSpace(body.Amount), 64)
 	if err != nil || amount <= 0 {
-		return domain.Transaction{}, &PaymentError{Kind: "invalid", Message: "amount must be positive"}
+		return domain.Transaction{}, apperror.New(apperror.Invalid, "invalid_amount", "Amount must be positive.")
 	}
 	if strings.TrimSpace(body.To) == "" {
-		return domain.Transaction{}, &PaymentError{Kind: "invalid", Message: "recipient required"}
+		return domain.Transaction{}, apperror.New(apperror.Invalid, "recipient_required", "Recipient is required.")
 	}
 	if err := s.requireSigning(); err != nil {
-		return domain.Transaction{}, &PaymentError{Kind: "unavailable", Message: err.Error()}
+		return domain.Transaction{}, apperror.Wrap(err, apperror.Unavailable, "mpc_unavailable", "Not enough MPC nodes are online. Please try again later.")
 	}
 
 	// Resolve federation / muxed recipients to a concrete address. If the
@@ -88,7 +85,7 @@ func (s *PaymentService) Create(userID string, body PaymentInput) (domain.Transa
 	if wallet.Chain == "stellar" {
 		resolved, resolveErr := s.chain.ResolveRecipient(destination)
 		if resolveErr != nil {
-			return domain.Transaction{}, &PaymentError{Kind: "invalid", Message: resolveErr.Error()}
+			return domain.Transaction{}, apperror.Wrap(fmt.Errorf("resolve payment recipient: %w", resolveErr), apperror.Invalid, "recipient_resolution_failed", "Unable to resolve recipient. Check the address and try again.")
 		}
 		destination = resolved.Address
 		if resolved.MemoType != "" {
@@ -121,21 +118,20 @@ func (s *PaymentService) Create(userID string, body PaymentInput) (domain.Transa
 		body.AssetCode, body.AssetIssuer, transaction.Memo, memoType,
 	)
 	if buildErr != nil {
-		return domain.Transaction{}, &PaymentError{Kind: "invalid", Message: buildErr.Error()}
+		return domain.Transaction{}, apperror.Wrap(fmt.Errorf("build payment: %w", buildErr), apperror.Invalid, "payment_build_failed", "Unable to prepare payment. Check the recipient, asset, amount and balance.")
 	}
 	transaction.EnvelopeXDR = envelope
-	payload := hash
 
 	err = s.payments.CreateTransaction(transaction)
 	if err != nil {
-		return domain.Transaction{}, &PaymentError{Kind: "persistence", Message: "insert failed"}
+		return domain.Transaction{}, fmt.Errorf("persist payment: %w", err)
 	}
 
 	if err := s.mpc.Sign(
-		wallet.ID, transaction.ID, domain.Chains[wallet.Chain].Network, payload,
+		wallet.ID, transaction.ID, domain.Chains[wallet.Chain].Network, hash,
 	); err != nil {
 		s.payments.SetTransactionStatus(transaction.ID, "failed")
-		return domain.Transaction{}, &PaymentError{Kind: "dispatch", Message: "sign dispatch failed: " + err.Error()}
+		return domain.Transaction{}, apperror.Wrap(fmt.Errorf("dispatch payment signing: %w", err), apperror.Upstream, "sign_dispatch_failed", "Unable to start transaction signing.")
 	}
 	s.WatchSignTimeout(userID, transaction.ID)
 	s.hub.PublishTransaction(userID, transaction)

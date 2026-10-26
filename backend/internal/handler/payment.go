@@ -1,12 +1,14 @@
 package handler
 
 import (
-	"errors"
+	"fmt"
 	"net/http"
-	"stellar-wallet-backend/internal/service"
 	"time"
 
+	"stellar-wallet-backend/internal/apperror"
 	"stellar-wallet-backend/internal/domain"
+	"stellar-wallet-backend/internal/httpapi"
+	"stellar-wallet-backend/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -16,28 +18,28 @@ func (s *Handler) listWalletTransactions(c *gin.Context) {
 	userID := c.GetString("userID")
 	walletID := c.Param("id")
 	if _, ok := s.store.WalletFor(userID, walletID); !ok {
-		c.JSON(http.StatusNotFound, gin.H{"error": "wallet not found"})
+		httpapi.Error(c, apperror.New(apperror.NotFound, "wallet_not_found", "Wallet not found."))
 		return
 	}
-	c.JSON(http.StatusOK, s.payments.TransactionsByWallet(userID, walletID))
+	httpapi.Success(c, http.StatusOK, s.payments.TransactionsByWallet(userID, walletID))
 }
 
 func (s *Handler) transactionOnChain(c *gin.Context) {
 	metadata, err := s.chain.TransactionOnChain(c.Param("hash"))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found on chain yet"})
+		httpapi.Error(c, apperror.Wrap(err, apperror.NotFound, "transaction_not_found", "Transaction not found on chain yet."))
 		return
 	}
-	c.JSON(http.StatusOK, metadata)
+	httpapi.Success(c, http.StatusOK, metadata)
 }
 
 func (s *Handler) getTransaction(c *gin.Context) {
 	transaction, ok := s.payments.TransactionForUser(c.Param("id"), c.GetString("userID"))
 	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"error": "transaction not found"})
+		httpapi.Error(c, apperror.New(apperror.NotFound, "transaction_not_found", "Transaction not found."))
 		return
 	}
-	c.JSON(http.StatusOK, transaction)
+	httpapi.Success(c, http.StatusOK, transaction)
 }
 
 // resolveRecipient turns a G/M/federation recipient into a concrete address
@@ -45,40 +47,24 @@ func (s *Handler) getTransaction(c *gin.Context) {
 func (s *Handler) resolveRecipient(c *gin.Context) {
 	resolved, err := s.chain.ResolveRecipient(c.Query("q"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		httpapi.Error(c, apperror.Wrap(err, apperror.Invalid, "recipient_resolution_failed", "Unable to resolve recipient. Check the address and try again."))
 		return
 	}
-	c.JSON(http.StatusOK, resolved)
+	httpapi.Success(c, http.StatusOK, resolved)
 }
 
 func (s *Handler) createTransaction(c *gin.Context) {
 	var body service.PaymentInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		httpapi.Error(c, apperror.New(apperror.Invalid, "invalid_request", "Invalid request body."))
 		return
 	}
 	transaction, err := s.paymentService.Create(c.GetString("userID"), body)
 	if err != nil {
-		status := http.StatusInternalServerError
-		var failure *service.PaymentError
-		if errors.As(err, &failure) {
-			switch failure.Kind {
-			case "not_found":
-				status = http.StatusNotFound
-			case "not_ready":
-				status = http.StatusConflict
-			case "invalid":
-				status = http.StatusBadRequest
-			case "unavailable":
-				status = http.StatusServiceUnavailable
-			case "dispatch":
-				status = http.StatusBadGateway
-			}
-		}
-		c.JSON(status, gin.H{"error": err.Error()})
+		httpapi.Error(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, transaction)
+	httpapi.Success(c, http.StatusCreated, transaction)
 }
 
 type trustlineBody struct {
@@ -89,32 +75,36 @@ type trustlineBody struct {
 func (s *Handler) addTrustline(c *gin.Context) {
 	userID := c.GetString("userID")
 	wallet, ok := s.store.WalletFor(userID, c.Param("id"))
-	if !ok || wallet.Status != "ready" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "wallet not ready"})
+	if !ok {
+		httpapi.Error(c, apperror.New(apperror.NotFound, "wallet_not_found", "Wallet not found."))
+		return
+	}
+	if wallet.Status != "ready" {
+		httpapi.Error(c, apperror.New(apperror.Conflict, "wallet_not_ready", "Wallet is not ready yet."))
 		return
 	}
 	if wallet.Chain != "stellar" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "trustlines are Stellar-only"})
+		httpapi.Error(c, apperror.New(apperror.Invalid, "unsupported_chain", "Trustlines are only supported on Stellar."))
 		return
 	}
 	var body trustlineBody
 	if err := c.ShouldBindJSON(&body); err != nil || body.Code == "" || body.Issuer == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "code and issuer required"})
+		httpapi.Error(c, apperror.New(apperror.Invalid, "invalid_asset", "Asset code and issuer are required."))
 		return
 	}
 
 	if s.payments.TrustlineTransactionExists(wallet.ID, body.Code) {
-		c.JSON(http.StatusConflict, gin.H{"error": "trustline already added or in progress"})
+		httpapi.Error(c, apperror.New(apperror.Conflict, "trustline_exists", "Trustline already exists or is in progress."))
 		return
 	}
 	if err := s.walletService.RequireNodes(service.SignQuorum, "signing"); err != nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		httpapi.Error(c, apperror.Wrap(err, apperror.Unavailable, "mpc_unavailable", "Not enough MPC nodes are online. Please try again later."))
 		return
 	}
 
 	envelope, hash, err := s.chain.BuildTrustline(wallet, body.Code, body.Issuer)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		httpapi.Error(c, apperror.Wrap(err, apperror.Invalid, "trustline_build_failed", "Unable to prepare trustline. Check the asset and wallet balance."))
 		return
 	}
 	transaction := domain.Transaction{
@@ -132,17 +122,17 @@ func (s *Handler) addTrustline(c *gin.Context) {
 	}
 	err = s.payments.CreateTransaction(transaction)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "insert failed"})
+		httpapi.Error(c, fmt.Errorf("persist trustline: %w", err))
 		return
 	}
 	if err := s.mpc.Sign(
 		wallet.ID, transaction.ID, domain.Chains[wallet.Chain].Network, hash,
 	); err != nil {
 		s.payments.SetTransactionStatus(transaction.ID, "failed")
-		c.JSON(http.StatusBadGateway, gin.H{"error": "sign dispatch failed: " + err.Error()})
+		httpapi.Error(c, apperror.Wrap(err, apperror.Upstream, "sign_dispatch_failed", "Unable to start transaction signing."))
 		return
 	}
 	s.paymentService.WatchSignTimeout(userID, transaction.ID)
 	s.hub.PublishTransaction(userID, transaction)
-	c.JSON(http.StatusOK, transaction)
+	httpapi.Success(c, http.StatusCreated, transaction)
 }

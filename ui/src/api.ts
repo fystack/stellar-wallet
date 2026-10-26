@@ -15,12 +15,16 @@ export function clearSession() {
   localStorage.removeItem(EMAIL_KEY)
 }
 
+export type ApiResponse<T> = { data: T; meta?: Record<string, unknown> }
+
 export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    public code: string = 'request_failed',
   ) {
     super(message)
+    this.name = 'ApiError'
   }
 }
 
@@ -40,16 +44,28 @@ async function req<T>(path: string, opts: RequestInit & { json?: unknown } = {})
   })
 
   if (!res.ok) {
-    let msg = `HTTP ${res.status}`
+    let message = `Request failed (HTTP ${res.status}).`
+    let code = 'request_failed'
     try {
-      msg = (await res.json()).error ?? msg
+      const body = await res.json() as { error?: { code?: unknown; message?: unknown } }
+      if (typeof body.error?.code === 'string') code = body.error.code
+      if (typeof body.error?.message === 'string') message = body.error.message
     } catch {
-      /* ignore */
+      // Gateways may return HTML or an empty body instead of the API contract.
     }
-    throw new ApiError(res.status, msg)
+    throw new ApiError(res.status, message, code)
   }
   if (res.status === 204) return undefined as T
-  return res.json() as Promise<T>
+  let body: unknown
+  try {
+    body = await res.json()
+  } catch {
+    throw new ApiError(res.status, 'Invalid API response.', 'invalid_response')
+  }
+  if (typeof body !== 'object' || body === null || !('data' in body)) {
+    throw new ApiError(res.status, 'Invalid API response.', 'invalid_response')
+  }
+  return (body as ApiResponse<T>).data
 }
 
 type AuthResp = { access_token: string; expires_in: number; email: string }

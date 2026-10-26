@@ -1,11 +1,14 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 
+	"stellar-wallet-backend/internal/apperror"
 	"stellar-wallet-backend/internal/auth"
 	"stellar-wallet-backend/internal/chain"
 	"stellar-wallet-backend/internal/cluster"
+	"stellar-wallet-backend/internal/httpapi"
 	"stellar-wallet-backend/internal/realtime"
 	"stellar-wallet-backend/internal/repository"
 	"stellar-wallet-backend/internal/repository/sqlite"
@@ -59,14 +62,24 @@ func New(dependencies Dependencies) *Handler {
 func (s *Handler) SetMPC(client MPCClient) { s.mpc = client }
 
 func (s *Handler) Router(corsOrigin string) *gin.Engine {
-	router := gin.Default()
+	router := gin.New()
+	router.Use(gin.Logger(), gin.CustomRecovery(func(c *gin.Context, recovered any) {
+		httpapi.Error(c, fmt.Errorf("request panic: %v", recovered))
+	}))
+	router.HandleMethodNotAllowed = true
+	router.NoRoute(func(c *gin.Context) {
+		httpapi.Error(c, apperror.New(apperror.NotFound, "route_not_found", "Route not found."))
+	})
+	router.NoMethod(func(c *gin.Context) {
+		httpapi.Error(c, apperror.New(apperror.MethodNotAllowed, "method_not_allowed", "Method not allowed."))
+	})
 	router.Use(corsMiddleware(corsOrigin))
 
 	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		httpapi.Success(c, http.StatusOK, gin.H{"status": "ok"})
 	})
 	router.GET("/api/v1/cluster", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
+		httpapi.Success(c, http.StatusOK, gin.H{
 			"threshold": "2-of-3",
 			"nodes":     s.cluster.Nodes(),
 		})

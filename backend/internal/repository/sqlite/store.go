@@ -3,9 +3,13 @@ package sqlite
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"stellar-wallet-backend/internal/domain"
 	storecontract "stellar-wallet-backend/internal/repository"
+
+	modernsqlite "modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 type Store struct {
@@ -23,7 +27,14 @@ func (s *Store) CreateUser(user domain.User) error {
 		`INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)`,
 		user.ID, user.Email, user.PasswordHash, user.CreatedAt,
 	)
-	return err
+	if err != nil {
+		var sqliteErr *modernsqlite.Error
+		if errors.As(err, &sqliteErr) && sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE {
+			return fmt.Errorf("create user: %w: %w", storecontract.ErrConflict, err)
+		}
+		return fmt.Errorf("create user: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) UserCredentials(email string) (string, string, error) {
@@ -32,9 +43,12 @@ func (s *Store) UserCredentials(email string) (string, string, error) {
 		`SELECT id, password_hash FROM users WHERE email = ?`, email,
 	).Scan(&userID, &passwordHash)
 	if errors.Is(err, sql.ErrNoRows) {
-		err = storecontract.ErrNotFound
+		return "", "", fmt.Errorf("read user credentials: %w", storecontract.ErrNotFound)
 	}
-	return userID, passwordHash, err
+	if err != nil {
+		return "", "", fmt.Errorf("read user credentials: %w", err)
+	}
+	return userID, passwordHash, nil
 }
 
 func (s *Store) Setting(key string) (string, bool) {
@@ -95,7 +109,7 @@ func (s *Store) ListWallets(userID string) ([]domain.Wallet, error) {
 		`SELECT `+walletColumns+` FROM wallets WHERE user_id = ? ORDER BY created_at`, userID,
 	)
 	if err != nil {
-		return nil, errors.New("db error")
+		return nil, fmt.Errorf("list wallets: %w", err)
 	}
 	defer rows.Close()
 
@@ -103,9 +117,12 @@ func (s *Store) ListWallets(userID string) ([]domain.Wallet, error) {
 	for rows.Next() {
 		wallet, scanErr := scanWallet(rows)
 		if scanErr != nil {
-			return nil, errors.New("scan error")
+			return nil, fmt.Errorf("scan wallet: %w", scanErr)
 		}
 		wallets = append(wallets, wallet)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate wallets: %w", err)
 	}
 	return wallets, nil
 }
@@ -117,7 +134,10 @@ func (s *Store) CreateWallet(wallet domain.Wallet) error {
 		wallet.ID, wallet.UserID, wallet.Name, wallet.Chain, wallet.Symbol,
 		wallet.Address, wallet.Pubkey, wallet.Balance, wallet.Status, wallet.CreatedAt,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("create wallet: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) WalletFor(userID, walletID string) (domain.Wallet, bool) {

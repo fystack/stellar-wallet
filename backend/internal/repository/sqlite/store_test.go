@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"errors"
+	modernsqlite "modernc.org/sqlite"
 	"testing"
 
 	"stellar-wallet-backend/internal/domain"
@@ -60,5 +61,29 @@ func TestStoreTranslatesMissingUserToPortableError(t *testing.T) {
 	_, _, err = NewStore(db).UserCredentials("missing@example.com")
 	if !errors.Is(err, storecontract.ErrNotFound) {
 		t.Fatalf("UserCredentials() error = %v, want store.ErrNotFound", err)
+	}
+}
+
+func TestCreateUserDistinguishesConflictFromDatabaseFailure(t *testing.T) {
+	db, err := Open(t.TempDir() + "/wallet.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	repo := NewStore(db)
+	user := domain.User{ID: "user-1", Email: "owner@example.com", PasswordHash: "hash"}
+	if err := repo.CreateUser(user); err != nil {
+		t.Fatal(err)
+	}
+	user.ID = "user-2"
+	err = repo.CreateUser(user)
+	var driverError *modernsqlite.Error
+	if !errors.Is(err, storecontract.ErrConflict) || !errors.As(err, &driverError) {
+		t.Fatalf("conflict lost sentinel or SQL cause: %v", err)
+	}
+	db.Close()
+	err = repo.CreateUser(user)
+	if err == nil || errors.Is(err, storecontract.ErrConflict) {
+		t.Fatalf("database failure = %v", err)
 	}
 }

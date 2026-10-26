@@ -2,6 +2,8 @@ package sqlite
 
 import (
 	"database/sql"
+	"fmt"
+
 	"stellar-wallet-backend/internal/domain"
 )
 
@@ -36,7 +38,10 @@ func (s *PaymentRepository) CreateTransaction(transaction domain.Transaction) er
 		transaction.Status, transaction.Signature, transaction.EnvelopeXDR,
 		transaction.TxHash, transaction.Error, transaction.CreatedAt,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("create transaction: %w", err)
+	}
+	return nil
 }
 
 func (s *PaymentRepository) IncomingTransactionExists(hash string) bool {

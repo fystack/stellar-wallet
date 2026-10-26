@@ -52,6 +52,8 @@ internal/
       payment_repository.go  # Concrete transaction repository
       store.go               # Existing user/wallet/settings SQL
       database.go            # Schema and database setup
+  apperror/                  # Business errors and wrapped causes
+  httpapi/                   # JSON envelopes and HTTP error mapping
   domain/                    # Data models
   auth/                      # JWT and auth middleware
   chain/                     # Stellar RPC, transaction builders and prices
@@ -71,8 +73,53 @@ and the shared result/broadcast lifecycle used by sends, swaps, and trustlines.
 The payment repository is concrete; interfaces cover the external Stellar,
 cluster and signer boundaries used in tests. Existing auth, wallet creation,
 swap, trustline and settings handlers still contain their original orchestration;
-their service/repository extraction can happen incrementally. REST paths, JSON
-shapes, and the SQLite schema remain unchanged.
+their service/repository extraction can happen incrementally. REST paths and the
+SQLite schema remain unchanged. JSON envelopes follow the contract below.
+
+## JSON response contract
+
+All ordinary JSON endpoints, including `/health`, return a success envelope:
+
+```json
+{"data": {"id": "wallet-1"}}
+```
+
+Lists remain arrays inside `data`. Optional pagination metadata belongs in `meta`:
+
+```json
+{"data": [], "meta": {"next_cursor": null, "has_more": false}}
+```
+
+Metadata is omitted when unused; this change does not add pagination to existing
+endpoints. Errors use a separate envelope with no `data` field:
+
+```json
+{"error": {"code": "wallet_not_found", "message": "Wallet not found."}}
+```
+
+Clients branch on `error.code`, not the message. `ui/src/api.ts` unwraps `data`
+and exposes `ApiError.status`, `.code`, and `.message`. Callers still receive the
+same wallet/transaction objects and arrays. Older clients consuming unwrapped
+JSON must migrate with this change; no legacy-response fallback is provided.
+
+- Resource creation (register, wallet, payment, swap, trustline): `201`.
+- Reads, login and other successful actions: `200`.
+- Invalid input: `400`; authentication: `401`; permissions: `403`.
+- Missing resource/route: `404`; unsupported method: `405`; conflict: `409`.
+- Dependency failure: `502`; insufficient MPC availability: `503`.
+- Unexpected failures: `500` with `internal_error` and a generic message.
+- `204` and CORS preflight responses have no body.
+- SSE keeps its `data: {"type": ..., "data": ...}` event format. Authentication
+  failures before the stream opens use the JSON error envelope.
+- OAuth redirects, when implemented, will remain redirects rather than JSON.
+
+`apperror.Error` carries a transport-independent kind, stable code, public message
+and optional cause. Services can wrap technical causes with `%w`; `httpapi.Error`
+uses `errors.As` to map failures to HTTP and logs technical causes server-side.
+Unexpected SQL, SDK or provider details are never copied into HTTP error messages.
+Repositories use `repository.ErrNotFound` / `ErrConflict` for known failures and
+preserve underlying errors when wrapping. Existing legacy lookup/update methods
+that do not return errors retain their current signatures for now.
 
 ## Verify
 
@@ -82,12 +129,20 @@ go vet ./...
 go build ./...
 ```
 
+Frontend API client tests use the built-in Node test runner (no added dependency):
+
+```bash
+cd ../ui
+npm test
+npm run build
+```
+
 ## Endpoints (`/api/v1`)
 
 | Method | Path                          | Auth | Body / notes                          |
 | ------ | ----------------------------- | ---- | ------------------------------------- |
-| POST   | `/auth/register`              | –    | `{email, password}` → `{access_token}`|
-| POST   | `/auth/login`                 | –    | `{email, password}` → `{access_token}`|
+| POST   | `/auth/register`              | –    | `{email, password}` → `data.access_token`|
+| POST   | `/auth/login`                 | –    | `{email, password}` → `data.access_token`|
 | GET    | `/wallets`                    | ✓    | list wallets                          |
 | POST   | `/wallets`                    | ✓    | `{name, chain}` (`stellar`)           |
 | GET    | `/wallets/:id`                | ✓    | one wallet                            |

@@ -1,13 +1,16 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
-	"stellar-wallet-backend/internal/service"
 	"strings"
 	"time"
 
+	"stellar-wallet-backend/internal/apperror"
 	"stellar-wallet-backend/internal/chain"
 	"stellar-wallet-backend/internal/domain"
+	"stellar-wallet-backend/internal/httpapi"
+	"stellar-wallet-backend/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -15,11 +18,15 @@ import (
 
 func (s *Handler) syncWallet(c *gin.Context) {
 	wallet, ok := s.store.WalletFor(c.GetString("userID"), c.Param("id"))
-	if !ok || wallet.Status != "ready" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "wallet not ready"})
+	if !ok {
+		httpapi.Error(c, apperror.New(apperror.NotFound, "wallet_not_found", "Wallet not found."))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"synced": s.walletService.SyncIncoming(wallet)})
+	if wallet.Status != "ready" {
+		httpapi.Error(c, apperror.New(apperror.Conflict, "wallet_not_ready", "Wallet is not ready yet."))
+		return
+	}
+	httpapi.Success(c, http.StatusOK, gin.H{"synced": s.walletService.SyncIncoming(wallet)})
 }
 
 func capitalize(value string) string {
@@ -33,10 +40,10 @@ func (s *Handler) listWallets(c *gin.Context) {
 	userID := c.GetString("userID")
 	wallets, err := s.store.ListWallets(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httpapi.Error(c, fmt.Errorf("list wallets: %w", err))
 		return
 	}
-	c.JSON(http.StatusOK, wallets)
+	httpapi.Success(c, http.StatusOK, wallets)
 }
 
 type createWalletBody struct {
@@ -48,12 +55,12 @@ func (s *Handler) createWallet(c *gin.Context) {
 	userID := c.GetString("userID")
 	var body createWalletBody
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		httpapi.Error(c, apperror.New(apperror.Invalid, "invalid_request", "Invalid request body."))
 		return
 	}
 	metadata, ok := domain.Chains[body.Chain]
 	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported chain"})
+		httpapi.Error(c, apperror.New(apperror.Invalid, "unsupported_chain", "Unsupported chain."))
 		return
 	}
 	name := strings.TrimSpace(body.Name)
@@ -62,7 +69,7 @@ func (s *Handler) createWallet(c *gin.Context) {
 	}
 
 	if err := s.walletService.RequireNodes(service.KeygenQuorum, "keygen"); err != nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		httpapi.Error(c, apperror.Wrap(err, apperror.Unavailable, "mpc_unavailable", "Not enough MPC nodes are online. Please try again later."))
 		return
 	}
 
@@ -79,34 +86,38 @@ func (s *Handler) createWallet(c *gin.Context) {
 	}
 	err := s.store.CreateWallet(wallet)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "insert failed"})
+		httpapi.Error(c, fmt.Errorf("persist wallet: %w", err))
 		return
 	}
 	if err := s.mpc.CreateWallet(wallet.ID); err != nil {
 		s.store.SetWalletStatus(wallet.ID, "failed")
-		c.JSON(http.StatusBadGateway, gin.H{"error": "keygen dispatch failed: " + err.Error()})
+		httpapi.Error(c, apperror.Wrap(err, apperror.Upstream, "keygen_dispatch_failed", "Unable to start wallet creation."))
 		return
 	}
 	s.walletService.WatchKeygenTimeout(userID, wallet.ID)
-	c.JSON(http.StatusOK, wallet)
+	httpapi.Success(c, http.StatusCreated, wallet)
 }
 
 func (s *Handler) getWallet(c *gin.Context) {
 	wallet, ok := s.store.WalletFor(c.GetString("userID"), c.Param("id"))
 	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"error": "wallet not found"})
+		httpapi.Error(c, apperror.New(apperror.NotFound, "wallet_not_found", "Wallet not found."))
 		return
 	}
-	c.JSON(http.StatusOK, wallet)
+	httpapi.Success(c, http.StatusOK, wallet)
 }
 
 func (s *Handler) walletBalance(c *gin.Context) {
 	wallet, ok := s.store.WalletFor(c.GetString("userID"), c.Param("id"))
-	if !ok || wallet.Status != "ready" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "wallet not ready"})
+	if !ok {
+		httpapi.Error(c, apperror.New(apperror.NotFound, "wallet_not_found", "Wallet not found."))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
+	if wallet.Status != "ready" {
+		httpapi.Error(c, apperror.New(apperror.Conflict, "wallet_not_ready", "Wallet is not ready yet."))
+		return
+	}
+	httpapi.Success(c, http.StatusOK, gin.H{
 		"assets":   s.chain.Balances(wallet.Chain, wallet.Address),
 		"symbol":   wallet.Symbol,
 		"explorer": chain.ExplorerAddress(wallet.Chain, wallet.Address),
@@ -116,12 +127,16 @@ func (s *Handler) walletBalance(c *gin.Context) {
 
 func (s *Handler) fundWallet(c *gin.Context) {
 	wallet, ok := s.store.WalletFor(c.GetString("userID"), c.Param("id"))
-	if !ok || wallet.Status != "ready" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "wallet not ready"})
+	if !ok {
+		httpapi.Error(c, apperror.New(apperror.NotFound, "wallet_not_found", "Wallet not found."))
+		return
+	}
+	if wallet.Status != "ready" {
+		httpapi.Error(c, apperror.New(apperror.Conflict, "wallet_not_ready", "Wallet is not ready yet."))
 		return
 	}
 	if err := s.chain.Fund(wallet.Chain, wallet.Address); err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		httpapi.Error(c, apperror.Wrap(err, apperror.Upstream, "funding_failed", "Unable to fund the wallet. Please try again later."))
 		return
 	}
 	balance, _ := s.chain.Balance(wallet.Chain, wallet.Address)
@@ -130,16 +145,16 @@ func (s *Handler) fundWallet(c *gin.Context) {
 		s.hub.PublishWallet(c.GetString("userID"), updated)
 	}
 	s.walletService.SyncIncoming(wallet)
-	c.JSON(http.StatusOK, gin.H{"balance": balance})
+	httpapi.Success(c, http.StatusOK, gin.H{"balance": balance})
 }
 
 func (s *Handler) deleteWallet(c *gin.Context) {
 	userID := c.GetString("userID")
 	walletID := c.Param("id")
 	if _, ok := s.store.WalletFor(userID, walletID); !ok {
-		c.JSON(http.StatusNotFound, gin.H{"error": "wallet not found"})
+		httpapi.Error(c, apperror.New(apperror.NotFound, "wallet_not_found", "Wallet not found."))
 		return
 	}
 	s.store.DeleteWallet(userID, walletID)
-	c.JSON(http.StatusOK, gin.H{"ok": true})
+	httpapi.Success(c, http.StatusOK, gin.H{"ok": true})
 }

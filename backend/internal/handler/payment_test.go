@@ -25,20 +25,20 @@ func TestCreatePaymentHTTPContract(t *testing.T) {
 		message            string
 		code               string
 	}{
-		{name: "success", body: `{"wallet_id":"wallet-1","to":"destination","amount":"1"}`, status: 200},
-		{name: "malformed JSON", body: `{`, status: 400, message: "invalid body", code: "invalid_request"},
-		{name: "wrong field type", body: `{"amount":1}`, status: 400, message: "invalid body", code: "invalid_request"},
-		{name: "other owner", body: `{"wallet_id":"wallet-1","to":"destination","amount":"1"}`, userID: "other-user", status: 404, message: "wallet not found", code: "wallet_not_found"},
+		{name: "success", body: `{"wallet_id":"wallet-1","to":"destination","amount":"1"}`, status: 201},
+		{name: "malformed JSON", body: `{`, status: 400, message: "Invalid request body.", code: "invalid_request"},
+		{name: "wrong field type", body: `{"amount":1}`, status: 400, message: "Invalid request body.", code: "invalid_request"},
+		{name: "other owner", body: `{"wallet_id":"wallet-1","to":"destination","amount":"1"}`, userID: "other-user", status: 404, message: "Wallet not found.", code: "wallet_not_found"},
 		{name: "wallet generating", body: `{"wallet_id":"wallet-1","to":"destination","amount":"1"}`, setup: func(s *paymentFixture, _ *paymentChainStub, _ *paymentSignerStub) {
 			s.wallets.SetWalletStatus("wallet-1", "generating")
-		}, status: 409, message: "wallet is not ready yet", code: "wallet_not_ready"},
-		{name: "invalid amount", body: `{"wallet_id":"wallet-1","to":"destination","amount":"0"}`, status: 400, message: "amount must be positive", code: "invalid_amount"},
-		{name: "missing recipient", body: `{"wallet_id":"wallet-1","amount":"1"}`, status: 400, message: "recipient required", code: "recipient_required"},
-		{name: "insufficient quorum", body: `{"wallet_id":"wallet-1","to":"destination","amount":"1"}`, setup: func(s *paymentFixture, _ *paymentChainStub, _ *paymentSignerStub) { s.cluster.online = 1 }, status: 503, message: "signing needs at least 2 MPC nodes online (1 up)", code: "mpc_unavailable"},
+		}, status: 409, message: "Wallet is not ready yet.", code: "wallet_not_ready"},
+		{name: "invalid amount", body: `{"wallet_id":"wallet-1","to":"destination","amount":"0"}`, status: 400, message: "Amount must be positive.", code: "invalid_amount"},
+		{name: "missing recipient", body: `{"wallet_id":"wallet-1","amount":"1"}`, status: 400, message: "Recipient is required.", code: "recipient_required"},
+		{name: "insufficient quorum", body: `{"wallet_id":"wallet-1","to":"destination","amount":"1"}`, setup: func(s *paymentFixture, _ *paymentChainStub, _ *paymentSignerStub) { s.cluster.online = 1 }, status: 503, message: "Not enough MPC nodes are online. Please try again later.", code: "mpc_unavailable"},
 		{name: "build failed", body: `{"wallet_id":"wallet-1","to":"destination","amount":"1"}`, setup: func(_ *paymentFixture, c *paymentChainStub, _ *paymentSignerStub) {
 			c.buildErr = errors.New("source account not found — fund it first")
-		}, status: 400, message: "source account not found — fund it first", code: "payment_build_failed"},
-		{name: "dispatch failed", body: `{"wallet_id":"wallet-1","to":"destination","amount":"1"}`, setup: func(_ *paymentFixture, _ *paymentChainStub, m *paymentSignerStub) { m.err = errors.New("offline") }, status: 502, message: "sign dispatch failed: offline", code: "sign_dispatch_failed"},
+		}, status: 400, message: "Unable to prepare payment. Check the recipient, asset, amount and balance.", code: "payment_build_failed"},
+		{name: "dispatch failed", body: `{"wallet_id":"wallet-1","to":"destination","amount":"1"}`, setup: func(_ *paymentFixture, _ *paymentChainStub, m *paymentSignerStub) { m.err = errors.New("offline") }, status: 502, message: "Unable to start transaction signing.", code: "sign_dispatch_failed"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -70,16 +70,21 @@ func TestCreatePaymentHTTPContract(t *testing.T) {
 				t.Fatal(err)
 			}
 			if tt.message != "" {
-				if body["error"] != tt.message {
+				failure, ok := body["error"].(map[string]any)
+				if !ok || failure["message"] != tt.message || failure["code"] != tt.code {
 					t.Fatalf("response = %s", response.Body)
 				}
 				return
 			}
-			if body["status"] != "signing" || body["walletId"] != "wallet-1" || body["amount"] != "1.00" || body["id"] == "" || body["createdAt"] == "" {
+			data, ok := body["data"].(map[string]any)
+			if !ok {
+				t.Fatalf("missing data envelope: %s", response.Body)
+			}
+			if data["status"] != "signing" || data["walletId"] != "wallet-1" || data["amount"] != "1.00" || data["id"] == "" || data["createdAt"] == "" {
 				t.Fatalf("response = %s", response.Body)
 			}
 			for _, private := range []string{"user_id", "userId", "envelope_xdr", "EnvelopeXDR"} {
-				if _, ok := body[private]; ok {
+				if _, ok := data[private]; ok {
 					t.Fatalf("private field %q in response", private)
 				}
 			}

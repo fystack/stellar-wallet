@@ -20,7 +20,7 @@ const (
 	keygenTimeout = 90 * time.Second
 )
 
-// requireNodes checks the live node count against a quorum. It returns a
+// RequireNodes checks the live node count against a quorum. It returns a
 // user-facing error when the cluster is short, so handlers can fail fast
 // before creating a record that would otherwise get stuck.
 func (s *WalletService) RequireNodes(quorum int, action string) error {
@@ -51,7 +51,7 @@ func (s *WalletService) ReconcilePending() {
 	}
 }
 
-// watchKeygenTimeout fails a wallet still "generating" after the timeout.
+// WatchKeygenTimeout fails a wallet still "generating" after the timeout.
 func (s *WalletService) WatchKeygenTimeout(userID, walletID string) {
 	time.AfterFunc(keygenTimeout, func() {
 		wallet, ok := s.store.WalletByID(walletID)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"stellar-wallet-backend/internal/apperror"
 	"stellar-wallet-backend/internal/chain"
 	"stellar-wallet-backend/internal/domain"
 	"stellar-wallet-backend/internal/mpc"
@@ -93,8 +94,8 @@ func TestPaymentCreateDispatchFailurePersistsFailedStatus(t *testing.T) {
 	s, _, signer := newTestPaymentService(t)
 	signer.err = errors.New("NATS unavailable")
 	_, err := s.Create("owner", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
-	var failure *PaymentError
-	if !errors.As(err, &failure) || failure.Kind != "dispatch" || failure.Error() != "sign dispatch failed: NATS unavailable" {
+	var failure *apperror.Error
+	if !errors.As(err, &failure) || failure.Kind != apperror.Upstream || failure.Code != "sign_dispatch_failed" || !errors.Is(err, signer.err) {
 		t.Fatalf("error = %v", err)
 	}
 	tx, ok := s.payments.TransactionByID(signer.transactionID)
@@ -106,8 +107,8 @@ func TestPaymentCreateDispatchFailurePersistsFailedStatus(t *testing.T) {
 func TestPaymentCreateRejectsOtherUsersWalletBeforeSigning(t *testing.T) {
 	s, _, signer := newTestPaymentService(t)
 	_, err := s.Create("other-user", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
-	var failure *PaymentError
-	if !errors.As(err, &failure) || failure.Kind != "not_found" {
+	var failure *apperror.Error
+	if !errors.As(err, &failure) || failure.Kind != apperror.NotFound || failure.Code != "wallet_not_found" {
 		t.Fatalf("error = %v", err)
 	}
 	if signer.transactionID != "" {

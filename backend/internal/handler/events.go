@@ -3,7 +3,9 @@ package handler
 import (
 	"fmt"
 	"io"
-	"net/http"
+
+	"stellar-wallet-backend/internal/apperror"
+	"stellar-wallet-backend/internal/httpapi"
 
 	"github.com/gin-gonic/gin"
 )
@@ -11,7 +13,7 @@ import (
 func (s *Handler) events(c *gin.Context) {
 	userID, ok := s.auth.ParseToken(c.Query("token"))
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		httpapi.Error(c, apperror.New(apperror.Unauthorized, "invalid_token", "Invalid or expired authentication token."))
 		return
 	}
 

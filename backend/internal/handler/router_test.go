@@ -3,10 +3,13 @@ package handler
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"stellar-wallet-backend/internal/auth"
+
+	"github.com/gin-gonic/gin"
 )
 
 func TestRouterPreservesPublicRouteContract(t *testing.T) {
@@ -64,10 +67,39 @@ func TestHealthAndCORSContract(t *testing.T) {
 
 	router.ServeHTTP(response, request)
 
-	if response.Code != http.StatusOK || response.Body.String() != "{\"status\":\"ok\"}" {
+	if response.Code != http.StatusOK || response.Body.String() != "{\"data\":{\"status\":\"ok\"}}" {
 		t.Fatalf("health response = %d %q", response.Code, response.Body.String())
 	}
 	if origin := response.Header().Get("Access-Control-Allow-Origin"); origin != "http://localhost:5173" {
 		t.Fatalf("CORS origin = %q", origin)
+	}
+
+	preflight := httptest.NewRecorder()
+	router.ServeHTTP(preflight, httptest.NewRequest(http.MethodOptions, "/api/v1/wallets", nil))
+	if preflight.Code != http.StatusNoContent || preflight.Body.Len() != 0 {
+		t.Fatalf("preflight = %d %s", preflight.Code, preflight.Body)
+	}
+}
+
+func TestRouterFormatsUnknownRoutesMethodsAndPanics(t *testing.T) {
+	s := New(Dependencies{Auth: auth.New([]byte("test-secret"), time.Hour)})
+	r := s.Router("http://localhost")
+	r.GET("/panic", func(c *gin.Context) { panic("private panic details") })
+	for _, tt := range []struct {
+		method, path string
+		status       int
+		code         string
+	}{
+		{"GET", "/api/v1/unknown", 404, "route_not_found"},
+		{"POST", "/health", 405, "method_not_allowed"},
+		{"GET", "/panic", 500, "internal_error"},
+		{"GET", "/api/v1/wallets", 401, "authentication_required"},
+		{"GET", "/api/v1/events", 401, "invalid_token"},
+	} {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(tt.method, tt.path, nil))
+		if w.Code != tt.status || !strings.Contains(w.Body.String(), `"code":"`+tt.code+`"`) || strings.Contains(w.Body.String(), "private") {
+			t.Errorf("%s %s: %d %s", tt.method, tt.path, w.Code, w.Body)
+		}
 	}
 }

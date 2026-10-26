@@ -41,7 +41,7 @@ func TestMiddlewareRejectsMissingBearerToken(t *testing.T) {
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
 	}
-	if response.Body.String() != "{\"error\":\"missing bearer token\"}" {
+	if response.Body.String() != "{\"error\":{\"code\":\"authentication_required\",\"message\":\"Authentication is required.\"}}" {
 		t.Fatalf("body = %q", response.Body.String())
 	}
 }

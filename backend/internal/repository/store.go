@@ -6,7 +6,10 @@ import (
 	"stellar-wallet-backend/internal/domain"
 )
 
-var ErrNotFound = errors.New("store: not found")
+var (
+	ErrNotFound = errors.New("repository: not found")
+	ErrConflict = errors.New("repository: conflict")
+)
 
 // Store is the persistence port consumed by the application layer.
 // Database adapters implement this contract without leaking driver-specific
