@@ -55,4 +55,5 @@ var (
 	SignDispatchFailed        = define(Upstream, "sign_dispatch_failed", "Unable to start transaction signing.")
 	KeygenDispatchFailed      = define(Upstream, "keygen_dispatch_failed", "Unable to start wallet creation.")
 	FundingFailed             = define(Upstream, "funding_failed", "Unable to fund the wallet. Please try again later.")
+	BalanceUnavailable        = define(Upstream, "balance_unavailable", "Unable to load balances. Please try again later.")
 )

@@ -78,7 +78,7 @@ func TestPaymentCreatePersistsResolvedPaymentAndDispatchesHash(t *testing.T) {
 		t.Fatalf("stored payment = %#v, found=%v", stored, ok)
 	}
 	// Preserve the current two-decimal behavior in this extraction; precision is a separate fix.
-	if c.builtAmount != "12.35" || c.builtMemo != "42" || c.builtMemoType != "id" {
+	if c.builtAmount != "12.345" || c.builtMemo != "42" || c.builtMemoType != "id" {
 		t.Fatalf("unexpected build: %#v", c)
 	}
 	if signer.walletID != tx.WalletID || signer.transactionID != tx.ID || signer.network != "stellar-testnet" || string(signer.payload) != "payment-hash" {

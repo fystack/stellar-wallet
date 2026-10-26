@@ -1,7 +1,6 @@
 package service
 
 import (
-	"strconv"
 	"strings"
 	"time"
 
@@ -89,14 +88,13 @@ func (s *SwapService) Create(userID, walletID string, input SwapInput) (SwapResu
 	if err != nil {
 		return SwapResult{}, apperror.SwapBuildFailed.Wrap(err)
 	}
-	amountValue, _ := strconv.ParseFloat(amount, 64)
 	transaction := domain.Transaction{
 		ID:           uuid.NewString(),
 		WalletID:     wallet.ID,
 		UserID:       userID,
 		Type:         domain.TransactionSwap,
 		Counterparty: wallet.Address, // strict-send lands back on the same account
-		Amount:       strconv.FormatFloat(amountValue, 'f', 2, 64),
+		Amount:       amount,
 		Symbol:       send.Code,
 		RecvAmount:   quote.DestAmount,
 		RecvSymbol:   dest.Code,
@@ -119,9 +117,9 @@ func (s *SwapService) quote(send chain.SwapAsset, amount string, dest chain.Swap
 }
 
 func parseSwap(input SwapInput) (string, chain.SwapAsset, chain.SwapAsset, error) {
-	amount := strings.TrimSpace(input.Amount)
-	if value, err := strconv.ParseFloat(amount, 64); err != nil || value <= 0 {
-		return "", chain.SwapAsset{}, chain.SwapAsset{}, apperror.InvalidAmount.New()
+	amount, err := parseAmount(input.Amount)
+	if err != nil {
+		return "", chain.SwapAsset{}, chain.SwapAsset{}, err
 	}
 	send, dest := parseAsset(input.From), parseAsset(input.To)
 	if send == dest {

@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
 	"time"
 
@@ -106,13 +105,16 @@ func (s *WalletService) Balance(userID, walletID string) (WalletBalance, error) 
 	if err != nil {
 		return WalletBalance{}, err
 	}
-	balance := WalletBalance{
-		Assets:   s.chain.Balances(wallet.Chain, wallet.Address),
-		Symbol:   wallet.Symbol,
-		Explorer: chain.ExplorerAddress(wallet.Chain, wallet.Address),
+	assets, err := s.chain.Balances(wallet.Chain, wallet.Address)
+	if err != nil {
+		return WalletBalance{}, apperror.BalanceUnavailable.Wrap(err)
 	}
 	go s.RefreshWallet(wallet.ID)
-	return balance, nil
+	return WalletBalance{
+		Assets:   assets,
+		Symbol:   wallet.Symbol,
+		Explorer: chain.ExplorerAddress(wallet.Chain, wallet.Address),
+	}, nil
 }
 
 // Fund tops the wallet up from the testnet faucet and returns the new native balance.
@@ -124,13 +126,10 @@ func (s *WalletService) Fund(userID, walletID string) (string, error) {
 	if err := s.chain.Fund(wallet.Chain, wallet.Address); err != nil {
 		return "", apperror.FundingFailed.Wrap(err)
 	}
-	balance, _ := s.chain.Balance(wallet.Chain, wallet.Address)
-	logError("fund wallet="+wallet.ID, s.store.SetWalletBalance(wallet.ID, balance))
-	if updated, found := s.store.WalletByID(wallet.ID); found {
-		s.hub.PublishWallet(userID, updated)
-	}
 	s.SyncIncoming(wallet)
-	return balance, nil
+	s.RefreshWallet(wallet.ID)
+	updated, _ := s.store.WalletByID(wallet.ID)
+	return updated.Balance, nil
 }
 
 func (s *WalletService) Sync(userID, walletID string) (int, error) {
@@ -184,7 +183,6 @@ func (s *WalletService) SyncIncoming(wallet domain.Wallet) int {
 		if s.transactions.IncomingTransactionExists(payment.Hash) {
 			continue
 		}
-		amount, _ := strconv.ParseFloat(payment.Amount, 64)
 		createdAt := payment.At
 		if createdAt == "" {
 			createdAt = time.Now().UTC().Format(time.RFC3339)
@@ -195,7 +193,7 @@ func (s *WalletService) SyncIncoming(wallet domain.Wallet) int {
 			UserID:       wallet.UserID,
 			Type:         domain.TransactionIn,
 			Counterparty: payment.From,
-			Amount:       strconv.FormatFloat(amount, 'f', 4, 64),
+			Amount:       trimAmount(payment.Amount),
 			Symbol:       payment.Symbol,
 			Status:       domain.TransactionConfirmed,
 			TxHash:       payment.Hash,

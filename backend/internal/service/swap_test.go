@@ -68,7 +68,7 @@ func TestSwapCreateAppliesDefaultSlippageAndDispatches(t *testing.T) {
 		t.Fatalf("dest min = %q, built with %q", result.DestMin, stub.destMin)
 	}
 	stored, ok := transactions.transactions.TransactionByID(result.Transaction.ID)
-	if !ok || stored.Type != domain.TransactionSwap || stored.Status != domain.TransactionSigning || stored.Amount != "10.00" || stored.RecvSymbol != "USDC" || stored.EnvelopeXDR != "swap-envelope" {
+	if !ok || stored.Type != domain.TransactionSwap || stored.Status != domain.TransactionSigning || stored.Amount != "10" || stored.RecvSymbol != "USDC" || stored.EnvelopeXDR != "swap-envelope" {
 		t.Fatalf("stored = %+v", stored)
 	}
 	if signer.transactionID != result.Transaction.ID || string(signer.payload) != "swap-hash" {

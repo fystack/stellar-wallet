@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
 	"time"
 
@@ -65,9 +64,9 @@ func (s *TransactionService) Create(userID string, body PaymentInput) (domain.Tr
 	if err != nil {
 		return domain.Transaction{}, err
 	}
-	amount, err := strconv.ParseFloat(strings.TrimSpace(body.Amount), 64)
-	if err != nil || amount <= 0 {
-		return domain.Transaction{}, apperror.InvalidAmount.New()
+	amount, err := parseAmount(body.Amount)
+	if err != nil {
+		return domain.Transaction{}, err
 	}
 	if strings.TrimSpace(body.To) == "" {
 		return domain.Transaction{}, apperror.RecipientRequired.New()
@@ -104,7 +103,7 @@ func (s *TransactionService) Create(userID string, body PaymentInput) (domain.Tr
 		UserID:       userID,
 		Type:         domain.TransactionOut,
 		Counterparty: destination,
-		Amount:       strconv.FormatFloat(amount, 'f', 2, 64),
+		Amount:       amount,
 		Symbol:       symbol,
 		Memo:         memo,
 		Status:       domain.TransactionSigning,

@@ -89,7 +89,7 @@ func TestCreatePaymentHTTPContract(t *testing.T) {
 			if !ok {
 				t.Fatalf("missing data envelope: %s", response.Body)
 			}
-			if data["status"] != "signing" || data["walletId"] != "wallet-1" || data["amount"] != "1.00" || data["id"] == "" || data["createdAt"] == "" {
+			if data["status"] != "signing" || data["walletId"] != "wallet-1" || data["amount"] != "1" || data["id"] == "" || data["createdAt"] == "" {
 				t.Fatalf("response = %s", response.Body)
 			}
 			for _, private := range []string{"user_id", "userId", "envelope_xdr", "EnvelopeXDR"} {
