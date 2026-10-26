@@ -1,8 +1,8 @@
-package app
+package handler
 
 import (
 	"net/http"
-	"strconv"
+	"stellar-wallet-backend/internal/service"
 	"strings"
 	"time"
 
@@ -13,54 +13,13 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *Server) syncIncoming(wallet domain.Wallet) int {
-	if wallet.Chain != "stellar" {
-		return 0
-	}
-	payments, err := s.chain.Incoming(wallet.Address)
-	if err != nil {
-		return 0
-	}
-
-	added := 0
-	for _, payment := range payments {
-		if s.store.IncomingTransactionExists(payment.Hash) {
-			continue
-		}
-		amount, _ := strconv.ParseFloat(payment.Amount, 64)
-		createdAt := payment.At
-		if createdAt == "" {
-			createdAt = time.Now().UTC().Format(time.RFC3339)
-		}
-		transaction := domain.Transaction{
-			ID:           uuid.NewString(),
-			WalletID:     wallet.ID,
-			UserID:       wallet.UserID,
-			Type:         "in",
-			Counterparty: payment.From,
-			Amount:       strconv.FormatFloat(amount, 'f', 4, 64),
-			Symbol:       payment.Symbol,
-			Status:       "confirmed",
-			TxHash:       payment.Hash,
-			CreatedAt:    createdAt,
-		}
-		_ = s.store.CreateTransaction(transaction)
-		s.hub.PublishTransaction(wallet.UserID, transaction)
-		added++
-	}
-	if added > 0 {
-		s.refreshWallet(wallet.ID)
-	}
-	return added
-}
-
-func (s *Server) syncWallet(c *gin.Context) {
-	wallet, ok := s.walletFor(c.GetString("userID"), c.Param("id"))
+func (s *Handler) syncWallet(c *gin.Context) {
+	wallet, ok := s.store.WalletFor(c.GetString("userID"), c.Param("id"))
 	if !ok || wallet.Status != "ready" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "wallet not ready"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"synced": s.syncIncoming(wallet)})
+	c.JSON(http.StatusOK, gin.H{"synced": s.walletService.SyncIncoming(wallet)})
 }
 
 func capitalize(value string) string {
@@ -70,7 +29,7 @@ func capitalize(value string) string {
 	return strings.ToUpper(value[:1]) + value[1:]
 }
 
-func (s *Server) listWallets(c *gin.Context) {
+func (s *Handler) listWallets(c *gin.Context) {
 	userID := c.GetString("userID")
 	wallets, err := s.store.ListWallets(userID)
 	if err != nil {
@@ -85,7 +44,7 @@ type createWalletBody struct {
 	Chain string `json:"chain"`
 }
 
-func (s *Server) createWallet(c *gin.Context) {
+func (s *Handler) createWallet(c *gin.Context) {
 	userID := c.GetString("userID")
 	var body createWalletBody
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -102,7 +61,7 @@ func (s *Server) createWallet(c *gin.Context) {
 		name = capitalize(body.Chain) + " Wallet"
 	}
 
-	if err := s.requireNodes(keygenQuorum, "keygen"); err != nil {
+	if err := s.walletService.RequireNodes(service.KeygenQuorum, "keygen"); err != nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
 		return
 	}
@@ -128,12 +87,12 @@ func (s *Server) createWallet(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "keygen dispatch failed: " + err.Error()})
 		return
 	}
-	s.watchKeygenTimeout(userID, wallet.ID)
+	s.walletService.WatchKeygenTimeout(userID, wallet.ID)
 	c.JSON(http.StatusOK, wallet)
 }
 
-func (s *Server) getWallet(c *gin.Context) {
-	wallet, ok := s.walletFor(c.GetString("userID"), c.Param("id"))
+func (s *Handler) getWallet(c *gin.Context) {
+	wallet, ok := s.store.WalletFor(c.GetString("userID"), c.Param("id"))
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "wallet not found"})
 		return
@@ -141,12 +100,8 @@ func (s *Server) getWallet(c *gin.Context) {
 	c.JSON(http.StatusOK, wallet)
 }
 
-func (s *Server) walletFor(userID, walletID string) (domain.Wallet, bool) {
-	return s.store.WalletFor(userID, walletID)
-}
-
-func (s *Server) walletBalance(c *gin.Context) {
-	wallet, ok := s.walletFor(c.GetString("userID"), c.Param("id"))
+func (s *Handler) walletBalance(c *gin.Context) {
+	wallet, ok := s.store.WalletFor(c.GetString("userID"), c.Param("id"))
 	if !ok || wallet.Status != "ready" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "wallet not ready"})
 		return
@@ -156,11 +111,11 @@ func (s *Server) walletBalance(c *gin.Context) {
 		"symbol":   wallet.Symbol,
 		"explorer": chain.ExplorerAddress(wallet.Chain, wallet.Address),
 	})
-	go s.refreshWallet(wallet.ID)
+	go s.walletService.RefreshWallet(wallet.ID)
 }
 
-func (s *Server) fundWallet(c *gin.Context) {
-	wallet, ok := s.walletFor(c.GetString("userID"), c.Param("id"))
+func (s *Handler) fundWallet(c *gin.Context) {
+	wallet, ok := s.store.WalletFor(c.GetString("userID"), c.Param("id"))
 	if !ok || wallet.Status != "ready" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "wallet not ready"})
 		return
@@ -171,24 +126,20 @@ func (s *Server) fundWallet(c *gin.Context) {
 	}
 	balance, _ := s.chain.Balance(wallet.Chain, wallet.Address)
 	s.store.SetWalletBalance(wallet.ID, balance)
-	if updated, found := s.walletByID(wallet.ID); found {
+	if updated, found := s.store.WalletByID(wallet.ID); found {
 		s.hub.PublishWallet(c.GetString("userID"), updated)
 	}
-	s.syncIncoming(wallet)
+	s.walletService.SyncIncoming(wallet)
 	c.JSON(http.StatusOK, gin.H{"balance": balance})
 }
 
-func (s *Server) deleteWallet(c *gin.Context) {
+func (s *Handler) deleteWallet(c *gin.Context) {
 	userID := c.GetString("userID")
 	walletID := c.Param("id")
-	if _, ok := s.walletFor(userID, walletID); !ok {
+	if _, ok := s.store.WalletFor(userID, walletID); !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "wallet not found"})
 		return
 	}
 	s.store.DeleteWallet(userID, walletID)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
-}
-
-func (s *Server) walletByID(walletID string) (domain.Wallet, bool) {
-	return s.store.WalletByID(walletID)
 }

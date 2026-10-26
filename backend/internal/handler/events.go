@@ -1,4 +1,4 @@
-package app
+package handler
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func (s *Server) events(c *gin.Context) {
+func (s *Handler) events(c *gin.Context) {
 	userID, ok := s.auth.ParseToken(c.Query("token"))
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})

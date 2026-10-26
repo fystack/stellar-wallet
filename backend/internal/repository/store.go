@@ -1,4 +1,4 @@
-package store
+package repository
 
 import (
 	"errors"
@@ -30,15 +30,4 @@ type Store interface {
 	CompleteWalletKeygen(walletID, address, publicKey string)
 	SetWalletBalance(walletID, balance string)
 	DeleteWallet(userID, walletID string)
-	CreateTransaction(domain.Transaction) error
-	IncomingTransactionExists(hash string) bool
-	TrustlineTransactionExists(walletID, symbol string) bool
-	TransactionsByWallet(userID, walletID string) []domain.Transaction
-	TransactionForUser(transactionID, userID string) (domain.Transaction, bool)
-	TransactionByID(transactionID string) (domain.Transaction, bool)
-	PendingTransactions() []domain.Transaction
-	SetTransactionStatus(transactionID, status string)
-	FailTransaction(transactionID, reason string)
-	SetTransactionSignature(transactionID, signature string)
-	BroadcastTransaction(transactionID, hash string)
 }

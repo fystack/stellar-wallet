@@ -1,4 +1,4 @@
-package app
+package handler
 
 import (
 	"errors"
@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"stellar-wallet-backend/internal/domain"
-	"stellar-wallet-backend/internal/store"
+	"stellar-wallet-backend/internal/repository"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -19,7 +19,7 @@ type credentials struct {
 	Password string `json:"password"`
 }
 
-func (s *Server) register(c *gin.Context) {
+func (s *Handler) register(c *gin.Context) {
 	var body credentials
 	if err := c.ShouldBindJSON(&body); err != nil || body.Email == "" || len(body.Password) < 6 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "email and password (min 6 chars) required"})
@@ -45,7 +45,7 @@ func (s *Server) register(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"access_token": token, "expires_in": ttl, "email": email})
 }
 
-func (s *Server) login(c *gin.Context) {
+func (s *Handler) login(c *gin.Context) {
 	var body credentials
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
@@ -54,11 +54,11 @@ func (s *Server) login(c *gin.Context) {
 	email := strings.ToLower(strings.TrimSpace(body.Email))
 
 	userID, hash, err := s.store.UserCredentials(email)
-	if errors.Is(err, store.ErrNotFound) || bcrypt.CompareHashAndPassword([]byte(hash), []byte(body.Password)) != nil {
+	if errors.Is(err, repository.ErrNotFound) || bcrypt.CompareHashAndPassword([]byte(hash), []byte(body.Password)) != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
 		return
 	}
-	if err != nil && !errors.Is(err, store.ErrNotFound) {
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "db error"})
 		return
 	}

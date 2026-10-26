@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"stellar-wallet-backend/internal/domain"
-	storecontract "stellar-wallet-backend/internal/store"
+	storecontract "stellar-wallet-backend/internal/repository"
 )
 
 func TestStorePersistsUsersWalletsAndTransactions(t *testing.T) {
@@ -41,10 +41,10 @@ func TestStorePersistsUsersWalletsAndTransactions(t *testing.T) {
 		ID: "tx-1", WalletID: wallet.ID, UserID: user.ID, Type: "out", Counterparty: "GDEST",
 		Amount: "1.00", Symbol: "XLM", Status: "signing", CreatedAt: "2026-08-14T00:00:00Z",
 	}
-	if err := store.CreateTransaction(transaction); err != nil {
+	if err := NewPaymentRepository(db).CreateTransaction(transaction); err != nil {
 		t.Fatalf("CreateTransaction() error = %v", err)
 	}
-	stored, ok := store.TransactionForUser(transaction.ID, user.ID)
+	stored, ok := NewPaymentRepository(db).TransactionForUser(transaction.ID, user.ID)
 	if !ok || stored.ID != transaction.ID || stored.UserID != user.ID {
 		t.Fatalf("TransactionForUser() = %#v, %v", stored, ok)
 	}

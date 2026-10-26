@@ -1,4 +1,4 @@
-package app
+package service
 
 import (
 	"sync"
@@ -12,7 +12,7 @@ const (
 	balanceConcurrency = 8
 )
 
-func (s *Server) StartBalanceRefresher() {
+func (s *WalletService) StartBalanceRefresher() {
 	go func() {
 		for {
 			s.refreshAllBalances()
@@ -21,7 +21,7 @@ func (s *Server) StartBalanceRefresher() {
 	}()
 }
 
-func (s *Server) refreshAllBalances() {
+func (s *WalletService) refreshAllBalances() {
 	wallets := s.store.ReadyWallets()
 
 	semaphore := make(chan struct{}, balanceConcurrency)
@@ -38,33 +38,33 @@ func (s *Server) refreshAllBalances() {
 	waitGroup.Wait()
 }
 
-func (s *Server) refreshWallet(walletID string) {
+func (s *WalletService) RefreshWallet(walletID string) {
 	if wallet, ok := s.store.WalletByID(walletID); ok {
 		s.refreshOne(wallet)
 	}
 }
 
-func (s *Server) refreshWalletByAddress(address string) {
+func (s *WalletService) refreshWalletByAddress(address string) {
 	if wallet, ok := s.store.WalletByAddress(address); ok {
 		s.refreshOne(wallet)
 	}
 }
 
-func (s *Server) refreshAfterTransaction(senderID, destinationAddress string) {
-	s.refreshWallet(senderID)
+func (s *WalletService) RefreshAfterTransaction(senderID, destinationAddress string) {
+	s.RefreshWallet(senderID)
 	s.refreshWalletByAddress(destinationAddress)
 	time.Sleep(3 * time.Second)
-	s.refreshWallet(senderID)
+	s.RefreshWallet(senderID)
 	s.refreshWalletByAddress(destinationAddress)
 }
 
-func (s *Server) refreshOne(wallet domain.Wallet) {
+func (s *WalletService) refreshOne(wallet domain.Wallet) {
 	balance, err := s.chain.Balance(wallet.Chain, wallet.Address)
 	if err != nil || balance == wallet.Balance {
 		return
 	}
 	s.store.SetWalletBalance(wallet.ID, balance)
-	if updated, ok := s.walletByID(wallet.ID); ok {
+	if updated, ok := s.store.WalletByID(wallet.ID); ok {
 		s.hub.PublishWallet(wallet.UserID, updated)
 	}
 }

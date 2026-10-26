@@ -12,7 +12,7 @@ import (
 	"stellar-wallet-backend/internal/config"
 	"stellar-wallet-backend/internal/mpc"
 	"stellar-wallet-backend/internal/realtime"
-	"stellar-wallet-backend/internal/storage/sqlite"
+	"stellar-wallet-backend/internal/repository/sqlite"
 )
 
 func main() {
@@ -32,11 +32,12 @@ func main() {
 	authManager := auth.New([]byte(cfg.AuthSecret), 24*time.Hour)
 	clusterClient := cluster.NewClient(httpClient, cfg.ConsulAddr, cfg.HealthBasePort, cfg.NodeHealthURL, cfg.AssumePeersOnline)
 	server := app.NewServer(app.Dependencies{
-		Store:   sqlite.NewStore(db),
-		Auth:    authManager,
-		Chain:   chainClient,
-		Cluster: clusterClient,
-		Hub:     realtime.NewHub(),
+		Store:    sqlite.NewStore(db),
+		Payments: sqlite.NewPaymentRepository(db),
+		Auth:     authManager,
+		Chain:    chainClient,
+		Cluster:  clusterClient,
+		Hub:      realtime.NewHub(),
 	})
 
 	mpcClient, err := mpc.New(cfg.NATSURL, cfg.InitiatorKey, server.MPCCallbacks())
@@ -47,12 +48,10 @@ func main() {
 	server.SetMPC(mpcClient)
 	log.Printf("linked to mpcium cluster via %s", cfg.NATSURL)
 
-	server.ApplyRPCConfig()
-	server.StartBalanceRefresher()
-	server.ReconcilePending()
+	server.Start()
 
 	log.Printf("backend listening on %s (db=%s)", cfg.Addr, cfg.DBPath)
-	if err := server.Router(cfg.CORSOrigin).Run(cfg.Addr); err != nil {
+	if err := server.HTTP.Router(cfg.CORSOrigin).Run(cfg.Addr); err != nil {
 		log.Fatal(err)
 	}
 }

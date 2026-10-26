@@ -1,7 +1,8 @@
-package app
+package handler
 
 import (
 	"net/http"
+	"stellar-wallet-backend/internal/service"
 	"strconv"
 	"strings"
 	"time"
@@ -28,8 +29,8 @@ func parseAsset(raw string) chain.SwapAsset {
 
 // swapQuote returns an estimate of how much of the destination asset a
 // strict-send swap would yield, without signing anything.
-func (s *Server) swapQuote(c *gin.Context) {
-	wallet, ok := s.walletFor(c.GetString("userID"), c.Param("id"))
+func (s *Handler) swapQuote(c *gin.Context) {
+	wallet, ok := s.store.WalletFor(c.GetString("userID"), c.Param("id"))
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "wallet not found"})
 		return
@@ -66,9 +67,9 @@ type swapBody struct {
 
 // createSwap quotes, applies slippage protection, builds a PathPaymentStrictSend,
 // and dispatches it for MPC signing — reusing the same broadcast path as a send.
-func (s *Server) createSwap(c *gin.Context) {
+func (s *Handler) createSwap(c *gin.Context) {
 	userID := c.GetString("userID")
-	wallet, ok := s.walletFor(userID, c.Param("id"))
+	wallet, ok := s.store.WalletFor(userID, c.Param("id"))
 	if !ok || wallet.Status != "ready" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "wallet not ready"})
 		return
@@ -94,7 +95,7 @@ func (s *Server) createSwap(c *gin.Context) {
 		return
 	}
 
-	if err := s.requireNodes(signQuorum, "signing"); err != nil {
+	if err := s.walletService.RequireNodes(service.SignQuorum, "signing"); err != nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
 		return
 	}
@@ -132,18 +133,18 @@ func (s *Server) createSwap(c *gin.Context) {
 		EnvelopeXDR:  envelope,
 		CreatedAt:    time.Now().UTC().Format(time.RFC3339),
 	}
-	if err := s.store.CreateTransaction(transaction); err != nil {
+	if err := s.payments.CreateTransaction(transaction); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "insert failed"})
 		return
 	}
 	if err := s.mpc.Sign(
 		wallet.ID, transaction.ID, domain.Chains[wallet.Chain].Network, hash,
 	); err != nil {
-		s.store.SetTransactionStatus(transaction.ID, "failed")
+		s.payments.SetTransactionStatus(transaction.ID, "failed")
 		c.JSON(http.StatusBadGateway, gin.H{"error": "sign dispatch failed: " + err.Error()})
 		return
 	}
-	s.watchSignTimeout(userID, transaction.ID)
+	s.paymentService.WatchSignTimeout(userID, transaction.ID)
 	s.hub.PublishTransaction(userID, transaction)
 	c.JSON(http.StatusOK, gin.H{"transaction": transaction, "quote": quote, "dest_min": destMin})
 }

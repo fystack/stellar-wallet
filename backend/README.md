@@ -26,29 +26,53 @@ go run .
 
 ## Architecture
 
-`main.go` is only the composition root. Runtime responsibilities live under
-`internal/` with one-way, acyclic dependencies:
+`main.go` loads configuration and infrastructure. `app/` connects the services,
+HTTP handlers and MPC callbacks, then starts runtime jobs.
 
 ```text
-main.go
-  ├── app/       HTTP routes, handlers, use-case orchestration, MPC callbacks
-  ├── auth/      JWT creation and authentication middleware
-  ├── chain/     Stellar (Horizon) RPC, transaction building, prices
-  ├── cluster/   Consul peer discovery and MPC node health
-  ├── domain/    Wallet, transaction, asset, and cluster models
-  ├── mpc/       NATS/mpcium client adapter
-  ├── realtime/  Per-user SSE event hub
-  ├── store/     Database-neutral persistence contract
-  └── storage/
-      └── sqlite/  Current schema and repository adapter
+internal/
+  app/
+    server.go                # Wiring and startup only
+  handler/                   # HTTP: bind requests, call services, return responses
+    router.go
+    auth.go
+    wallet.go
+    payment.go
+    swap.go
+    config.go
+    events.go
+  service/                   # Business logic and background work; no Gin/HTTP
+    payment.go               # Create, sign, broadcast and recover payments
+    wallet.go                # Keygen callbacks and incoming payment sync
+    balances.go              # Balance refresh jobs
+    mpc_policy.go            # Node quorum and keygen timeout/recovery
+  repository/
+    store.go                 # Existing user/wallet/settings persistence contract
+    sqlite/
+      payment_repository.go  # Concrete transaction repository
+      store.go               # Existing user/wallet/settings SQL
+      database.go            # Schema and database setup
+  domain/                    # Data models
+  auth/                      # JWT and auth middleware
+  chain/                     # Stellar RPC, transaction builders and prices
+  mpc/                       # mpcium/NATS adapter
+  cluster/                   # MPC node health and discovery
+  realtime/                  # Per-user SSE hub
 ```
 
-The app layer depends only on `store.Store`, not SQL or a database driver. All
-SQLite-specific schema and queries are contained in `internal/storage/sqlite`.
-To migrate databases, implement the same port in an adapter such as
-`internal/storage/postgres` and change only the wiring in `main.go`; handlers,
-use cases, routes, and domain models stay unchanged. Public REST paths, JSON
-shapes, and the current SQLite schema remain unchanged by this package split.
+Payment requests follow `handler/payment.go → service/payment.go →
+repository/sqlite/payment_repository.go`. The payment handler binds JSON and maps
+service errors to HTTP responses. `PaymentService` checks wallet ownership and
+signing quorum, resolves the recipient, builds and persists the payment, and
+dispatches MPC signing. It also owns signing timeouts, pending-payment recovery,
+and the shared result/broadcast lifecycle used by sends, swaps, and trustlines.
+`WalletService` refreshes balances after a successful broadcast.
+
+The payment repository is concrete; interfaces cover the external Stellar,
+cluster and signer boundaries used in tests. Existing auth, wallet creation,
+swap, trustline and settings handlers still contain their original orchestration;
+their service/repository extraction can happen incrementally. REST paths, JSON
+shapes, and the SQLite schema remain unchanged.
 
 ## Verify
 

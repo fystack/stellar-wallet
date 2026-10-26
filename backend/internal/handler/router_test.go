@@ -1,4 +1,4 @@
-package app
+package handler
 
 import (
 	"net/http"
@@ -10,7 +10,7 @@ import (
 )
 
 func TestRouterPreservesPublicRouteContract(t *testing.T) {
-	server := NewServer(Dependencies{Auth: auth.New([]byte("test-secret"), time.Hour)})
+	server := New(Dependencies{Auth: auth.New([]byte("test-secret"), time.Hour)})
 	router := server.Router("http://localhost:5173")
 
 	want := map[string]bool{
@@ -57,7 +57,7 @@ func TestRouterPreservesPublicRouteContract(t *testing.T) {
 }
 
 func TestHealthAndCORSContract(t *testing.T) {
-	server := NewServer(Dependencies{Auth: auth.New([]byte("test-secret"), time.Hour)})
+	server := New(Dependencies{Auth: auth.New([]byte("test-secret"), time.Hour)})
 	router := server.Router("http://localhost:5173")
 	request := httptest.NewRequest(http.MethodGet, "/health", nil)
 	response := httptest.NewRecorder()
