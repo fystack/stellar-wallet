@@ -67,10 +67,10 @@ React 18 + TypeScript (strict) + Vite + Tailwind. Talks to the Go backend in `..
 
 ## Tests
 
-- `npm test` runs the Node unit tests in `tests/`; `npm run build` must pass (it typechecks).
+- The package manager is pnpm (`packageManager` in `package.json`); never commit another lockfile. `pnpm test` runs the Node unit tests in `tests/`; `pnpm build` must pass (it typechecks).
 - `e2e/` is Playwright against a live backend and vite. Put shared setup in `e2e/helpers.ts`, create unique accounts per test, and set up data through the API rather than clicking through it. Never commit screenshots or specs with absolute paths.
 - Run e2e with a backend config whose `auth_rate_limit` is high; the default (30/min) is below what the suites use.
-- Fund test wallets with `fundAccount` (`e2e/fund.ts`), never Friendbot: it sends XLM from a plain testnet account whose secret is in the git-ignored `e2e/.fund-wallet.json`. Set it up once with `npm run e2e:fund -- create`, and return leftover test XLM with `npm run e2e:fund -- sweep <since>`.
+- Fund test wallets with `fundAccount` (`e2e/fund.ts`), never Friendbot: it sends XLM from a plain testnet account whose secret is in the git-ignored `e2e/.fund-wallet.json`. Set it up once with `pnpm e2e:fund create`, and return leftover test XLM with `pnpm e2e:fund sweep <since>`.
 - Specs that create wallets run with `test.describe.configure({ mode: 'serial' })` and wait up to 3 minutes for keygen: the local cluster queues keygens at about 10 s each.
 
 ## Comments and commits

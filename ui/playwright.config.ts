@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
 // E2E runs against the full stack (backend :8090 + MPC nodes + vite :5173).
-// Start it first with ./start.sh, then: npm run e2e
+// Start it first with ./start.sh, then: pnpm e2e
 export default defineConfig({
   testDir: './e2e',
   timeout: 120_000, // real MPC keygen + on-chain broadcast are slow

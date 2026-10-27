@@ -114,7 +114,7 @@ the backend's SQLite file, so it needs the `sqlite3` CLI and `E2E_DB`:
 
 ```bash
 cd ui
-E2E_DB=../backend/wallet.db npx playwright test e2e/invite.spec.ts e2e/invitations.spec.ts
+E2E_DB=../backend/wallet.db pnpm exec playwright test e2e/invite.spec.ts e2e/invitations.spec.ts
 ```
 
 Set `auth_rate_limit` high (e.g. 1000) in the backend config used for e2e;

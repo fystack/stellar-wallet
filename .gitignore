@@ -28,3 +28,8 @@ backend/config.yaml
 
 # Testnet funding wallet for e2e (secret key)
 ui/e2e/.fund-wallet.json
+
+# The UI uses pnpm; keep other package managers' lockfiles out
+ui/package-lock.json
+ui/bun.lock
+ui/yarn.lock
