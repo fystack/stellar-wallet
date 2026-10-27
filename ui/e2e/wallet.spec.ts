@@ -9,7 +9,8 @@ async function register(page: Page): Promise<string> {
   await page.goto('/')
   await page.getByRole('button', { name: 'Create one' }).click()
   await page.getByPlaceholder('you@example.com').fill(email)
-  await page.getByPlaceholder('At least 6 characters').fill('secret123')
+  await page.getByLabel('Password', { exact: true }).fill('secret123')
+  await page.getByLabel('Confirm password').fill('secret123')
   await page.getByRole('button', { name: 'Create account' }).click()
   await expect(page.getByText('Your keys, split — never whole')).toBeVisible()
   return email
@@ -163,7 +164,8 @@ test('logout then login again', async ({ page }) => {
   await expect(page.getByText('Welcome back')).toBeVisible()
 
   await page.getByPlaceholder('you@example.com').fill(email)
-  await page.getByPlaceholder('At least 6 characters').fill('secret123')
+  await page.getByLabel('Password', { exact: true }).fill('secret123')
+  await page.getByLabel('Confirm password').fill('secret123')
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page.getByText('Your keys, split — never whole')).toBeVisible()
 })
