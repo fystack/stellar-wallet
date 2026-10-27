@@ -1,8 +1,18 @@
 import { test, expect, type Page } from '@playwright/test'
+import { fundAccount } from './fund.ts'
 
 // Full user journey against the live stack:
-// register → create wallet (real MPC keygen) → fund (Friendbot) →
+// register → create wallet (real MPC keygen) → fund (from the e2e fund wallet) →
 // create a second wallet → transfer XLM A→B → transaction confirms on-chain.
+
+// Serial, with long waits: keygens queue on the shared local cluster.
+test.describe.configure({ mode: 'serial', timeout: 300_000 })
+
+// About 10 s per keygen, so a new wallet can wait behind other tests' wallets.
+const KEYGEN_WAIT = 180_000
+
+// Distinctive, so the balance check can't match other text on the page.
+const FUNDED = '123.45'
 
 async function register(page: Page): Promise<string> {
   const email = `e2e_${Date.now()}_${Math.floor(Math.random() * 1e4)}@test.io`
@@ -27,44 +37,40 @@ async function createWalletAndOpen(page: Page, first: boolean): Promise<string> 
   await page.getByRole('button', { name: 'Create wallet' }).click()
   // Keygen ceremony → wallet ready.
   const open = page.getByRole('button', { name: 'Open wallet' })
-  await expect(open).toBeVisible({ timeout: 90_000 })
+  await expect(open).toBeVisible({ timeout: KEYGEN_WAIT })
   await open.click()
-  // The address is exposed as the CopyAddress button's title attribute.
-  const addr = await page
-    .locator('button[title^="G"]')
-    .first()
-    .getAttribute('title')
-  expect(addr).toBeTruthy()
-  return addr as string
+  const label = await page.getByRole('button', { name: /^Copy address G/ }).first().getAttribute('aria-label')
+  expect(label).toBeTruthy()
+  return (label as string).replace('Copy address ', '')
 }
 
 test('register → create → fund → transfer → confirmed', async ({ page }) => {
   await register(page)
 
   // Wallet A + fund it.
-  await createWalletAndOpen(page, true)
-  await page.getByRole('button', { name: 'Fund (testnet)' }).click()
-  await expect(page.getByText(/10,000/)).toBeVisible({ timeout: 40_000 })
+  await fundAccount(await createWalletAndOpen(page, true), FUNDED)
+  await expect(page.getByText(FUNDED).first()).toBeVisible({ timeout: 40_000 })
 
   // Wallet B (recipient) — grab its address.
   await page.getByRole('button', { name: 'Back to wallets' }).click()
   const dest = await createWalletAndOpen(page, false)
   await page.getByRole('button', { name: 'Back to wallets' }).click()
 
-  // Open the funded wallet A (the card showing 10,000) and send to B.
+  // Open the funded wallet A and send to B.
   await page
     .getByRole('main')
-    .locator('button', { hasText: '10,000' })
+    .locator('button', { hasText: FUNDED })
     .first()
     .click()
   await page.getByRole('main').getByRole('button', { name: 'Send' }).click()
 
-  await page.getByPlaceholder('G...').fill(dest)
-  await page.getByPlaceholder('0.00').fill('5')
+  await page.getByRole('textbox', { name: /Recipient/ }).fill(dest)
+  await page.getByLabel('Amount', { exact: true }).fill('5')
   await page.getByRole('button', { name: 'Review & sign' }).click()
+  await page.getByRole('button', { name: 'Confirm & sign' }).click()
 
   // Transaction detail opens automatically and should reach Confirmed.
-  await expect(page.getByText('Transaction')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Transaction', exact: true })).toBeVisible()
   await expect(page.getByText('Confirmed').first()).toBeVisible({
     timeout: 90_000,
   })
@@ -73,11 +79,11 @@ test('register → create → fund → transfer → confirmed', async ({ page })
 test('self-send shows a warning', async ({ page }) => {
   await register(page)
   const addr = await createWalletAndOpen(page, true)
-  await page.getByRole('button', { name: 'Fund (testnet)' }).click()
-  await expect(page.getByText(/10,000/)).toBeVisible({ timeout: 40_000 })
+  await fundAccount(addr, FUNDED)
+  await expect(page.getByText(FUNDED).first()).toBeVisible({ timeout: 40_000 })
 
   await page.getByRole('main').getByRole('button', { name: 'Send' }).click()
-  await page.getByPlaceholder('G...').fill(addr)
+  await page.getByRole('textbox', { name: /Recipient/ }).fill(addr)
   await expect(page.getByText(/sender's own address/)).toBeVisible()
 })
 
@@ -91,14 +97,14 @@ test('send validation: bad address + insufficient balance block submit', async (
   const review = page.getByRole('button', { name: 'Review & sign' })
 
   // Invalid address → error + disabled submit.
-  await page.getByPlaceholder('G...').fill('not-a-valid-address')
+  await page.getByRole('textbox', { name: /Recipient/ }).fill('not-a-valid-address')
   await expect(page.getByText(/valid Stellar address/)).toBeVisible()
 
   // Valid address but amount over (empty) balance → insufficient + disabled.
   await page
-    .getByPlaceholder('G...')
+    .getByRole('textbox', { name: /Recipient/ })
     .fill('GAP5J5SWHUGNBXI5BALRU4HITVMWTAO2A52I6JNRWLYFEQ2W4YSBWEVJ')
-  await page.getByPlaceholder('0.00').fill('5')
+  await page.getByLabel('Amount', { exact: true }).fill('5')
   await expect(page.getByText(/Insufficient balance/)).toBeVisible()
   await expect(review).toBeDisabled()
 })
@@ -165,7 +171,6 @@ test('logout then login again', async ({ page }) => {
 
   await page.getByPlaceholder('you@example.com').fill(email)
   await page.getByLabel('Password', { exact: true }).fill('secret123')
-  await page.getByLabel('Confirm password').fill('secret123')
-  await page.getByRole('button', { name: 'Sign in' }).click()
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
   await expect(page.getByText('Your keys, split — never whole')).toBeVisible()
 })

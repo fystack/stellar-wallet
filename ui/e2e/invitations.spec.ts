@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import {
+  PASSWORD,
   acceptByLink,
   markGoogleVerified,
   memberSwitcher,
@@ -78,7 +79,7 @@ test('unverified password account is pointed to the emailed link', async ({ page
   await expect(page.getByRole('tabpanel')).toContainText('open the invite link from your email')
 })
 
-test('switcher shows a badge for new invitations and accepts from the dropdown', async ({ page }) => {
+test('switcher shows a badge for new invitations and opens the workspace picker to accept', async ({ page }) => {
   const invitee = await registerAccount(uniqueEmail('badge'))
   markGoogleVerified(invitee)
   const first = await teamWithInvite(invitee.email)
@@ -94,9 +95,47 @@ test('switcher shows a badge for new invitations and accepts from the dropdown',
   await expect(page.getByLabel('1 pending invitation')).toBeVisible()
 
   await page.getByRole('button', { name: /Personal\s+Personal\s+1/ }).click()
+  await expect(page.getByRole('heading', { name: 'Choose a workspace' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: /Invitations/ })).toHaveAttribute('aria-selected', 'true')
   await page.getByRole('button', { name: `Accept invitation to ${second.name}` }).click()
 
   await expect(page.getByText(`You joined ${second.name}`)).toBeVisible()
   await expect(memberSwitcher(page, second.name)).toBeVisible()
   await expect(page.getByLabel(/pending invitation/)).toBeHidden()
+})
+
+test('switcher opens the workspace picker and Back returns to the app', async ({ page }) => {
+  const invitee = await registerAccount(uniqueEmail('switcher'))
+  const team = await teamWithInvite(invitee.email)
+  await acceptByLink(invitee.api, team.invite.token)
+
+  await signIn(page, invitee.email)
+  await page.getByRole('list', { name: 'Your workspaces' }).getByRole('button', { name: /Personal/ }).click()
+  await page.getByRole('button', { name: /Personal\s+Personal/ }).click()
+  await expect(page.getByRole('heading', { name: 'Choose a workspace' })).toBeVisible()
+  await page.getByRole('button', { name: '← Back' }).click()
+  await expect(page.getByRole('heading', { name: 'Choose a workspace' })).toBeHidden()
+
+  await page.getByRole('button', { name: /Personal\s+Personal/ }).click()
+  await page.getByRole('list', { name: 'Your workspaces' }).getByRole('button', { name: new RegExp(team.name) }).click()
+  await expect(memberSwitcher(page, team.name)).toBeVisible()
+})
+
+test('an invite opened from its link is not listed twice', async ({ page }) => {
+  const invitee = await registerAccount(uniqueEmail('linked'))
+  markGoogleVerified(invitee)
+  const team = await teamWithInvite(invitee.email)
+
+  await page.goto(team.invite.path)
+  await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+
+  await expect(page.getByRole('button', { name: `Accept invitation to ${team.name}` })).toBeVisible()
+  await expect(page.getByRole('tab', { name: /Invitations/ })).toContainText('1')
+  await expect(page.getByRole('region', { name: `Join ${team.name}` })).toBeHidden()
+
+  await page.getByRole('button', { name: `Accept invitation to ${team.name}` }).click()
+  await expect(page.getByText(`You joined ${team.name}`)).toBeVisible()
+  await page.reload()
+  await expect(page.getByRole('region', { name: `Join ${team.name}` })).toBeHidden()
 })

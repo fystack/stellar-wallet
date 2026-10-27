@@ -25,3 +25,6 @@ playwright-report/
 
 # Backend local config (copy of config.example.yaml)
 backend/config.yaml
+
+# Testnet funding wallet for e2e (secret key)
+ui/e2e/.fund-wallet.json

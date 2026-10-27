@@ -35,8 +35,8 @@ export async function createWorkspace(owner: APIRequestContext, name: string): P
   return (await response.json()).data.workspace.id
 }
 
-export async function invite(owner: APIRequestContext, workspaceId: string, email: string): Promise<Invite> {
-  const response = await owner.post(`/api/v1/workspaces/${workspaceId}/invites`, { data: { email } })
+export async function invite(owner: APIRequestContext, workspaceId: string, email: string, role = 'member'): Promise<Invite> {
+  const response = await owner.post(`/api/v1/workspaces/${workspaceId}/invites`, { data: { email, role } })
   expect(response.status(), await response.text()).toBe(201)
   const { invite, link } = (await response.json()).data
   const token = link.split('/#/invite/')[1]
@@ -64,4 +64,39 @@ export async function signIn(page: Page, email: string) {
 
 export function memberSwitcher(page: Page, workspaceName: string) {
   return page.getByRole('button', { name: new RegExp(`${workspaceName}\\s+Member`) })
+}
+
+export async function setApprovalPolicy(owner: APIRequestContext, workspaceId: string, thresholdXlm: string, requiredApprovals = 1) {
+  const response = await owner.put(`/api/v1/workspaces/${workspaceId}/approval-policy`, {
+    data: { thresholdXlm, requiredApprovals, belowThreshold: 'send' },
+  })
+  expect(response.status(), await response.text()).toBe(200)
+}
+
+// Holding a payment never signs, so a ready wallet row is enough when the MPC nodes are down.
+export function insertReadyWallet(workspaceId: string, ownerId: string, name: string, address: string) {
+  const id = `e2e-wallet-${Date.now()}-${Math.floor(Math.random() * 1e6)}`
+  execFileSync('sqlite3', [
+    DB,
+    `INSERT INTO wallets (id, user_id, workspace_id, name, chain, symbol, address, pubkey, balance, status, created_at)
+     VALUES ('${id}', '${ownerId}', '${workspaceId}', '${name}', 'stellar', 'XLM', '${address}', '', '0', 'ready', '${new Date().toISOString()}');`,
+  ])
+  return id
+}
+
+export async function requestPayment(sender: APIRequestContext, walletId: string, to: string, amount: string) {
+  const response = await sender.post('/api/v1/transactions', { data: { wallet_id: walletId, to, amount } })
+  expect(response.status(), await response.text()).toBe(202)
+  return (await response.json()).data.request as { id: string; requiredApprovals: number }
+}
+
+export async function clusterOnline(): Promise<boolean> {
+  const api = await request.newContext({ baseURL: API })
+  try {
+    const response = await api.get('/api/v1/cluster')
+    const nodes: { online: boolean }[] = (await response.json()).data.nodes
+    return nodes.filter((node) => node.online).length >= 3
+  } finally {
+    await api.dispose()
+  }
 }

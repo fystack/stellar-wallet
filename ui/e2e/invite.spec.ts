@@ -76,7 +76,7 @@ test('invite link pasted into an already-open login tab is picked up', async ({ 
   await expectInviteLogin(page, team.name, email)
 })
 
-test('invitee with several workspaces sees the invite instead of the workspace picker', async ({ page }) => {
+test('invitee with several workspaces sees the invite on the picker Invitations tab', async ({ page }) => {
   const email = uniqueEmail('multi')
   const invitee = await apiSession(email)
   const first = await teamWithInvite(email)
@@ -88,7 +88,8 @@ test('invitee with several workspaces sees the invite instead of the workspace p
   await page.goto(second.invite.path)
   await signInFromLogin(page)
 
-  await expect(page.getByRole('heading', { name: 'Choose a workspace' })).toBeHidden()
+  await expect(page.getByRole('heading', { name: 'Choose a workspace' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: /Invitations/ })).toHaveAttribute('aria-selected', 'true')
   await acceptAndExpectJoined(page, second.name)
 })
 
@@ -185,5 +186,27 @@ test('members are view-only: no send, swap or wallet management', async ({ page 
   await expect(page.getByRole('heading', { name: 'View-only access' })).toBeVisible()
   await page.getByRole('navigation').getByRole('button', { name: 'Swap' }).click()
   await expect(page.getByRole('heading', { name: 'View-only access' })).toBeVisible()
+
+  await page.getByRole('navigation').getByRole('button', { name: 'Settings' }).click()
+  await expect(page.getByText('Only workspace owners can add or remove assets.')).toBeVisible()
+  await expect(page.getByLabel('Asset code')).toBeHidden()
+  await expect(page.getByRole('button', { name: /^Remove / })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Send invite' })).toBeHidden()
+  await expect(page.getByRole('combobox', { name: /^Role for / })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Turn on approvals' })).toBeHidden()
+  await expect(page.getByRole('switch', { name: /Transaction notifications/ })).toBeEnabled()
 })
 
+
+test('sign out of all devices ends every session of the account', async ({ page }) => {
+  const account = await apiSession(uniqueEmail('everywhere'))
+  await page.goto('/')
+  await page.getByLabel('Email').fill((await (await account.get('/api/v1/auth/me')).json()).data.email)
+  await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await page.getByRole('navigation').getByRole('button', { name: 'Settings' }).click()
+  await page.getByRole('button', { name: 'Sign out all' }).click()
+
+  await expect(page.getByRole('heading', { level: 1, name: 'Welcome back' })).toBeVisible()
+  expect((await account.get('/api/v1/auth/me')).status()).toBe(401)
+})
