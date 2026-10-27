@@ -1,19 +1,24 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from '../api.ts'
-import { toast } from '../toast.tsx'
 import type { Chain, Wallet } from '../types.ts'
 
-export function useWallets(onUnauthorized: () => void) {
+// workspaceId re-fetches the list after the active workspace changes; empty waits for it.
+export function useWallets(onUnauthorized: () => void, workspaceId: string) {
   const [wallets, setWallets] = useState<Wallet[]>([])
+  const [loadedFor, setLoadedFor] = useState('')
+  const [failedFor, setFailedFor] = useState('')
 
   const reload = useCallback(async () => {
+    if (!workspaceId) return
+    setFailedFor('')
     try {
-      setWallets(await api.listWallets())
+      setWallets(await api.listWallets(workspaceId))
+      setLoadedFor(workspaceId)
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) onUnauthorized()
-      else toast.error('Unable to load wallets. Please try again.')
+      else setFailedFor(workspaceId)
     }
-  }, [onUnauthorized])
+  }, [onUnauthorized, workspaceId])
 
   useEffect(() => {
     void reload()
@@ -26,11 +31,11 @@ export function useWallets(onUnauthorized: () => void) {
   // Keygen runs asynchronously; the caller watches the returned wallet id until it is ready.
   const create = useCallback(
     async (name: string, chain: Chain) => {
-      const wallet = await api.createWallet(name, chain)
+      const wallet = await api.createWallet(workspaceId, name, chain)
       await reload()
       return wallet.id
     },
-    [reload],
+    [reload, workspaceId],
   )
 
   const remove = useCallback(
@@ -41,5 +46,8 @@ export function useWallets(onUnauthorized: () => void) {
     [reload],
   )
 
-  return { wallets, applyUpdate, create, remove }
+  // False until the active workspace's list arrives, so pages don't flash their empty state.
+  const loaded = workspaceId !== '' && loadedFor === workspaceId
+  const failed = workspaceId !== '' && failedFor === workspaceId
+  return { wallets, loaded, failed, reload, applyUpdate, create, remove }
 }

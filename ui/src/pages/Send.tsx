@@ -16,7 +16,9 @@ export default function Send({
   preselectId,
   onGoCreate,
   onSubmit,
+  readOnly = false,
 }: {
+  readOnly?: boolean
   wallets: Wallet[]
   preselectId?: string
   onGoCreate: () => void
@@ -26,6 +28,16 @@ export default function Send({
   const wallets = allWallets.filter((w) => w.status === 'ready')
   const form = useSendForm(wallets, preselectId, onSubmit)
   const [showScanner, setShowScanner] = useState(false)
+
+  if (readOnly) {
+    return (
+      <EmptyState
+        icon={<SendIcon size={32} />}
+        title="View-only access"
+        body="Only workspace owners can send, swap or add assets for now. Payment approvals for members are coming next."
+      />
+    )
+  }
 
   if (wallets.length === 0) {
     return (

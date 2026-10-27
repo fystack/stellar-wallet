@@ -110,7 +110,7 @@ export default function LinkedAccounts() {
         })}
       </div>
 
-      {error && <div role="alert" className="mt-4 bg-[#fdecec] px-3 py-2 text-sm text-[#d33a3a]">{error}</div>}
+      {error && <div role="alert" className="mt-4 bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
       {!account && error && (
         <button className="mt-3 text-sm font-semibold text-brand hover:underline" onClick={() => void load()}>Try again</button>
       )}

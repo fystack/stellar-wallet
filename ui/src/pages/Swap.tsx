@@ -14,7 +14,9 @@ export default function Swap({
   preselectId,
   onGoCreate,
   onSubmit,
+  readOnly = false,
 }: {
+  readOnly?: boolean
   wallets: Wallet[]
   preselectId?: string
   onGoCreate: () => void
@@ -22,6 +24,16 @@ export default function Swap({
 }) {
   const wallets = allWallets.filter((w) => w.status === 'ready' && w.chain === 'stellar')
   const form = useSwapForm(wallets, preselectId, onSubmit)
+
+  if (readOnly) {
+    return (
+      <EmptyState
+        icon={<SwapIcon size={32} />}
+        title="View-only access"
+        body="Only workspace owners can send, swap or add assets for now. Payment approvals for members are coming next."
+      />
+    )
+  }
 
   if (wallets.length === 0) {
     return (

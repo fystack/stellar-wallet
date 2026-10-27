@@ -16,12 +16,14 @@ export default function Sidebar({
   signingOut,
   onNavigate,
   onSignOut,
+  workspaceSwitcher,
 }: {
   user: string
   activePage: PageKey | null
   signingOut: boolean
   onNavigate: (page: PageKey) => void
   onSignOut: () => void
+  workspaceSwitcher: ReactNode
 }) {
   return (
     <aside className="sticky top-0 z-40 flex h-16 w-full flex-shrink-0 items-center border-b border-line bg-white px-4 md:top-0 md:h-screen md:w-[260px] md:flex-col md:items-stretch md:overflow-y-auto md:border-b-0 md:border-r md:p-4">
@@ -39,6 +41,8 @@ export default function Sidebar({
           </div>
         </div>
       </button>
+
+      {workspaceSwitcher}
 
       <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-line bg-white px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 md:static md:flex md:flex-col md:gap-1 md:border-0 md:p-0">
         {nav.map((item) => (
@@ -62,7 +66,7 @@ export default function Sidebar({
         onClick={onSignOut}
         disabled={signingOut}
         aria-label={`Sign out ${user}`}
-        className="ml-auto flex items-center gap-3 text-left text-[15px] text-ink-soft transition-colors hover:text-ink md:ml-0 md:mt-auto md:px-2 md:py-3"
+        className="ml-3 flex items-center gap-3 text-left text-[15px] text-ink-soft transition-colors hover:text-ink md:ml-0 md:mt-auto md:px-2 md:py-3"
       >
         <span className="grid h-9 w-9 shrink-0 place-items-center bg-[#1b1c1f] text-sm font-semibold uppercase text-white md:h-10 md:w-10">
           {user.charAt(0)}

@@ -4,6 +4,8 @@ import { TokenLogo, ChainLogo } from '../logos.tsx'
 import { api } from '../api.ts'
 import { toast } from '../toast.tsx'
 import LinkedAccounts from '../components/LinkedAccounts.tsx'
+import WorkspaceMembers from '../components/WorkspaceMembers.tsx'
+import type { Workspace } from '../types.ts'
 
 type ChainStat = { chain: string; online: boolean }
 
@@ -104,7 +106,15 @@ function Pref({
   )
 }
 
-export default function Settings() {
+export default function Settings({
+  workspace,
+  userEmail,
+  onCreateWorkspace,
+}: {
+  workspace: Workspace | null
+  userEmail: string
+  onCreateWorkspace: (name: string) => Promise<void>
+}) {
   const [hideBalances, setHideBalances] = useState(
     () => localStorage.getItem('pref_hide') === '1',
   )
@@ -192,6 +202,7 @@ export default function Settings() {
           Manage your MPC cluster, security, and preferences.
         </p>
       </header>
+      <WorkspaceMembers workspace={workspace} userEmail={userEmail} onCreateWorkspace={onCreateWorkspace} />
       <LinkedAccounts />
 
       <section className="surface mb-5">

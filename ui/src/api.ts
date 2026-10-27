@@ -1,4 +1,14 @@
-import type { ResolvedRecipient, SwapQuote, Transaction, Wallet } from './types.ts'
+import type {
+  InvitePreview,
+  JoinResult,
+  ResolvedRecipient,
+  SwapQuote,
+  Transaction,
+  Wallet,
+  Workspace,
+  WorkspaceInvite,
+  WorkspaceMember,
+} from './types.ts'
 
 export const BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8090'
 export type Account = {
@@ -84,9 +94,36 @@ export const api = {
   login: (email: string, password: string) => auth('login', email, password),
   register: (email: string, password: string) => auth('register', email, password),
 
-  listWallets: () => req<Wallet[]>('/api/v1/wallets'),
-  createWallet: (name: string, chain: string) =>
-    req<Wallet>('/api/v1/wallets', { method: 'POST', json: { name, chain } }),
+  workspaces: () => req<{ workspaces: Workspace[]; activeId: string; selected: boolean }>('/api/v1/workspaces'),
+  createWorkspace: (name: string) =>
+    req<JoinResult>('/api/v1/workspaces', { method: 'POST', json: { name } }),
+  switchWorkspace: (id: string) =>
+    req<Workspace>(`/api/v1/workspaces/${id}/switch`, { method: 'POST' }),
+  members: (id: string) =>
+    req<{ members: WorkspaceMember[]; invites: WorkspaceInvite[] }>(`/api/v1/workspaces/${id}/members`),
+  removeMember: (id: string, userId: string) =>
+    req<void>(`/api/v1/workspaces/${id}/members/${userId}`, { method: 'DELETE' }),
+  invite: (id: string, email: string) =>
+    req<{ invite: WorkspaceInvite; link: string; emailSent: boolean }>(`/api/v1/workspaces/${id}/invites`, {
+      method: 'POST',
+      json: { email },
+    }),
+  revokeInvite: (id: string, inviteId: string) =>
+    req<void>(`/api/v1/workspaces/${id}/invites/${inviteId}`, { method: 'DELETE' }),
+  invitations: () => req<{ invites: WorkspaceInvite[]; verified: boolean }>('/api/v1/invitations'),
+  acceptInvitation: (id: string) =>
+    req<JoinResult>(`/api/v1/invitations/${id}/accept`, { method: 'POST' }),
+  declineInvitation: (id: string) =>
+    req<void>(`/api/v1/invitations/${id}/decline`, { method: 'POST' }),
+  previewInvite: (token: string) =>
+    req<InvitePreview>(`/api/v1/invites/${encodeURIComponent(token)}`),
+  acceptInvite: (token: string) =>
+    req<JoinResult>(`/api/v1/invites/${encodeURIComponent(token)}/accept`, { method: 'POST' }),
+
+  listWallets: (workspaceId: string) =>
+    req<Wallet[]>(`/api/v1/wallets?workspace_id=${encodeURIComponent(workspaceId)}`),
+  createWallet: (workspaceId: string, name: string, chain: string) =>
+    req<Wallet>('/api/v1/wallets', { method: 'POST', json: { workspace_id: workspaceId, name, chain } }),
   walletTxns: (id: string) =>
     req<Transaction[]>(`/api/v1/wallets/${id}/transactions`),
   createTxn: (

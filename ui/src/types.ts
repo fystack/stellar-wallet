@@ -2,8 +2,54 @@ export type Chain = 'stellar'
 
 export type WalletStatus = 'generating' | 'ready' | 'failed'
 
+export type WorkspaceRole = 'owner' | 'member'
+
+export type Workspace = {
+  id: string
+  name: string
+  role: WorkspaceRole
+  personal: boolean
+  createdAt: string
+}
+
+export type WorkspaceMember = {
+  userId: string
+  email: string
+  role: WorkspaceRole
+  joinedAt: string
+}
+
+export type WorkspaceInvite = {
+  id: string
+  workspaceId: string
+  workspaceName?: string
+  email: string
+  invitedBy: string
+  createdAt: string
+  expiresAt: number
+}
+
+export type InviteStatus = 'pending' | 'accepted' | 'revoked' | 'expired'
+
+export type InvitePreview = {
+  workspaceName: string
+  invitedBy: string
+  email: string
+  status: InviteStatus
+  hasAccount: boolean
+  hasPassword: boolean
+  providers: string[]
+}
+
+export type JoinResult = {
+  workspace: Workspace
+  wallet?: Wallet
+  walletError?: string
+}
+
 export type Wallet = {
   id: string
+  workspaceId: string
   name: string
   chain: Chain
   symbol: string

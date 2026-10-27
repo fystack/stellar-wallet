@@ -21,6 +21,7 @@ export default function WalletDetail({
   onBack,
   onSend,
   onDelete,
+  readOnly = false,
 }: {
   wallet: Wallet
   liveTxns: Record<string, Transaction>
@@ -28,7 +29,9 @@ export default function WalletDetail({
   onFocusHandled?: () => void
   onBack: () => void
   onSend: () => void
-  onDelete: (id: string) => Promise<void>
+  // Undefined for members: only workspace owners delete wallets.
+  onDelete?: (id: string) => Promise<void>
+  readOnly?: boolean
 }) {
   const [showReceive, setShowReceive] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -51,15 +54,17 @@ export default function WalletDetail({
         <button onClick={onBack} className="text-sm font-semibold text-ink-soft hover:text-ink">
           ← Back to wallets
         </button>
-        <button
-          onClick={() => setConfirmDelete(true)}
-          className="flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-danger"
-        >
-          <TrashIcon size={16} /> Delete
-        </button>
+        {onDelete && (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-danger"
+          >
+            <TrashIcon size={16} /> Delete
+          </button>
+        )}
       </div>
 
-      {confirmDelete && (
+      {confirmDelete && onDelete && (
         <DeleteWalletBar
           walletName={wallet.name}
           onCancel={() => setConfirmDelete(false)}
@@ -89,7 +94,7 @@ export default function WalletDetail({
         <div className="mb-1 text-sm text-muted">Balances</div>
         <BalanceList assets={detail.assets} fallbackSymbol={wallet.symbol} usd={detail.usd} />
 
-        {wallet.chain === 'stellar' && (
+        {wallet.chain === 'stellar' && !readOnly && (
           <AddAssetChips
             registry={detail.registry}
             heldKeys={new Set((detail.assets ?? []).map(assetKey))}
@@ -98,13 +103,18 @@ export default function WalletDetail({
           />
         )}
 
+        {readOnly && (
+          <p className="mb-3 bg-card px-3.5 py-2.5 text-sm text-ink-soft">Only workspace owners can send, swap or add assets for now.</p>
+        )}
         <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3">
-          <button
-            onClick={onSend}
-            className="flex items-center justify-center gap-2 bg-brand px-4 py-3 font-semibold text-white transition-colors hover:bg-brand-deep sm:px-5"
-          >
-            <SendIcon size={18} /> Send
-          </button>
+          {!readOnly && (
+            <button
+              onClick={onSend}
+              className="flex items-center justify-center gap-2 bg-brand px-4 py-3 font-semibold text-white transition-colors hover:bg-brand-deep sm:px-5"
+            >
+              <SendIcon size={18} /> Send
+            </button>
+          )}
           <button
             onClick={() => setShowReceive(true)}
             className="border border-line px-4 py-3 font-semibold text-ink-soft transition-colors hover:bg-hover sm:px-5"
