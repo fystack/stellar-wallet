@@ -10,6 +10,8 @@ var (
 	ErrNotFound       = errors.New("repository: not found")
 	ErrConflict       = errors.New("repository: conflict")
 	ErrIdentityLinked = errors.New("repository: identity already linked")
+	ErrDuplicate      = errors.New("repository: duplicate")
+	ErrTooFewSenders  = errors.New("repository: approval policy needs more senders")
 )
 
 // Store is the persistence port consumed by the application layer.
@@ -26,7 +28,7 @@ type Store interface {
 	WorkspaceRole(workspaceID, userID string) (domain.WorkspaceRole, error)
 	WalletByID(walletID string) (domain.Wallet, bool)
 	WalletByAddress(address string) (domain.Wallet, bool)
-	ReadyWallets() ([]domain.Wallet, error)
+	ReadyWalletsForUsers(userIDs []string) ([]domain.Wallet, error)
 	GeneratingWallets() ([]domain.Wallet, error)
 	SetWalletStatus(walletID string, status domain.WalletStatus) error
 	CompleteWalletKeygen(walletID, address, publicKey string) error

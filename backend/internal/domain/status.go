@@ -27,3 +27,22 @@ const (
 
 // TrustlineMemo marks the outgoing transactions that add a trustline.
 const TrustlineMemo = "Add trustline"
+
+type PaymentRequestStatus string
+
+const (
+	PaymentRequestPending   PaymentRequestStatus = "pending"
+	PaymentRequestExecuting PaymentRequestStatus = "executing"
+	PaymentRequestExecuted  PaymentRequestStatus = "executed"
+	PaymentRequestFailed    PaymentRequestStatus = "failed"
+	PaymentRequestRejected  PaymentRequestStatus = "rejected"
+	PaymentRequestCancelled PaymentRequestStatus = "cancelled"
+	PaymentRequestExpired   PaymentRequestStatus = "expired"
+)
+
+type VoteDecision string
+
+const (
+	VoteApprove VoteDecision = "approve"
+	VoteReject  VoteDecision = "reject"
+)

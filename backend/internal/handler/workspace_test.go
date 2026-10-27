@@ -65,7 +65,7 @@ func TestWorkspaceInviteHTTPContract(t *testing.T) {
 	_, token, _ := strings.Cut(data(body)["link"].(string), "/#/invite/")
 
 	status, body = request("GET", "/invites/"+token, "", nil)
-	if status != http.StatusOK || data(body)["status"] != "pending" || data(body)["workspaceName"] != "Treasury" {
+	if status != http.StatusOK || data(body)["status"] != "pending" || data(body)["workspaceName"] != "Treasury" || data(body)["inviteId"] == "" {
 		t.Fatalf("public preview = %d %#v", status, body)
 	}
 	if status, body = request("POST", "/invites/"+token+"/accept", "", nil); status != http.StatusUnauthorized {
@@ -74,7 +74,7 @@ func TestWorkspaceInviteHTTPContract(t *testing.T) {
 	if status, body = request("POST", "/invites/"+token+"/accept", "", owner); status != http.StatusForbidden || errorCode(body) != "invite_email_mismatch" {
 		t.Fatalf("wrong account accept = %d %#v", status, body)
 	}
-	if status, body = request("POST", "/invites/"+token+"/accept", "", teammate); status != http.StatusOK || data(body)["wallet"] == nil {
+	if status, body = request("POST", "/invites/"+token+"/accept", "", teammate); status != http.StatusOK || data(body)["wallet"] != nil {
 		t.Fatalf("accept = %d %#v", status, body)
 	}
 
@@ -87,6 +87,49 @@ func TestWorkspaceInviteHTTPContract(t *testing.T) {
 	}
 	if status, body = request("POST", "/workspaces/"+workspaceID+"/invites", `{"email":"new@example.com"}`, teammate); status != http.StatusForbidden || errorCode(body) != "workspace_owner_required" {
 		t.Fatalf("member invite = %d %#v", status, body)
+	}
+
+	policyPath := "/workspaces/" + workspaceID + "/approval-policy"
+	status, body = request("GET", policyPath, "", teammate)
+	if status != http.StatusOK || data(body)["policy"] != nil || data(body)["maxApprovals"] != float64(0) {
+		t.Fatalf("empty policy = %d %#v", status, body)
+	}
+	policy := `{"thresholdXlm":"10","requiredApprovals":1,"belowThreshold":"send"}`
+	if status, body = request("PUT", policyPath, policy, owner); status != http.StatusBadRequest || errorCode(body) != "approval_policy_invalid" {
+		t.Fatalf("policy without approvers = %d %#v", status, body)
+	}
+	status, body = request("GET", "/workspaces/"+workspaceID+"/members", "", owner)
+	memberIDs := map[string]string{}
+	for _, member := range data(body)["members"].([]any) {
+		member := member.(map[string]any)
+		memberIDs[member["email"].(string)] = member["userId"].(string)
+	}
+	teammatePath := "/workspaces/" + workspaceID + "/members/" + memberIDs["teammate@example.com"]
+	if status, body = request("PATCH", teammatePath, `{"role":"operator"}`, teammate); status != http.StatusForbidden || errorCode(body) != "workspace_owner_required" {
+		t.Fatalf("member changes role = %d %#v", status, body)
+	}
+	if status, body = request("PATCH", teammatePath, `{"role":"admin"}`, owner); status != http.StatusBadRequest || errorCode(body) != "invalid_role" {
+		t.Fatalf("invalid role = %d %#v", status, body)
+	}
+	if status, body = request("PATCH", teammatePath, `{"role":"operator"}`, owner); status != http.StatusNoContent {
+		t.Fatalf("promote operator = %d %#v", status, body)
+	}
+	ownerPath := "/workspaces/" + workspaceID + "/members/" + memberIDs["owner@example.com"]
+	if status, body = request("PATCH", ownerPath, `{"role":"member"}`, owner); status != http.StatusConflict || errorCode(body) != "last_owner" {
+		t.Fatalf("demote last owner = %d %#v", status, body)
+	}
+	status, body = request("PUT", policyPath, policy, owner)
+	if status != http.StatusOK || data(body)["policy"].(map[string]any)["thresholdXlm"] != "10" || data(body)["maxApprovals"] != float64(1) {
+		t.Fatalf("set policy = %d %#v", status, body)
+	}
+	if status, body = request("PUT", policyPath, policy, teammate); status != http.StatusForbidden || errorCode(body) != "workspace_owner_required" {
+		t.Fatalf("operator sets policy = %d %#v", status, body)
+	}
+	if status, body = request("DELETE", policyPath, "", owner); status != http.StatusNoContent {
+		t.Fatalf("disable policy = %d %#v", status, body)
+	}
+	if status, body = request("GET", policyPath, "", owner); status != http.StatusOK || data(body)["policy"] != nil {
+		t.Fatalf("disabled policy = %d %#v", status, body)
 	}
 
 	request("POST", "/workspaces/"+workspaceID+"/invites", `{"email":"unverified@example.com"}`, owner)

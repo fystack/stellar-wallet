@@ -37,3 +37,20 @@ func TestHubPublishesOnlyToTheTargetUser(t *testing.T) {
 	default:
 	}
 }
+
+func TestHubListsConnectedUsers(t *testing.T) {
+	hub := NewHub()
+	if users := hub.ConnectedUserIDs(); len(users) != 0 {
+		t.Fatalf("connected = %v", users)
+	}
+	first := hub.Subscribe("alice")
+	second := hub.Subscribe("alice")
+	if users := hub.ConnectedUserIDs(); len(users) != 1 || users[0] != "alice" {
+		t.Fatalf("connected = %v", users)
+	}
+	hub.Unsubscribe("alice", first)
+	hub.Unsubscribe("alice", second)
+	if users := hub.ConnectedUserIDs(); len(users) != 0 {
+		t.Fatalf("connected after unsubscribe = %v", users)
+	}
+}

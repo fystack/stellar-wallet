@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"stellar-wallet-backend/internal/domain"
 	storecontract "stellar-wallet-backend/internal/repository"
@@ -133,8 +134,17 @@ func (s *Store) WalletByAddress(address string) (domain.Wallet, bool) {
 	return wallet, err == nil
 }
 
-func (s *Store) ReadyWallets() ([]domain.Wallet, error) {
-	return s.wallets(`SELECT `+walletColumns+` FROM wallets WHERE status = ?`, domain.WalletReady)
+// ReadyWalletsForUsers returns ready wallets in any workspace the given users belong to.
+func (s *Store) ReadyWalletsForUsers(userIDs []string) ([]domain.Wallet, error) {
+	if len(userIDs) == 0 {
+		return []domain.Wallet{}, nil
+	}
+	args := []any{domain.WalletReady}
+	for _, userID := range userIDs {
+		args = append(args, userID)
+	}
+	return s.wallets(`SELECT `+walletColumns+` FROM wallets WHERE status = ? AND workspace_id IN (
+		SELECT workspace_id FROM workspace_members WHERE user_id IN (`+strings.TrimSuffix(strings.Repeat("?,", len(userIDs)), ",")+`))`, args...)
 }
 
 func (s *Store) GeneratingWallets() ([]domain.Wallet, error) {
@@ -194,6 +204,19 @@ func (s *Store) DeleteWallet(walletID string) error {
 		return fmt.Errorf("delete wallet: %w", err)
 	}
 	return nil
+}
+
+// transition runs a conditional UPDATE and reports whether it changed a row.
+func transition(db *sql.DB, action, query string, args ...any) (bool, error) {
+	result, err := db.Exec(query, args...)
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", action, err)
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", action, err)
+	}
+	return changed == 1, nil
 }
 
 func exec(db *sql.DB, action, query string, args ...any) error {

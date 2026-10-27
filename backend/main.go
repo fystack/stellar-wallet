@@ -62,19 +62,20 @@ func main() {
 	}
 	clusterClient := cluster.NewClient(httpClient, cfg.ConsulAddr, cfg.HealthBasePort, cfg.NodeHealthURL, cfg.AssumePeersOnline)
 	server := app.NewServer(app.Dependencies{
-		FrontendURL:    cfg.FrontendURL,
-		PublicURL:      cfg.PublicURL,
-		AuthRateLimit:  cfg.AuthRateLimit,
-		Store:          sqlite.NewStore(db),
-		Transactions:   sqlite.NewTransactionRepository(db),
-		AuthRepository: authRepo,
-		Workspaces:     sqlite.NewWorkspaceRepository(db),
-		Mailer:         mailer,
-		OAuthProviders: auth.NewProviders(cfg.OAuth, cfg.PublicURL, httpClient),
-		Auth:           authManager,
-		Chain:          chainClient,
-		Cluster:        clusterClient,
-		Hub:            realtime.NewHub(),
+		FrontendURL:     cfg.FrontendURL,
+		PublicURL:       cfg.PublicURL,
+		AuthRateLimit:   cfg.AuthRateLimit,
+		Store:           sqlite.NewStore(db),
+		Transactions:    sqlite.NewTransactionRepository(db),
+		AuthRepository:  authRepo,
+		Workspaces:      sqlite.NewWorkspaceRepository(db),
+		PaymentRequests: sqlite.NewPaymentRequestRepository(db),
+		Mailer:          mailer,
+		OAuthProviders:  auth.NewProviders(cfg.OAuth, cfg.PublicURL, httpClient),
+		Auth:            authManager,
+		Chain:           chainClient,
+		Cluster:         clusterClient,
+		Hub:             realtime.NewHub(),
 	})
 
 	mpcClient, err := mpc.New(cfg.NATSURL, cfg.InitiatorKey, server.MPCCallbacks())

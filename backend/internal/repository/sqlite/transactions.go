@@ -122,7 +122,7 @@ func (s *TransactionRepository) transactions(query string, args ...any) ([]domai
 // ClaimSignature stores the signature and moves a signing transaction to broadcast.
 // It returns false when the transaction already left signing (timed out, failed or a duplicate result).
 func (s *TransactionRepository) ClaimSignature(transactionID, signature string) (bool, error) {
-	return s.transition("claim signature",
+	return transition(s.db, "claim signature",
 		`UPDATE transactions SET signature = ?, status = ? WHERE id = ? AND status = ?`,
 		signature, domain.TransactionBroadcast, transactionID, domain.TransactionSigning,
 	)
@@ -130,7 +130,7 @@ func (s *TransactionRepository) ClaimSignature(transactionID, signature string) 
 
 // FailSigning fails a transaction only if it is still waiting for its signature.
 func (s *TransactionRepository) FailSigning(transactionID, reason string) (bool, error) {
-	return s.transition("fail signing",
+	return transition(s.db, "fail signing",
 		`UPDATE transactions SET status = ?, error = ? WHERE id = ? AND status = ?`,
 		domain.TransactionFailed, reason, transactionID, domain.TransactionSigning,
 	)
@@ -146,16 +146,4 @@ func (s *TransactionRepository) FailTransaction(transactionID, reason string) er
 	return exec(s.db, "fail transaction",
 		`UPDATE transactions SET status = ?, error = ? WHERE id = ?`, domain.TransactionFailed, reason, transactionID,
 	)
-}
-
-func (s *TransactionRepository) transition(action, query string, args ...any) (bool, error) {
-	result, err := s.db.Exec(query, args...)
-	if err != nil {
-		return false, fmt.Errorf("%s: %w", action, err)
-	}
-	changed, err := result.RowsAffected()
-	if err != nil {
-		return false, fmt.Errorf("%s: %w", action, err)
-	}
-	return changed == 1, nil
 }

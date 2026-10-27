@@ -63,6 +63,19 @@ func TestAuthCookieContractLogoutAndDatabaseFailures(t *testing.T) {
 	if w := request("GET", "me", "", cookie); w.Code != 401 {
 		t.Fatal("revoked cookie still works")
 	}
+	first := request("POST", "login", credentials, nil).Result().Cookies()[0]
+	second := request("POST", "login", credentials, nil).Result().Cookies()[0]
+	if w := request("POST", "logout-all", "", first); w.Code != 204 || w.Body.Len() != 0 {
+		t.Fatalf("logout-all=%d %s", w.Code, w.Body)
+	}
+	for _, device := range []*http.Cookie{first, second} {
+		if w := request("GET", "me", "", device); w.Code != 401 {
+			t.Fatal("logout-all left a session active")
+		}
+	}
+	if w := request("POST", "logout-all", "", nil); w.Code != 401 {
+		t.Fatalf("anonymous logout-all=%d", w.Code)
+	}
 	for _, tt := range []struct {
 		path, body string
 		status     int

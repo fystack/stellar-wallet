@@ -98,6 +98,7 @@ func (s *AuthService) newSession(userID, oldToken string) (string, error) {
 	return token, nil
 }
 func (s *AuthService) Logout(token string) error                     { return s.repo.RevokeSession(auth.HashToken(token)) }
+func (s *AuthService) LogoutEverywhere(userID string) error          { return s.repo.RevokeUserSessions(userID) }
 func (s *AuthService) Account(userID string) (domain.Account, error) { return s.repo.Account(userID) }
 func (s *AuthService) Reauthenticate(userID, password, oldToken string) (string, error) {
 	session, err := s.repo.Session(auth.HashToken(oldToken))

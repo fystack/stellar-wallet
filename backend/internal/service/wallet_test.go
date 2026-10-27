@@ -27,8 +27,10 @@ func TestWalletAccessFollowsWorkspaceMembership(t *testing.T) {
 		{"member sees team wallet", func() error { _, err := wallets.Get("teammate", "team-wallet"); return err }, ""},
 		{"stranger cannot see team wallet", func() error { _, err := wallets.Get("stranger", "team-wallet"); return err }, "wallet_not_found"},
 		{"member cannot create wallets", func() error { _, err := wallets.Create("teammate", "", team.ID, "Extra", "stellar"); return err }, "workspace_owner_required"},
-		{"member cannot sign", func() error { _, err := signableWallet(store, "teammate", "team-wallet"); return err }, "workspace_owner_required"},
-		{"owner can sign", func() error { _, err := signableWallet(store, "owner", "team-wallet"); return err }, ""},
+		{"member cannot send", func() error { _, err := sendableWallet(store, "teammate", "team-wallet"); return err }, "send_role_required"},
+		{"member cannot swap", func() error { _, err := ownerWallet(store, "teammate", "team-wallet"); return err }, "workspace_owner_required"},
+		{"owner can send", func() error { _, err := sendableWallet(store, "owner", "team-wallet"); return err }, ""},
+		{"owner can swap", func() error { _, err := ownerWallet(store, "owner", "team-wallet"); return err }, ""},
 		{"stranger cannot list a requested workspace", func() error { _, err := wallets.List("stranger", "", team.ID); return err }, "workspace_not_found"},
 		{"member cannot delete wallets", func() error { return wallets.Delete("teammate", "team-wallet") }, "workspace_owner_required"},
 		{"removed member loses access", func() error {

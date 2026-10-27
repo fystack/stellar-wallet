@@ -56,10 +56,14 @@ func (h *TransactionHandler) create(c *gin.Context) {
 		httpapi.Error(c, apperror.InvalidRequest.New())
 		return
 	}
-	transaction, err := h.transactions.Create(c.GetString("userID"), body)
+	result, err := h.transactions.Create(c.GetString("userID"), body)
 	if err != nil {
 		httpapi.Error(c, err)
 		return
 	}
-	httpapi.Success(c, http.StatusCreated, transaction)
+	status := http.StatusCreated
+	if result.Request != nil {
+		status = http.StatusAccepted
+	}
+	httpapi.Success(c, status, result)
 }

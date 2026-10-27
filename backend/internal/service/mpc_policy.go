@@ -20,8 +20,9 @@ const (
 	SignQuorum   = 2 // nodes required to produce a signature (2-of-3)
 	KeygenQuorum = 3 // nodes required to generate a full key (all shares)
 
-	signTimeout   = 60 * time.Second
-	keygenTimeout = 90 * time.Second
+	signTimeout = 60 * time.Second
+	// mpcium queues keygens (about 10 s each, a few at a time), so a burst of new wallets waits in line.
+	keygenTimeout = 3 * time.Minute
 )
 
 // requireQuorum fails fast before creating a record that would otherwise get stuck.

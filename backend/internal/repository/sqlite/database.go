@@ -92,6 +92,42 @@ func Open(path string) (*sql.DB, error) {
 		revoked_at   TEXT NOT NULL DEFAULT ''
 	);
 	CREATE INDEX IF NOT EXISTS workspace_invites_workspace ON workspace_invites(workspace_id);
+	CREATE TABLE IF NOT EXISTS workspace_approval_policies (
+		workspace_id       TEXT PRIMARY KEY REFERENCES workspaces(id),
+		threshold_xlm      TEXT NOT NULL,
+		required_approvals INTEGER NOT NULL,
+		below_threshold    TEXT NOT NULL,
+		updated_by         TEXT NOT NULL,
+		updated_at         TEXT NOT NULL
+	);
+	CREATE TABLE IF NOT EXISTS payment_requests (
+		id                 TEXT PRIMARY KEY,
+		workspace_id       TEXT NOT NULL REFERENCES workspaces(id),
+		wallet_id          TEXT NOT NULL,
+		initiator_id       TEXT NOT NULL,
+		destination        TEXT NOT NULL,
+		amount             TEXT NOT NULL,
+		asset_code         TEXT NOT NULL DEFAULT '',
+		asset_issuer       TEXT NOT NULL DEFAULT '',
+		symbol             TEXT NOT NULL,
+		memo               TEXT NOT NULL DEFAULT '',
+		memo_type          TEXT NOT NULL DEFAULT '',
+		required_approvals INTEGER NOT NULL,
+		status             TEXT NOT NULL,
+		transaction_id     TEXT NOT NULL DEFAULT '',
+		reason             TEXT NOT NULL DEFAULT '',
+		created_at         TEXT NOT NULL,
+		expires_at         INTEGER NOT NULL,
+		decided_at         TEXT NOT NULL DEFAULT ''
+	);
+	CREATE INDEX IF NOT EXISTS payment_requests_workspace ON payment_requests(workspace_id, status);
+	CREATE TABLE IF NOT EXISTS payment_request_votes (
+		request_id TEXT NOT NULL REFERENCES payment_requests(id),
+		user_id    TEXT NOT NULL,
+		decision   TEXT NOT NULL,
+		created_at TEXT NOT NULL,
+		PRIMARY KEY (request_id, user_id)
+	);
 	CREATE TABLE IF NOT EXISTS settings (
 		key   TEXT PRIMARY KEY,
 		value TEXT NOT NULL
@@ -131,6 +167,7 @@ func Open(path string) (*sql.DB, error) {
 		`ALTER TABLE transactions ADD COLUMN recv_symbol TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE wallets ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE auth_sessions ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE workspace_invites ADD COLUMN role TEXT NOT NULL DEFAULT 'member'`,
 	} {
 		_, _ = db.Exec(migration)
 	}

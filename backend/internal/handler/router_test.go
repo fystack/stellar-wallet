@@ -19,6 +19,7 @@ func TestRouterPreservesPublicRouteContract(t *testing.T) {
 		"POST /api/v1/auth/logout":                        true,
 		"GET /api/v1/auth/me":                             true,
 		"POST /api/v1/auth/reauthenticate":                true,
+		"POST /api/v1/auth/logout-all":                    true,
 		"POST /api/v1/auth/:provider/link":                true,
 		"GET /health":                                     true,
 		"GET /api/v1/cluster":                             true,
@@ -49,12 +50,21 @@ func TestRouterPreservesPublicRouteContract(t *testing.T) {
 		"POST /api/v1/workspaces":                         true,
 		"POST /api/v1/workspaces/:id/switch":              true,
 		"GET /api/v1/workspaces/:id/members":              true,
+		"PATCH /api/v1/workspaces/:id/members/:userId":    true,
 		"DELETE /api/v1/workspaces/:id/members/:userId":   true,
+		"GET /api/v1/workspaces/:id/approval-policy":      true,
+		"PUT /api/v1/workspaces/:id/approval-policy":      true,
+		"DELETE /api/v1/workspaces/:id/approval-policy":   true,
 		"POST /api/v1/workspaces/:id/invites":             true,
 		"DELETE /api/v1/workspaces/:id/invites/:inviteId": true,
 		"GET /api/v1/invites/:token":                      true,
 		"POST /api/v1/invites/:token/accept":              true,
 		"GET /api/v1/invitations":                         true,
+		"GET /api/v1/workspaces/:id/payment-requests":     true,
+		"GET /api/v1/payment-requests/:id":                true,
+		"POST /api/v1/payment-requests/:id/approve":       true,
+		"POST /api/v1/payment-requests/:id/reject":        true,
+		"POST /api/v1/payment-requests/:id/cancel":        true,
 		"POST /api/v1/invitations/:id/accept":             true,
 		"POST /api/v1/invitations/:id/decline":            true,
 	}
@@ -91,6 +101,12 @@ func TestHealthAndCORSContract(t *testing.T) {
 	router.ServeHTTP(preflight, httptest.NewRequest(http.MethodOptions, "/api/v1/wallets", nil))
 	if preflight.Code != http.StatusNoContent || preflight.Body.Len() != 0 {
 		t.Fatalf("preflight = %d %s", preflight.Code, preflight.Body)
+	}
+	methods := preflight.Header().Get("Access-Control-Allow-Methods")
+	for _, method := range []string{"GET", "POST", "PUT", "PATCH", "DELETE"} {
+		if !strings.Contains(methods, method) {
+			t.Fatalf("preflight allows %q, missing %s", methods, method)
+		}
 	}
 }
 

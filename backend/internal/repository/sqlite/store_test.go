@@ -3,6 +3,8 @@ package sqlite
 import (
 	"errors"
 	modernsqlite "modernc.org/sqlite"
+	"slices"
+	"strings"
 	"testing"
 
 	"stellar-wallet-backend/internal/domain"
@@ -88,5 +90,53 @@ func TestCreateUserDistinguishesConflictFromDatabaseFailure(t *testing.T) {
 	err = repo.CreateUser(user)
 	if err == nil || errors.Is(err, storecontract.ErrConflict) {
 		t.Fatalf("database failure = %v", err)
+	}
+}
+
+func TestReadyWalletsForUsersFollowsWorkspaceMembership(t *testing.T) {
+	db, err := Open(t.TempDir() + "/wallet.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	store, workspaces := NewStore(db), NewWorkspaceRepository(db)
+	for _, userID := range []string{"watcher", "idle"} {
+		if err := workspaces.EnsurePersonalWorkspace(userID, "2026-10-01T00:00:00Z"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, wallet := range []domain.Wallet{
+		{ID: "watched", UserID: "watcher", WorkspaceID: domain.PersonalWorkspaceID("watcher"), Status: domain.WalletReady},
+		{ID: "generating", UserID: "watcher", WorkspaceID: domain.PersonalWorkspaceID("watcher"), Status: domain.WalletGenerating},
+		{ID: "unwatched", UserID: "idle", WorkspaceID: domain.PersonalWorkspaceID("idle"), Status: domain.WalletReady},
+	} {
+		if err := store.CreateWallet(wallet); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cases := []struct {
+		name    string
+		userIDs []string
+		want    []string
+	}{
+		{"nobody connected", nil, nil},
+		{"connected user sees their ready wallets", []string{"watcher"}, []string{"watched"}},
+		{"several users", []string{"watcher", "idle"}, []string{"unwatched", "watched"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			wallets, err := store.ReadyWalletsForUsers(tc.userIDs)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := []string{}
+			for _, wallet := range wallets {
+				got = append(got, wallet.ID)
+			}
+			slices.Sort(got)
+			if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+				t.Fatalf("wallets = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

@@ -114,7 +114,7 @@ func (s *WalletService) Delete(userID, walletID string) error {
 	if err != nil {
 		return err
 	}
-	if err := requireOwner(s.workspaces, wallet.WorkspaceID, userID); err != nil {
+	if _, err := requireOwner(s.workspaces, wallet.WorkspaceID, userID); err != nil {
 		return err
 	}
 	return s.store.DeleteWallet(walletID)

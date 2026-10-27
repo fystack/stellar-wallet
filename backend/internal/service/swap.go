@@ -63,7 +63,7 @@ func (s *SwapService) Quote(userID, walletID string, input SwapInput) (chain.Swa
 
 // Create builds a slippage-protected PathPaymentStrictSend and dispatches it for signing.
 func (s *SwapService) Create(userID, walletID string, input SwapInput) (SwapResult, error) {
-	wallet, err := signableWallet(s.wallets, userID, walletID)
+	wallet, err := ownerWallet(s.wallets, userID, walletID)
 	if err != nil {
 		return SwapResult{}, err
 	}

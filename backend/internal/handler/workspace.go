@@ -5,6 +5,7 @@ import (
 
 	"stellar-wallet-backend/internal/apperror"
 	"stellar-wallet-backend/internal/auth"
+	"stellar-wallet-backend/internal/domain"
 	"stellar-wallet-backend/internal/httpapi"
 	"stellar-wallet-backend/internal/service"
 
@@ -68,8 +69,57 @@ func (h *WorkspaceHandler) removeMember(c *gin.Context) {
 	httpapi.Success(c, http.StatusNoContent, nil)
 }
 
+type changeRoleBody struct {
+	Role domain.WorkspaceRole `json:"role"`
+}
+
+func (h *WorkspaceHandler) changeRole(c *gin.Context) {
+	var body changeRoleBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		httpapi.Error(c, apperror.InvalidRequest.New())
+		return
+	}
+	if err := h.workspaces.ChangeRole(c.GetString("userID"), c.Param("id"), c.Param("userId"), body.Role); err != nil {
+		httpapi.Error(c, err)
+		return
+	}
+	httpapi.Success(c, http.StatusNoContent, nil)
+}
+
+func (h *WorkspaceHandler) approvalPolicy(c *gin.Context) {
+	settings, err := h.workspaces.ApprovalPolicy(c.GetString("userID"), c.Param("id"))
+	if err != nil {
+		httpapi.Error(c, err)
+		return
+	}
+	httpapi.Success(c, http.StatusOK, settings)
+}
+
+func (h *WorkspaceHandler) setApprovalPolicy(c *gin.Context) {
+	var body service.ApprovalPolicyInput
+	if err := c.ShouldBindJSON(&body); err != nil {
+		httpapi.Error(c, apperror.InvalidRequest.New())
+		return
+	}
+	settings, err := h.workspaces.SetApprovalPolicy(c.GetString("userID"), c.Param("id"), body)
+	if err != nil {
+		httpapi.Error(c, err)
+		return
+	}
+	httpapi.Success(c, http.StatusOK, settings)
+}
+
+func (h *WorkspaceHandler) disableApprovalPolicy(c *gin.Context) {
+	if err := h.workspaces.DisableApprovalPolicy(c.GetString("userID"), c.Param("id")); err != nil {
+		httpapi.Error(c, err)
+		return
+	}
+	httpapi.Success(c, http.StatusNoContent, nil)
+}
+
 type inviteBody struct {
-	Email string `json:"email"`
+	Email string               `json:"email"`
+	Role  domain.WorkspaceRole `json:"role"`
 }
 
 func (h *WorkspaceHandler) invite(c *gin.Context) {
@@ -78,7 +128,7 @@ func (h *WorkspaceHandler) invite(c *gin.Context) {
 		httpapi.Error(c, apperror.InvalidRequest.New())
 		return
 	}
-	result, err := h.workspaces.Invite(c.GetString("userID"), c.Param("id"), body.Email)
+	result, err := h.workspaces.Invite(c.GetString("userID"), c.Param("id"), body.Email, body.Role)
 	if err != nil {
 		httpapi.Error(c, err)
 		return

@@ -129,3 +129,36 @@ func TestRegisterRejectsPasswordOverBcryptByteLimit(t *testing.T) {
 		t.Fatalf("expected validation error, got %v", err)
 	}
 }
+
+func TestLogoutEverywhereEndsOnlyThatUsersSessions(t *testing.T) {
+	db, err := sqlite.Open(t.TempDir() + "/auth.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	repo := sqlite.NewAuthRepository(db)
+	s := NewAuthService(repo, nil)
+	owner, firstToken, err := s.Register("owner@example.com", "password123", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, secondToken, err := s.Login("owner@example.com", "password123", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, otherToken, err := s.Register("other@example.com", "password123", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LogoutEverywhere(owner.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, token := range []string{firstToken, secondToken} {
+		if _, err := repo.Session(auth.HashToken(token)); !errors.Is(err, repository.ErrNotFound) {
+			t.Fatalf("owner session still active: %v", err)
+		}
+	}
+	if _, err := repo.Session(auth.HashToken(otherToken)); err != nil {
+		t.Fatalf("another user's session was ended: %v", err)
+	}
+}

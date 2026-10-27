@@ -40,6 +40,8 @@ internal/
     wallet.go                # WalletHandler (incl. trustlines)
     transaction.go           # TransactionHandler
     swap.go                  # SwapHandler
+    workspace.go             # WorkspaceHandler (members, roles, invites, approval policy)
+    payment_request.go       # PaymentRequestHandler (list, approve, reject, cancel)
     settings.go              # SettingsHandler (config, assets, chains, prices, cluster)
     events.go                # EventsHandler (SSE)
   service/                   # Business logic and background work; no Gin/HTTP
@@ -48,6 +50,10 @@ internal/
     transaction.go           # Payments, transaction reads and the shared sign/broadcast lifecycle
     swap.go                  # DEX quotes and path-payment swaps
     trustline.go             # Trustline transactions
+    workspace.go             # Workspaces, members and roles
+    workspace_invite.go      # Invite links, in-app invitations and joining
+    approval_policy.go       # Per-workspace payment approval policy
+    payment_request.go       # Held payments, votes and execution after approval
     settings.go              # Custom assets, chain status (Horizon URL from config) and prices
     balances.go              # Balance refresh jobs
     mpc_policy.go            # Node quorum and keygen/sign timeout recovery
@@ -58,7 +64,10 @@ internal/
       auth.go                # Accounts, identities, sessions and OAuth state
       transactions.go        # Concrete transaction repository
       store.go               # Existing user/wallet/settings SQL
-      workspaces.go          # Workspace, membership and invite SQL
+      workspaces.go          # Workspace and membership SQL
+      workspace_invites.go   # Invite SQL
+      approval_policies.go   # Approval policy SQL and the approver check run inside member changes
+      payment_requests.go    # Payment request and vote SQL with conditional transitions
       database.go            # Schema and database setup
   apperror/                  # Business errors and wrapped causes
   httpapi/                   # JSON envelopes and HTTP error mapping
@@ -71,7 +80,7 @@ internal/
   mail/                      # SMTP mailer for invite emails
 ```
 
-Payment requests follow `handler/transaction.go → service/transaction.go →
+Payments follow `handler/transaction.go → service/transaction.go →
 repository/sqlite/transactions.go`. The handler binds JSON and maps service
 errors to HTTP responses. `TransactionService` checks wallet ownership and
 signing quorum, resolves the recipient, builds and persists the payment, and
@@ -90,10 +99,36 @@ with the account, and backfilled at startup for older databases) and can join
 team workspaces by invite. `WorkspaceService` owns workspaces, members and
 invites: invite links are single-use, expire after seven days and are emailed
 when `smtp` is configured; the link is always returned so owners can share it.
-Accepting an invite switches the session's active workspace and provisions a
-wallet for the new member. Wallet access is checked by workspace membership,
+Accepting an invite switches the session's active workspace; it does not
+create a wallet. Creating a team workspace provisions its first wallet for the
+owner. Wallet access is checked by workspace membership,
 owners alone create and delete wallets or manage members, and realtime events
 go to every member of the wallet's workspace.
+
+Roles are `owner`, `operator` and `member`. Owners and operators send payments
+and approve other people's payments; members are read-only. Swaps and
+trustlines stay owner-only. An owner can set one approval policy per team
+workspace: a threshold in XLM, how many approvals a payment needs, and whether
+payments at or below the threshold send immediately or also need approval.
+Non-XLM payments always need approval under a policy. Demoting or removing an
+owner or operator is refused while the policy would then need more approvers
+than remain.
+
+`TransactionService.Create` asks `PaymentRequestService` whether to hold a
+payment. A held payment is stored as a payment request with its inputs only,
+because Stellar envelopes expire 300 seconds after they are built. Approvers
+are emailed and every workspace member gets a `payment_request` event. Each
+approval is recorded with the last one claiming the request
+(`pending → executing`) in the same SQL transaction, so concurrent approvals
+send at most once; the claimer builds the envelope and dispatches it through
+the normal signing lifecycle. `POST /transactions` returns `201` with
+`{transaction}` when sent and `202` with `{request}` when held. Requests expire
+after seven days.
+
+The balance refresher polls Horizon every 30 seconds, but only for wallets in
+workspaces whose members have the app open (an SSE stream on the realtime hub).
+Public testnet Horizon allows 2,000 requests per 5 minutes per IP, so polling
+every wallet would exhaust it as wallets accumulate.
 
 Wallet and transaction statuses and transaction types are typed constants in
 `domain/status.go`. Repository writes return errors: request paths return them

@@ -41,6 +41,7 @@ type TransactionService struct {
 	cluster      SigningCluster
 	mpc          PaymentSigner
 	hub          *realtime.Hub
+	approvals    *PaymentRequestService
 }
 
 func NewTransactionService(wallets repository.Store, transactions *sqlite.TransactionRepository, chain PaymentChain, cluster SigningCluster, hub *realtime.Hub) *TransactionService {
@@ -48,6 +49,9 @@ func NewTransactionService(wallets repository.Store, transactions *sqlite.Transa
 }
 
 func (s *TransactionService) SetMPC(client PaymentSigner) { s.mpc = client }
+
+// SetApprovals routes payments through the workspace approval policy.
+func (s *TransactionService) SetApprovals(approvals *PaymentRequestService) { s.approvals = approvals }
 
 type PaymentInput struct {
 	WalletID    string `json:"wallet_id"`
@@ -59,20 +63,59 @@ type PaymentInput struct {
 	AssetIssuer string `json:"asset_issuer"`
 }
 
-func (s *TransactionService) Create(userID string, body PaymentInput) (domain.Transaction, error) {
-	wallet, err := signableWallet(s.wallets, userID, body.WalletID)
+// PaymentResult carries the transaction when the payment was sent, or the request when it awaits approval.
+type PaymentResult struct {
+	Transaction *domain.Transaction    `json:"transaction,omitempty"`
+	Request     *domain.PaymentRequest `json:"request,omitempty"`
+}
+
+// preparedPayment is a validated payment with its recipient resolved, ready to build now or after approval.
+type preparedPayment struct {
+	Destination string
+	Amount      string
+	AssetCode   string
+	AssetIssuer string
+	Symbol      string
+	Memo        string
+	MemoType    string
+}
+
+func (p preparedPayment) native() bool {
+	return p.AssetCode == "" || (p.AssetCode == "XLM" && p.AssetIssuer == "")
+}
+
+func (s *TransactionService) Create(userID string, body PaymentInput) (PaymentResult, error) {
+	wallet, err := sendableWallet(s.wallets, userID, body.WalletID)
 	if err != nil {
-		return domain.Transaction{}, err
+		return PaymentResult{}, err
 	}
-	amount, err := parseAmount(body.Amount)
+	payment, err := s.preparePayment(wallet, body)
 	if err != nil {
-		return domain.Transaction{}, err
+		return PaymentResult{}, err
 	}
-	if strings.TrimSpace(body.To) == "" {
-		return domain.Transaction{}, apperror.RecipientRequired.New()
+	if s.approvals != nil {
+		request, err := s.approvals.hold(wallet, userID, payment)
+		if err != nil || request != nil {
+			return PaymentResult{Request: request}, err
+		}
 	}
 	if err := s.requireSigning(); err != nil {
-		return domain.Transaction{}, err
+		return PaymentResult{}, err
+	}
+	transaction, err := s.sendPayment(wallet, userID, payment, uuid.NewString())
+	if err != nil {
+		return PaymentResult{}, err
+	}
+	return PaymentResult{Transaction: &transaction}, nil
+}
+
+func (s *TransactionService) preparePayment(wallet domain.Wallet, body PaymentInput) (preparedPayment, error) {
+	amount, err := parseAmount(body.Amount)
+	if err != nil {
+		return preparedPayment{}, err
+	}
+	if strings.TrimSpace(body.To) == "" {
+		return preparedPayment{}, apperror.RecipientRequired.New()
 	}
 
 	// Resolve federation / muxed recipients to a concrete address. If the
@@ -82,7 +125,7 @@ func (s *TransactionService) Create(userID string, body PaymentInput) (domain.Tr
 	if wallet.Chain == "stellar" {
 		resolved, resolveErr := s.chain.ResolveRecipient(destination)
 		if resolveErr != nil {
-			return domain.Transaction{}, apperror.RecipientResolutionFailed.Wrap(fmt.Errorf("resolve payment recipient: %w", resolveErr))
+			return preparedPayment{}, apperror.RecipientResolutionFailed.Wrap(fmt.Errorf("resolve payment recipient: %w", resolveErr))
 		}
 		destination = resolved.Address
 		if resolved.MemoType != "" {
@@ -97,22 +140,35 @@ func (s *TransactionService) Create(userID string, body PaymentInput) (domain.Tr
 	if symbol == "" {
 		symbol = wallet.Symbol
 	}
+	return preparedPayment{
+		Destination: destination,
+		Amount:      amount,
+		AssetCode:   body.AssetCode,
+		AssetIssuer: body.AssetIssuer,
+		Symbol:      symbol,
+		Memo:        memo,
+		MemoType:    memoType,
+	}, nil
+}
+
+// sendPayment builds the envelope now, so it must run right before signing: envelopes expire after 300 seconds.
+func (s *TransactionService) sendPayment(wallet domain.Wallet, initiatorID string, payment preparedPayment, transactionID string) (domain.Transaction, error) {
 	transaction := domain.Transaction{
-		ID:           uuid.NewString(),
+		ID:           transactionID,
 		WalletID:     wallet.ID,
-		UserID:       userID,
+		UserID:       initiatorID,
 		Type:         domain.TransactionOut,
-		Counterparty: destination,
-		Amount:       amount,
-		Symbol:       symbol,
-		Memo:         memo,
+		Counterparty: payment.Destination,
+		Amount:       payment.Amount,
+		Symbol:       payment.Symbol,
+		Memo:         payment.Memo,
 		Status:       domain.TransactionSigning,
 		CreatedAt:    time.Now().UTC().Format(time.RFC3339),
 	}
 
 	envelope, hash, buildErr := s.chain.BuildPayment(
 		wallet, transaction.Counterparty, transaction.Amount,
-		body.AssetCode, body.AssetIssuer, transaction.Memo, memoType,
+		payment.AssetCode, payment.AssetIssuer, transaction.Memo, payment.MemoType,
 	)
 	if buildErr != nil {
 		return domain.Transaction{}, apperror.PaymentBuildFailed.Wrap(fmt.Errorf("build payment: %w", buildErr))

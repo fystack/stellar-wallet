@@ -21,8 +21,9 @@ func (s *WalletService) StartBalanceRefresher() {
 	}()
 }
 
+// refreshAllBalances only polls wallets someone is watching: Horizon allows 2,000 requests per 5 minutes per IP.
 func (s *WalletService) refreshAllBalances() {
-	wallets, err := s.store.ReadyWallets()
+	wallets, err := s.store.ReadyWalletsForUsers(s.hub.ConnectedUserIDs())
 	if err != nil {
 		logError("refresh balances", err)
 		return

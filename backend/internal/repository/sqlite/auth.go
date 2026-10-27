@@ -182,6 +182,12 @@ func (s *AuthRepository) RevokeSession(hash string) error {
 	}
 	return nil
 }
+func (s *AuthRepository) RevokeUserSessions(userID string) error {
+	if _, err := s.db.Exec(`DELETE FROM auth_sessions WHERE user_id=?`, userID); err != nil {
+		return fmt.Errorf("revoke user sessions: %w", err)
+	}
+	return nil
+}
 func (s *AuthRepository) CreateFlow(flow domain.OAuthFlow) error {
 	if _, err := s.db.Exec(`DELETE FROM oauth_flows WHERE expires_at<=?`, time.Now().Unix()); err != nil {
 		return fmt.Errorf("clean expired OAuth states: %w", err)

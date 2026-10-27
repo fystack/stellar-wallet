@@ -78,6 +78,14 @@ func (h *AuthHandler) logout(c *gin.Context) {
 	h.sessions.ClearSession(c)
 	httpapi.Success(c, http.StatusNoContent, nil)
 }
+func (h *AuthHandler) logoutEverywhere(c *gin.Context) {
+	if err := h.accounts.LogoutEverywhere(c.GetString("userID")); err != nil {
+		httpapi.Error(c, err)
+		return
+	}
+	h.sessions.ClearSession(c)
+	httpapi.Success(c, http.StatusNoContent, nil)
+}
 func (h *AuthHandler) reauthenticate(c *gin.Context) {
 	var body credentials
 	if err := c.ShouldBindJSON(&body); err != nil {

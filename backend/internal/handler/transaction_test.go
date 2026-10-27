@@ -85,9 +85,13 @@ func TestCreatePaymentHTTPContract(t *testing.T) {
 				}
 				return
 			}
-			data, ok := body["data"].(map[string]any)
+			result, ok := body["data"].(map[string]any)
 			if !ok {
 				t.Fatalf("missing data envelope: %s", response.Body)
+			}
+			data, ok := result["transaction"].(map[string]any)
+			if !ok || result["request"] != nil {
+				t.Fatalf("missing transaction: %s", response.Body)
 			}
 			if data["status"] != "signing" || data["walletId"] != "wallet-1" || data["amount"] != "1" || data["id"] == "" || data["createdAt"] == "" {
 				t.Fatalf("response = %s", response.Body)

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"database/sql"
 	"errors"
 	"strings"
 	"testing"
@@ -33,6 +34,7 @@ func (m *mailerStub) Send(to, _, body string) error {
 }
 
 type workspaceFixture struct {
+	db          *sql.DB
 	service     *WorkspaceService
 	workspaces  *sqlite.WorkspaceRepository
 	accounts    *sqlite.AuthRepository
@@ -50,6 +52,7 @@ func newWorkspaceFixture(t *testing.T) *workspaceFixture {
 	}
 	t.Cleanup(func() { db.Close() })
 	fixture := &workspaceFixture{
+		db:          db,
 		workspaces:  sqlite.NewWorkspaceRepository(db),
 		accounts:    sqlite.NewAuthRepository(db),
 		store:       sqlite.NewStore(db),
@@ -83,7 +86,7 @@ func (f *workspaceFixture) teamWorkspace(t *testing.T) domain.Workspace {
 
 func (f *workspaceFixture) invite(t *testing.T, workspaceID, email string) string {
 	t.Helper()
-	result, err := f.service.Invite("owner", workspaceID, email)
+	result, err := f.service.Invite("owner", workspaceID, email, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,14 +114,14 @@ func assertCode(t *testing.T, err error, code string) {
 	}
 }
 
-func TestWorkspaceInviteAndAcceptProvisionsMemberWallet(t *testing.T) {
+func TestWorkspaceInviteAndAccept(t *testing.T) {
 	f := newWorkspaceFixture(t)
 	workspace := f.teamWorkspace(t)
 	if workspace.Role != domain.RoleOwner || f.sessionWorkspace(t, "owner") != workspace.ID {
 		t.Fatalf("created workspace = %#v, session workspace = %q", workspace, f.sessionWorkspace(t, "owner"))
 	}
 
-	result, err := f.service.Invite("owner", workspace.ID, " Teammate@Example.com ")
+	result, err := f.service.Invite("owner", workspace.ID, " Teammate@Example.com ", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,13 +154,13 @@ func TestWorkspaceInviteAndAcceptProvisionsMemberWallet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if joined.Workspace.ID != workspace.ID || joined.Workspace.Role != domain.RoleMember || joined.Wallet == nil || joined.Wallet.Name != "teammate's wallet" {
+	if joined.Workspace.ID != workspace.ID || joined.Workspace.Role != domain.RoleMember || joined.Wallet != nil {
 		t.Fatalf("join result = %#v", joined)
 	}
 	if f.sessionWorkspace(t, "teammate") != workspace.ID {
 		t.Fatal("session was not switched to the joined workspace")
 	}
-	wantCalls := []string{"owner@" + workspace.ID, "teammate@" + workspace.ID}
+	wantCalls := []string{"owner@" + workspace.ID}
 	if strings.Join(f.provisioner.calls, ",") != strings.Join(wantCalls, ",") {
 		t.Fatalf("provisioned = %v, want %v", f.provisioner.calls, wantCalls)
 	}
@@ -198,7 +201,7 @@ func TestWorkspaceInviteRejections(t *testing.T) {
 				t.Fatal(err)
 			}
 			sentBefore := len(f.mailer.sent)
-			_, err := f.service.Invite(tc.userID, tc.target(f, team), tc.email)
+			_, err := f.service.Invite(tc.userID, tc.target(f, team), tc.email, "")
 			assertCode(t, err, tc.code)
 			if len(f.mailer.sent) != sentBefore {
 				t.Fatal("rejected invite sent an email")
@@ -256,19 +259,18 @@ func TestWorkspaceAcceptRejections(t *testing.T) {
 	}
 }
 
-func TestWorkspaceJoinSucceedsWhenWalletProvisioningFails(t *testing.T) {
+func TestWorkspaceCreateSucceedsWhenWalletProvisioningFails(t *testing.T) {
 	f := newWorkspaceFixture(t)
-	team := f.teamWorkspace(t)
 	f.provisioner.err = apperror.MPCUnavailable.New()
-	joined, err := f.service.Accept("teammate", f.sessions["teammate"], f.invite(t, team.ID, "teammate@example.com"))
+	created, err := f.service.Create("owner", f.sessions["owner"], "Treasury")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if joined.Wallet != nil || joined.WalletError != apperror.MPCUnavailable.New().Message {
-		t.Fatalf("join result = %#v", joined)
+	if created.Wallet != nil || created.WalletError != apperror.MPCUnavailable.New().Message {
+		t.Fatalf("create result = %#v", created)
 	}
-	if _, err := f.service.Members("teammate", team.ID); err != nil {
-		t.Fatalf("member was not added: %v", err)
+	if _, err := f.service.Members("owner", created.Workspace.ID); err != nil {
+		t.Fatalf("workspace was not created: %v", err)
 	}
 }
 
@@ -276,7 +278,7 @@ func TestWorkspaceInviteWithoutMailerReturnsLink(t *testing.T) {
 	f := newWorkspaceFixture(t)
 	f.service.mailer = nil
 	team := f.teamWorkspace(t)
-	result, err := f.service.Invite("owner", team.ID, "teammate@example.com")
+	result, err := f.service.Invite("owner", team.ID, "teammate@example.com", "")
 	if err != nil || result.EmailSent || result.Link == "" {
 		t.Fatalf("result = %#v, %v", result, err)
 	}
@@ -373,7 +375,7 @@ func TestInvitationsAreListedForVerifiedEmailsOnly(t *testing.T) {
 	}
 
 	joined, err := f.service.AcceptInvitation("teammate", f.sessions["teammate"], invite.ID)
-	if err != nil || joined.Workspace.ID != team.ID || joined.Wallet == nil {
+	if err != nil || joined.Workspace.ID != team.ID || joined.Wallet != nil {
 		t.Fatalf("accept = %#v, %v", joined, err)
 	}
 	if f.sessionWorkspace(t, "teammate") != team.ID {
@@ -467,3 +469,125 @@ func (f *workspaceFixture) mustTeam(t *testing.T) string {
 	t.Fatal("owner has no team workspace")
 	return ""
 }
+
+func TestInviteRoleIsGrantedOnAccept(t *testing.T) {
+	f := newWorkspaceFixture(t)
+	team := f.teamWorkspace(t)
+	if _, err := f.service.Invite("owner", team.ID, "stranger@example.com", "admin"); err == nil {
+		t.Fatal("invalid invite role accepted")
+	} else {
+		assertCode(t, err, "invalid_role")
+	}
+	result, err := f.service.Invite("owner", team.ID, "teammate@example.com", domain.RoleOperator)
+	if err != nil || result.Invite.Role != domain.RoleOperator {
+		t.Fatalf("invite = %#v, %v", result.Invite, err)
+	}
+	_, token, _ := strings.Cut(result.Link, "/#/invite/")
+	joined, err := f.service.Accept("teammate", f.sessions["teammate"], token)
+	if err != nil || joined.Workspace.Role != domain.RoleOperator {
+		t.Fatalf("joined = %#v, %v", joined.Workspace, err)
+	}
+}
+
+func TestChangeMemberRole(t *testing.T) {
+	cases := []struct {
+		name     string
+		userID   string
+		memberID string
+		role     domain.WorkspaceRole
+		code     string
+	}{
+		{"owner promotes member to operator", "owner", "teammate", domain.RoleOperator, ""},
+		{"owner promotes member to owner", "owner", "teammate", domain.RoleOwner, ""},
+		{"invalid role", "owner", "teammate", "admin", "invalid_role"},
+		{"last owner cannot be demoted", "owner", "owner", domain.RoleMember, "last_owner"},
+		{"member cannot change roles", "teammate", "teammate", domain.RoleOwner, "workspace_owner_required"},
+		{"unknown member", "owner", "stranger", domain.RoleOperator, "member_not_found"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newWorkspaceFixture(t)
+			team := f.teamWorkspace(t)
+			if _, err := f.service.Accept("teammate", f.sessions["teammate"], f.invite(t, team.ID, "teammate@example.com")); err != nil {
+				t.Fatal(err)
+			}
+			err := f.service.ChangeRole(tc.userID, team.ID, tc.memberID, tc.role)
+			if tc.code != "" {
+				assertCode(t, err, tc.code)
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			workspace, err := f.workspaces.MemberWorkspace(team.ID, tc.memberID)
+			if err != nil || workspace.Role != tc.role {
+				t.Fatalf("role = %q, %v", workspace.Role, err)
+			}
+		})
+	}
+}
+
+func TestApprovalPolicy(t *testing.T) {
+	valid := ApprovalPolicyInput{ThresholdXLM: "100.50", RequiredApprovals: 1, BelowThreshold: domain.BelowThresholdSend}
+	cases := []struct {
+		name      string
+		userID    string
+		operator  bool
+		workspace func(team domain.Workspace) string
+		input     ApprovalPolicyInput
+		code      string
+	}{
+		{"owner sets policy", "owner", true, teamID, valid, ""},
+		{"below threshold needs approval", "owner", true, teamID, ApprovalPolicyInput{ThresholdXLM: "1", RequiredApprovals: 1, BelowThreshold: domain.BelowThresholdApprove}, ""},
+		{"no other sender to approve", "owner", false, teamID, valid, "approval_policy_invalid"},
+		{"too many approvals", "owner", true, teamID, ApprovalPolicyInput{ThresholdXLM: "1", RequiredApprovals: 2, BelowThreshold: domain.BelowThresholdSend}, "approval_policy_invalid"},
+		{"zero approvals", "owner", true, teamID, ApprovalPolicyInput{ThresholdXLM: "1", RequiredApprovals: 0, BelowThreshold: domain.BelowThresholdSend}, "approval_policy_invalid"},
+		{"zero threshold", "owner", true, teamID, ApprovalPolicyInput{ThresholdXLM: "0", RequiredApprovals: 1, BelowThreshold: domain.BelowThresholdSend}, "approval_policy_invalid"},
+		{"eight decimals", "owner", true, teamID, ApprovalPolicyInput{ThresholdXLM: "1.12345678", RequiredApprovals: 1, BelowThreshold: domain.BelowThresholdSend}, "approval_policy_invalid"},
+		{"unknown below threshold mode", "owner", true, teamID, ApprovalPolicyInput{ThresholdXLM: "1", RequiredApprovals: 1, BelowThreshold: "maybe"}, "approval_policy_invalid"},
+		{"operator cannot set policy", "teammate", true, teamID, valid, "workspace_owner_required"},
+		{"stranger cannot set policy", "stranger", true, teamID, valid, "workspace_not_found"},
+		{"personal workspace", "owner", true, func(domain.Workspace) string { return domain.PersonalWorkspaceID("owner") }, valid, "personal_workspace"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newWorkspaceFixture(t)
+			team := f.teamWorkspace(t)
+			if _, err := f.service.Accept("teammate", f.sessions["teammate"], f.invite(t, team.ID, "teammate@example.com")); err != nil {
+				t.Fatal(err)
+			}
+			if tc.operator {
+				if err := f.service.ChangeRole("owner", team.ID, "teammate", domain.RoleOperator); err != nil {
+					t.Fatal(err)
+				}
+			}
+			workspaceID := tc.workspace(team)
+			settings, err := f.service.SetApprovalPolicy(tc.userID, workspaceID, tc.input)
+			if tc.code != "" {
+				assertCode(t, err, tc.code)
+				if stored, err := f.service.ApprovalPolicy("owner", workspaceID); err != nil || stored.Policy != nil {
+					t.Fatalf("rejected policy stored: %#v, %v", stored.Policy, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			stored, err := f.service.ApprovalPolicy("teammate", workspaceID)
+			if err != nil || stored.Policy == nil || *stored.Policy != *settings.Policy || stored.MaxApprovals != 1 {
+				t.Fatalf("stored = %#v, %v", stored, err)
+			}
+			if stored.Policy.ThresholdXLM != strings.TrimSuffix(strings.TrimRight(tc.input.ThresholdXLM, "0"), ".") {
+				t.Fatalf("threshold = %q", stored.Policy.ThresholdXLM)
+			}
+			if err := f.service.DisableApprovalPolicy("owner", workspaceID); err != nil {
+				t.Fatal(err)
+			}
+			if stored, err := f.service.ApprovalPolicy("owner", workspaceID); err != nil || stored.Policy != nil {
+				t.Fatalf("disabled policy = %#v, %v", stored.Policy, err)
+			}
+		})
+	}
+}
+
+func teamID(team domain.Workspace) string { return team.ID }
