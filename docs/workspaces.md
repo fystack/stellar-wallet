@@ -2,8 +2,9 @@
 
 Wallets belong to workspaces. Every account has a **Personal** workspace; teams
 create a separate workspace and invite members by email. Key shares stay on the
-3 MPC nodes (2-of-3); each member signs in with their own login, and every
-member gets their own MPC wallet in the workspace when they join.
+3 MPC nodes (2-of-3); each member signs in with their own login. Joining a
+workspace never creates a wallet: owners create the wallets the team shares, and
+each user keeps their own wallets in their Personal workspace.
 
 ## Roles
 
@@ -74,8 +75,8 @@ Any SMTP provider works in production (Resend, SES, Postmark, Gmail); set
    from Mailpit).
 4. In a private window, open the link. The login page shows who invited you.
    Register or sign in with Google/GitHub as `teammate@example.com`, then accept.
-5. The teammate lands in Treasury, sees the owner's wallet and their own new
-   wallet, and appears as **Member** in Settings → Members on both sides.
+5. The teammate lands in Treasury, sees the owner's wallet, and appears as
+   **Member** in Settings → Members on both sides.
 6. The teammate has no **New wallet** or **Delete** buttons, and cannot invite.
 7. Opening the same link again shows "already used". Inviting with a different
    signed-in email shows the email-mismatch message.
@@ -96,7 +97,7 @@ All routes are under `/api/v1` and use the standard `{data}` / `{error}` envelop
 | POST | `/workspaces/:id/invites` | owner | Create an invite; returns the link and whether it was emailed |
 | DELETE | `/workspaces/:id/invites/:inviteId` | owner | Revoke a pending invite |
 | GET | `/invites/:token` | public | Workspace name, inviter, invited email and status |
-| POST | `/invites/:token/accept` | session | Join, switch, provision the member's wallet |
+| POST | `/invites/:token/accept` | session | Join and switch to the workspace |
 | GET | `/invitations` | session | Pending invites for the account's verified emails, and whether any email is verified |
 | POST | `/invitations/:id/accept` | session | Accept an invite addressed to a verified email of the account |
 | POST | `/invitations/:id/decline` | session | Decline (revoke) such an invite |
