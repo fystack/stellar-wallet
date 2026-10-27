@@ -94,9 +94,12 @@ func TestAuthTablesPreserveLegacyUsersAndWalletsOnUpgrade(t *testing.T) {
 	if err != nil || !account.HasPassword || len(account.Identities) != 0 {
 		t.Fatalf("account=%#v %v", account, err)
 	}
-	wallets, err := NewStore(upgraded).ListWallets("legacy-user")
+	wallets, err := NewStore(upgraded).ListWallets(domain.PersonalWorkspaceID("legacy-user"))
 	if err != nil || len(wallets) != 1 || wallets[0].ID != "legacy-wallet" {
 		t.Fatalf("wallets=%#v %v", wallets, err)
+	}
+	if _, ok := NewStore(upgraded).WalletFor("legacy-user", "legacy-wallet"); !ok {
+		t.Fatal("legacy owner lost access after workspace backfill")
 	}
 }
 

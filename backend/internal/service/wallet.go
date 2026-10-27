@@ -3,7 +3,6 @@ package service
 import (
 	"encoding/hex"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 	"stellar-wallet-backend/internal/repository/sqlite"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 type WalletKeygen interface {
@@ -31,10 +31,11 @@ type WalletService struct {
 	cluster      *cluster.Client
 	hub          *realtime.Hub
 	mpc          WalletKeygen
+	workspaces   *sqlite.WorkspaceRepository
 }
 
-func NewWalletService(store repository.Store, transactions *sqlite.TransactionRepository, chain *chain.Client, cluster *cluster.Client, hub *realtime.Hub) *WalletService {
-	return &WalletService{store: store, transactions: transactions, chain: chain, cluster: cluster, hub: hub}
+func NewWalletService(store repository.Store, transactions *sqlite.TransactionRepository, workspaces *sqlite.WorkspaceRepository, chain *chain.Client, cluster *cluster.Client, hub *realtime.Hub) *WalletService {
+	return &WalletService{store: store, transactions: transactions, workspaces: workspaces, chain: chain, cluster: cluster, hub: hub}
 }
 
 func (s *WalletService) SetMPC(client WalletKeygen) { s.mpc = client }
@@ -45,8 +46,12 @@ type WalletBalance struct {
 	Explorer string                `json:"explorer"`
 }
 
-func (s *WalletService) List(userID string) ([]domain.Wallet, error) {
-	wallets, err := s.store.ListWallets(userID)
+func (s *WalletService) List(userID, sessionWorkspaceID, requestedWorkspaceID string) ([]domain.Wallet, error) {
+	workspace, err := requestedWorkspace(s.workspaces, userID, sessionWorkspaceID, requestedWorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	wallets, err := s.store.ListWallets(workspace.ID)
 	if err != nil {
 		return nil, fmt.Errorf("list wallets: %w", err)
 	}
@@ -57,8 +62,19 @@ func (s *WalletService) Get(userID, walletID string) (domain.Wallet, error) {
 	return ownedWallet(s.store, userID, walletID)
 }
 
-// Create stores a "generating" wallet and starts distributed keygen; OnKeygen completes it.
-func (s *WalletService) Create(userID, name, chainName string) (domain.Wallet, error) {
+func (s *WalletService) Create(userID, sessionWorkspaceID, requestedWorkspaceID, name, chainName string) (domain.Wallet, error) {
+	workspace, err := requestedWorkspace(s.workspaces, userID, sessionWorkspaceID, requestedWorkspaceID)
+	if err != nil {
+		return domain.Wallet{}, err
+	}
+	if workspace.Role != domain.RoleOwner {
+		return domain.Wallet{}, apperror.WorkspaceOwnerRequired.New()
+	}
+	return s.Provision(userID, workspace.ID, name, chainName)
+}
+
+// Provision skips authorization; callers must have checked userID's access to workspaceID.
+func (s *WalletService) Provision(userID, workspaceID, name, chainName string) (domain.Wallet, error) {
 	metadata, ok := domain.Chains[chainName]
 	if !ok {
 		return domain.Wallet{}, apperror.UnsupportedChain.New()
@@ -72,14 +88,15 @@ func (s *WalletService) Create(userID, name, chainName string) (domain.Wallet, e
 	}
 
 	wallet := domain.Wallet{
-		ID:        uuid.NewString(),
-		UserID:    userID,
-		Name:      name,
-		Chain:     chainName,
-		Symbol:    metadata.Symbol,
-		Balance:   "0.00",
-		Status:    domain.WalletGenerating,
-		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		ID:          uuid.NewString(),
+		UserID:      userID,
+		WorkspaceID: workspaceID,
+		Name:        name,
+		Chain:       chainName,
+		Symbol:      metadata.Symbol,
+		Balance:     "0.00",
+		Status:      domain.WalletGenerating,
+		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
 	}
 	if err := s.store.CreateWallet(wallet); err != nil {
 		return domain.Wallet{}, fmt.Errorf("persist wallet: %w", err)
@@ -88,15 +105,19 @@ func (s *WalletService) Create(userID, name, chainName string) (domain.Wallet, e
 		logError("keygen dispatch wallet="+wallet.ID, s.store.SetWalletStatus(wallet.ID, domain.WalletFailed))
 		return domain.Wallet{}, apperror.KeygenDispatchFailed.Wrap(err)
 	}
-	s.WatchKeygenTimeout(userID, wallet.ID)
+	s.WatchKeygenTimeout(wallet.ID)
 	return wallet, nil
 }
 
 func (s *WalletService) Delete(userID, walletID string) error {
-	if _, err := ownedWallet(s.store, userID, walletID); err != nil {
+	wallet, err := ownedWallet(s.store, userID, walletID)
+	if err != nil {
 		return err
 	}
-	return s.store.DeleteWallet(userID, walletID)
+	if err := requireOwner(s.workspaces, wallet.WorkspaceID, userID); err != nil {
+		return err
+	}
+	return s.store.DeleteWallet(walletID)
 }
 
 // Balance reads live balances and refreshes the cached wallet balance in the background.
@@ -137,7 +158,7 @@ func (s *WalletService) Fund(userID, walletID string) (string, error) {
 		return "", err
 	}
 	if updated, found := s.store.WalletByID(wallet.ID); found {
-		s.hub.PublishWallet(userID, updated)
+		publishWallet(s.store, s.hub, updated)
 	}
 	return balance, nil
 }
@@ -159,7 +180,7 @@ func capitalize(value string) string {
 
 func (s *WalletService) OnKeygen(result mpc.KeygenResult) {
 	if !result.Successful {
-		log.Printf("keygen failed wallet=%s reason=%s", result.WalletID, result.Error)
+		zap.L().Warn("keygen failed", zap.String("wallet", result.WalletID), zap.String("reason", result.Error))
 		logError("keygen failed wallet="+result.WalletID, s.store.SetWalletStatus(result.WalletID, domain.WalletFailed))
 		return
 	}
@@ -175,7 +196,7 @@ func (s *WalletService) OnKeygen(result mpc.KeygenResult) {
 		return
 	}
 	if updated, found := s.store.WalletByID(result.WalletID); found {
-		s.hub.PublishWallet(wallet.UserID, updated)
+		publishWallet(s.store, s.hub, updated)
 	}
 }
 
@@ -218,7 +239,7 @@ func (s *WalletService) SyncIncoming(wallet domain.Wallet) (int, error) {
 			logError("record incoming payment hash="+payment.Hash, err)
 			continue
 		}
-		s.hub.PublishTransaction(wallet.UserID, transaction)
+		publishTransaction(s.store, s.hub, transaction)
 		added++
 	}
 	if added > 0 {

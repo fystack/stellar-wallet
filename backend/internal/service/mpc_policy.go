@@ -2,11 +2,12 @@ package service
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"stellar-wallet-backend/internal/apperror"
 	"stellar-wallet-backend/internal/domain"
+
+	"go.uber.org/zap"
 )
 
 // MPC quorum + timeout policy.
@@ -45,19 +46,19 @@ func (s *WalletService) ReconcilePending() {
 	keygenOK := s.cluster.OnlineCount() >= KeygenQuorum
 	for _, wallet := range generating {
 		if keygenOK {
-			s.WatchKeygenTimeout(wallet.UserID, wallet.ID)
+			s.WatchKeygenTimeout(wallet.ID)
 			continue
 		}
 		logError("reconcile wallet="+wallet.ID, s.store.SetWalletStatus(wallet.ID, domain.WalletFailed))
 		if updated, found := s.store.WalletByID(wallet.ID); found {
-			s.hub.PublishWallet(wallet.UserID, updated)
+			publishWallet(s.store, s.hub, updated)
 		}
-		log.Printf("reconcile: failed stuck wallet=%s (cluster below quorum)", wallet.ID)
+		zap.L().Warn("reconcile: failed stuck wallet, cluster below quorum", zap.String("wallet", wallet.ID))
 	}
 }
 
 // WatchKeygenTimeout fails a wallet still "generating" after the timeout.
-func (s *WalletService) WatchKeygenTimeout(userID, walletID string) {
+func (s *WalletService) WatchKeygenTimeout(walletID string) {
 	time.AfterFunc(keygenTimeout, func() {
 		wallet, ok := s.store.WalletByID(walletID)
 		if !ok || wallet.Status != domain.WalletGenerating {
@@ -65,7 +66,7 @@ func (s *WalletService) WatchKeygenTimeout(userID, walletID string) {
 		}
 		logError("keygen timeout wallet="+walletID, s.store.SetWalletStatus(walletID, domain.WalletFailed))
 		if updated, found := s.store.WalletByID(walletID); found {
-			s.hub.PublishWallet(userID, updated)
+			publishWallet(s.store, s.hub, updated)
 		}
 	})
 }

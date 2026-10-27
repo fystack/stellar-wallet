@@ -27,7 +27,7 @@ func testAuthManager(t *testing.T) *auth.Manager { m, _, _, _ := newAuthFixture(
 
 func TestAuthCookieContractLogoutAndDatabaseFailures(t *testing.T) {
 	manager, svc, _, db := newAuthFixture(t)
-	r := NewRouter(Dependencies{Auth: manager, AuthService: svc}, "http://localhost")
+	r := NewRouter(Dependencies{AuthRateLimit: 30, Auth: manager, AuthService: svc}, "http://localhost")
 	request := func(method, path, body string, cookie *http.Cookie) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, "/api/v1/auth/"+path, bytes.NewBufferString(body))
 		req.Header.Set("Content-Type", "application/json")
@@ -90,7 +90,7 @@ func TestAuthCookieContractLogoutAndDatabaseFailures(t *testing.T) {
 
 func TestUnsafeRequestsRequireCSRFHeaderAndAllowedOrigin(t *testing.T) {
 	manager, svc, _, _ := newAuthFixture(t)
-	r := NewRouter(Dependencies{Auth: manager, AuthService: svc}, "http://localhost:5173")
+	r := NewRouter(Dependencies{AuthRateLimit: 30, Auth: manager, AuthService: svc}, "http://localhost:5173")
 	for _, tt := range []struct {
 		origin, header string
 		status         int

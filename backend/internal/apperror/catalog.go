@@ -59,3 +59,19 @@ var (
 	SyncFailed                = define(Upstream, "sync_failed", "Unable to check for incoming payments. Please try again later.")
 	BalanceUnavailable        = define(Upstream, "balance_unavailable", "Unable to load balances. Please try again later.")
 )
+
+// Workspace, membership and invite failures.
+var (
+	WorkspaceNotFound      = define(NotFound, "workspace_not_found", "Workspace not found.")
+	WorkspaceOwnerRequired = define(Forbidden, "workspace_owner_required", "Only workspace owners can do this.")
+	OwnerOnlySigning       = define(Forbidden, "workspace_owner_required", "Only workspace owners can send, swap or add assets for now.")
+	InvalidWorkspaceName   = define(Invalid, "invalid_request", "Workspace name is required (up to 60 characters).")
+	PersonalWorkspace      = define(Invalid, "personal_workspace", "Create a team workspace to invite teammates.")
+	InvalidInviteEmail     = define(Invalid, "invalid_request", "Enter a valid email address.")
+	AlreadyWorkspaceMember = define(Conflict, "already_member", "This person is already a member of the workspace.")
+	InviteNotFound         = define(NotFound, "invite_not_found", "This invite link is invalid.")
+	InviteUnavailable      = define(Conflict, "invite_unavailable", "This invite has expired, was revoked or was already used.")
+	InviteEmailMismatch    = define(Forbidden, "invite_email_mismatch", "This invite was sent to a different email. Sign in with that email to accept it.")
+	MemberNotFound         = define(NotFound, "member_not_found", "Member not found.")
+	LastWorkspaceOwner     = define(Conflict, "last_owner", "A workspace needs at least one owner.")
+)

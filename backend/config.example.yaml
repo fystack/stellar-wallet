@@ -22,6 +22,23 @@ cookie_secure: false # Set true with HTTPS outside localhost.
 
 # Register these callbacks with Google/GitHub. Put secrets in ignored config.yaml
 # or a privately mounted config file; never commit real client secrets.
+auth_rate_limit: 30  # sign-in/sign-up/OAuth attempts per client IP per minute
+
+log:
+  level: "info"      # debug, info, warn, error
+  format: "console"  # console (colored, local) or json (production)
+
+# Invite emails. With host empty and a localhost frontend_url, emails (including
+# the invite link) are written to the backend log instead. Elsewhere, an empty
+# host disables email; owners can still copy invite links.
+# Local Mailpit (docker-compose.infra.yaml): host localhost, port 1025, inbox at http://localhost:8025.
+smtp:
+  host: ""
+  port: 1025
+  username: ""
+  password: ""
+  from: "Stellar MPC Wallet <no-reply@localhost>"
+
 oauth:
   google:
     client_id: ""

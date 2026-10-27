@@ -3,12 +3,12 @@ package httpapi
 
 import (
 	"errors"
-	"log"
 	"net/http"
 
 	"stellar-wallet-backend/internal/apperror"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 type Response struct {
@@ -69,7 +69,7 @@ func Error(c *gin.Context, err error) {
 		}
 	}
 	if status >= 500 || (failure != nil && failure.Unwrap() != nil) {
-		log.Printf("request failed method=%s route=%s error=%v", c.Request.Method, c.FullPath(), err)
+		zap.L().Error("request failed", zap.String("method", c.Request.Method), zap.String("route", c.FullPath()), zap.Int("status", status), zap.Error(err))
 	}
 	c.AbortWithStatusJSON(status, ErrorResponse{Error: detail})
 }

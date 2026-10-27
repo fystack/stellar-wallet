@@ -2,9 +2,16 @@ package sqlite
 
 import (
 	"database/sql"
+	"fmt"
+
+	"stellar-wallet-backend/internal/domain"
 
 	_ "modernc.org/sqlite"
 )
+
+var personalPrefix = domain.PersonalWorkspaceID("")
+
+const personalName = "Personal"
 
 func Open(path string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
@@ -49,6 +56,7 @@ func Open(path string) (*sql.DB, error) {
 	CREATE TABLE IF NOT EXISTS wallets (
 		id         TEXT PRIMARY KEY,
 		user_id    TEXT NOT NULL,
+		workspace_id TEXT NOT NULL DEFAULT '',
 		name       TEXT NOT NULL,
 		chain      TEXT NOT NULL,
 		symbol     TEXT NOT NULL,
@@ -58,6 +66,32 @@ func Open(path string) (*sql.DB, error) {
 		status     TEXT NOT NULL DEFAULT 'ready',
 		created_at TEXT NOT NULL
 	);
+	CREATE TABLE IF NOT EXISTS workspaces (
+		id         TEXT PRIMARY KEY,
+		name       TEXT NOT NULL,
+		created_by TEXT NOT NULL,
+		created_at TEXT NOT NULL
+	);
+	CREATE TABLE IF NOT EXISTS workspace_members (
+		workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+		user_id      TEXT NOT NULL,
+		role         TEXT NOT NULL,
+		joined_at    TEXT NOT NULL,
+		PRIMARY KEY (workspace_id, user_id)
+	);
+	CREATE INDEX IF NOT EXISTS workspace_members_user ON workspace_members(user_id);
+	CREATE TABLE IF NOT EXISTS workspace_invites (
+		id           TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+		email        TEXT NOT NULL,
+		token_hash   TEXT UNIQUE NOT NULL,
+		invited_by   TEXT NOT NULL,
+		created_at   TEXT NOT NULL,
+		expires_at   INTEGER NOT NULL,
+		accepted_at  TEXT NOT NULL DEFAULT '',
+		revoked_at   TEXT NOT NULL DEFAULT ''
+	);
+	CREATE INDEX IF NOT EXISTS workspace_invites_workspace ON workspace_invites(workspace_id);
 	CREATE TABLE IF NOT EXISTS settings (
 		key   TEXT PRIMARY KEY,
 		value TEXT NOT NULL
@@ -95,8 +129,14 @@ func Open(path string) (*sql.DB, error) {
 	for _, migration := range []string{
 		`ALTER TABLE transactions ADD COLUMN recv_amount TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE transactions ADD COLUMN recv_symbol TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE wallets ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE auth_sessions ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ''`,
 	} {
 		_, _ = db.Exec(migration)
+	}
+	if err := backfillPersonalWorkspaces(db); err != nil {
+		db.Close()
+		return nil, err
 	}
 	// Seed default Stellar testnet assets so they're swappable/sendable out of the
 	// box. INSERT OR IGNORE keeps it idempotent; users can still delete them.
@@ -110,4 +150,26 @@ func Open(path string) (*sql.DB, error) {
 		_, _ = db.Exec(`INSERT OR IGNORE INTO custom_assets (code, issuer) VALUES (?, ?)`, seed[0], seed[1])
 	}
 	return db, nil
+}
+
+// backfillPersonalWorkspaces is idempotent: it runs on every start for pre-workspace databases.
+func backfillPersonalWorkspaces(db *sql.DB) error {
+	statements := []struct {
+		action string
+		query  string
+		args   []any
+	}{
+		{"create personal workspaces", `INSERT OR IGNORE INTO workspaces (id, name, created_by, created_at)
+			SELECT ? || id, ?, id, created_at FROM users`, []any{personalPrefix, personalName}},
+		{"add personal workspace owners", `INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, role, joined_at)
+			SELECT ? || id, id, ?, created_at FROM users`, []any{personalPrefix, domain.RoleOwner}},
+		{"index wallet workspaces", `CREATE INDEX IF NOT EXISTS wallets_workspace ON wallets(workspace_id)`, nil},
+		{"move wallets into personal workspaces", `UPDATE wallets SET workspace_id = ? || user_id WHERE workspace_id = ''`, []any{personalPrefix}},
+	}
+	for _, statement := range statements {
+		if _, err := db.Exec(statement.query, statement.args...); err != nil {
+			return fmt.Errorf("%s: %w", statement.action, err)
+		}
+	}
+	return nil
 }

@@ -1,7 +1,12 @@
-# MPC infra only (NATS + Consul + 3 mpcium nodes); run backend and UI on the host.
+# MPC infra only (NATS + Consul + 3 mpcium nodes + Mailpit); run backend and UI on the host.
 #
-#   docker compose -f docker-compose.yaml -f docker-compose.infra.yaml up -d consul nats node0 node1 node2
+#   docker compose -f docker-compose.yaml -f docker-compose.infra.yaml up -d consul nats node0 node1 node2 mailpit
 services:
+  mailpit:
+    image: axllent/mailpit:v1.20.5
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
   consul:
     ports:
       - "127.0.0.1:8500:8500"

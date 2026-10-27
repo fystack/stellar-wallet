@@ -24,7 +24,9 @@ Go (Gin) + SQLite API. Testnet only. Follow these when adding or changing backen
 ## Domain
 
 - Use the typed constants in `domain/status.go` (`domain.WalletReady`, `domain.TransactionSigning`, `domain.TransactionSwap`, ...). Never write status/type strings by hand, in Go or in SQL; pass them as query parameters.
-- Check wallet access with `ownedWallet` / `readyWallet` (`service/ownership.go`); every wallet-scoped query is also filtered by `user_id`.
+- Check wallet access with `ownedWallet` / `readyWallet` (`service/ownership.go`); wallet-scoped queries are filtered by workspace membership (`workspace_members`), not by `wallets.user_id`, which only records who created the wallet.
+- Owner-only actions (create/delete wallets, invites, removing members) go through `requireOwner`. The session's active workspace comes from `activeWorkspace`, which falls back to the personal workspace.
+- Realtime events go to every member of the wallet's workspace via `publishWallet` / `publishTransaction` (`service/notify.go`); never publish to a single user directly.
 - Check MPC quorum with `requireQuorum` before creating any record that needs signing or keygen.
 - MPC results and timeouts can arrive late or more than once. Change transaction state only through the conditional repository transitions (`ClaimSignature`, `FailSigning`), never by reading the status and then writing it.
 - Anything that needs signing builds its envelope, then goes through `TransactionService.dispatch`. Do not re-implement persist/sign/timeout/publish.
@@ -39,7 +41,8 @@ Go (Gin) + SQLite API. Testnet only. Follow these when adding or changing backen
 
 ## Security
 
-- Never log OAuth codes, state, tokens, cookies, signatures or raw provider bodies.
+- Never log OAuth codes, state, tokens, cookies, signatures or raw provider bodies. The one exception is `mail.LogMailer`, which logs invite links and is only wired in when `frontend_url` is localhost.
+- Log with zap through `zap.L()` and structured fields (`zap.String("wallet", id)`, `zap.Error(err)`); never the standard `log` package or `fmt.Print`. Request logs use the route pattern, never the raw path, because invite paths carry tokens.
 - Unsafe methods stay behind the CSRF middleware; do not add routes that bypass it.
 - Secrets live only in the git-ignored `config.yaml`. Config comes from `config.yaml` only, not environment variables.
 - Settings that affect every user (such as the Horizon URL) come from config, never from an API endpoint a regular user can call.

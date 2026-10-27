@@ -72,6 +72,6 @@ func (s *WalletService) refreshOne(wallet domain.Wallet) {
 		return
 	}
 	if updated, ok := s.store.WalletByID(wallet.ID); ok {
-		s.hub.PublishWallet(wallet.UserID, updated)
+		publishWallet(s.store, s.hub, updated)
 	}
 }

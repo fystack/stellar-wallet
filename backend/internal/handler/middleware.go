@@ -4,18 +4,31 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"stellar-wallet-backend/internal/apperror"
 	"stellar-wallet-backend/internal/httpapi"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
-// requestLogger logs the path only: OAuth callback queries contain single-use secrets.
+// requestLogger logs the route pattern only: OAuth callback queries and invite paths contain single-use secrets.
 func requestLogger() gin.HandlerFunc {
-	return gin.LoggerWithFormatter(func(p gin.LogFormatterParams) string {
-		return fmt.Sprintf("%s %s %d %s\n", p.Method, p.Request.URL.Path, p.StatusCode, p.Latency)
-	})
+	return func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+		route := c.FullPath()
+		if route == "" {
+			route = "unmatched"
+		}
+		zap.L().Info("request",
+			zap.String("method", c.Request.Method),
+			zap.String("route", route),
+			zap.Int("status", c.Writer.Status()),
+			zap.Duration("latency", time.Since(start)),
+		)
+	}
 }
 
 func recoverPanics() gin.HandlerFunc {

@@ -12,7 +12,7 @@ import (
 
 // Bound anonymous login/state creation work. This deliberately keys on the direct
 // peer, not untrusted forwarded headers. Reverse proxies share their peer limit.
-func authRateLimit() gin.HandlerFunc {
+func authRateLimit(perMinute int) gin.HandlerFunc {
 	type window struct {
 		attempts int
 		until    time.Time
@@ -41,7 +41,7 @@ func authRateLimit() gin.HandlerFunc {
 		entry.attempts++
 		windows[peer] = entry
 		mu.Unlock()
-		if entry.attempts > 30 {
+		if entry.attempts > perMinute {
 			c.Header("Retry-After", "60")
 			httpapi.Error(c, apperror.RateLimited.New())
 			return

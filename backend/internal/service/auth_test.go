@@ -62,9 +62,8 @@ func TestSocialLoginAndExplicitLinkKeepExistingWallet(t *testing.T) {
 	if err != nil || result.User.ID != user.ID || !result.Linked {
 		t.Fatalf("link result = %#v %v", result, err)
 	}
-	list, err := wallets.ListWallets(result.User.ID)
-	if err != nil || len(list) != 1 || list[0].ID != "wallet" {
-		t.Fatalf("wallet ownership changed: %#v %v", list, err)
+	if wallet, ok := wallets.WalletByID("wallet"); !ok || wallet.UserID != user.ID {
+		t.Fatalf("wallet ownership changed: %#v %v", wallet, ok)
 	}
 	if _, err := s.CompleteOAuth(context.Background(), "google", u.Query().Get("state"), start.BrowserToken, "code", token, false); err == nil {
 		t.Fatal("callback replay accepted")

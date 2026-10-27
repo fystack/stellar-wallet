@@ -17,9 +17,12 @@ import (
 type Dependencies struct {
 	FrontendURL    string
 	PublicURL      string
+	AuthRateLimit  int
 	Store          repository.Store
 	Transactions   *sqlite.TransactionRepository
 	AuthRepository *sqlite.AuthRepository
+	Workspaces     *sqlite.WorkspaceRepository
+	Mailer         service.Mailer
 	OAuthProviders map[string]auth.OAuthProvider
 	Auth           *auth.Manager
 	Chain          *chain.Client
@@ -42,7 +45,7 @@ type Server struct {
 
 func NewServer(d Dependencies) *Server {
 	transactions := service.NewTransactionService(d.Store, d.Transactions, d.Chain, d.Cluster, d.Hub)
-	wallets := service.NewWalletService(d.Store, d.Transactions, d.Chain, d.Cluster, d.Hub)
+	wallets := service.NewWalletService(d.Store, d.Transactions, d.Workspaces, d.Chain, d.Cluster, d.Hub)
 	settings := service.NewSettingsService(d.Store, d.Chain)
 	routes := handler.Dependencies{
 		Auth:               d.Auth,
@@ -52,10 +55,12 @@ func NewServer(d Dependencies) *Server {
 		SwapService:        service.NewSwapService(d.Store, d.Chain, transactions),
 		TrustlineService:   service.NewTrustlineService(d.Store, d.Transactions, d.Chain, transactions),
 		SettingsService:    settings,
+		WorkspaceService:   service.NewWorkspaceService(d.Workspaces, d.AuthRepository, wallets, d.Mailer, d.FrontendURL),
 		Cluster:            d.Cluster,
 		Hub:                d.Hub,
 		FrontendURL:        d.FrontendURL,
 		PublicURL:          d.PublicURL,
+		AuthRateLimit:      d.AuthRateLimit,
 	}
 	return &Server{routes: routes, transactions: transactions, wallets: wallets, settings: settings}
 }

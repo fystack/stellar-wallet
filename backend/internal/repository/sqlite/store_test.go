@@ -27,13 +27,16 @@ func TestStorePersistsUsersWalletsAndTransactions(t *testing.T) {
 	}
 
 	wallet := domain.Wallet{
-		ID: "wallet-1", UserID: user.ID, Name: "Wallet", Chain: "stellar", Symbol: "XLM",
+		ID: "wallet-1", UserID: user.ID, WorkspaceID: domain.PersonalWorkspaceID(user.ID), Name: "Wallet", Chain: "stellar", Symbol: "XLM",
 		Balance: "0.00", Status: "ready", CreatedAt: "2026-08-14T00:00:00Z",
+	}
+	if err := NewWorkspaceRepository(db).EnsurePersonalWorkspace(user.ID, user.CreatedAt); err != nil {
+		t.Fatal(err)
 	}
 	if err := store.CreateWallet(wallet); err != nil {
 		t.Fatalf("CreateWallet() error = %v", err)
 	}
-	wallets, err := store.ListWallets(user.ID)
+	wallets, err := store.ListWallets(domain.PersonalWorkspaceID(user.ID))
 	if err != nil || len(wallets) != 1 || wallets[0].ID != wallet.ID {
 		t.Fatalf("ListWallets() = %#v, %v", wallets, err)
 	}

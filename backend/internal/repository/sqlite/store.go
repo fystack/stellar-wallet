@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"stellar-wallet-backend/internal/domain"
@@ -49,26 +50,26 @@ func (s *Store) RemoveAsset(code, issuer string) error {
 	return exec(s.db, "remove asset", `DELETE FROM custom_assets WHERE code = ? AND issuer = ?`, code, issuer)
 }
 
-const walletColumns = `id, user_id, name, chain, symbol, address, pubkey, balance, status, created_at`
+const walletColumns = `id, user_id, workspace_id, name, chain, symbol, address, pubkey, balance, status, created_at`
 
 func scanWallet(scanner interface{ Scan(...any) error }) (domain.Wallet, error) {
 	var wallet domain.Wallet
 	err := scanner.Scan(
-		&wallet.ID, &wallet.UserID, &wallet.Name, &wallet.Chain, &wallet.Symbol,
+		&wallet.ID, &wallet.UserID, &wallet.WorkspaceID, &wallet.Name, &wallet.Chain, &wallet.Symbol,
 		&wallet.Address, &wallet.Pubkey, &wallet.Balance, &wallet.Status, &wallet.CreatedAt,
 	)
 	return wallet, err
 }
 
-func (s *Store) ListWallets(userID string) ([]domain.Wallet, error) {
-	return s.wallets(`SELECT `+walletColumns+` FROM wallets WHERE user_id = ? ORDER BY created_at`, userID)
+func (s *Store) ListWallets(workspaceID string) ([]domain.Wallet, error) {
+	return s.wallets(`SELECT `+walletColumns+` FROM wallets WHERE workspace_id = ? ORDER BY created_at`, workspaceID)
 }
 
 func (s *Store) CreateWallet(wallet domain.Wallet) error {
 	_, err := s.db.Exec(
-		`INSERT INTO wallets (id, user_id, name, chain, symbol, address, pubkey, balance, status, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		wallet.ID, wallet.UserID, wallet.Name, wallet.Chain, wallet.Symbol,
+		`INSERT INTO wallets (id, user_id, workspace_id, name, chain, symbol, address, pubkey, balance, status, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		wallet.ID, wallet.UserID, wallet.WorkspaceID, wallet.Name, wallet.Chain, wallet.Symbol,
 		wallet.Address, wallet.Pubkey, wallet.Balance, wallet.Status, wallet.CreatedAt,
 	)
 	if err != nil {
@@ -77,11 +78,45 @@ func (s *Store) CreateWallet(wallet domain.Wallet) error {
 	return nil
 }
 
+// WalletFor returns the wallet only when userID is a member of its workspace.
 func (s *Store) WalletFor(userID, walletID string) (domain.Wallet, bool) {
 	wallet, err := scanWallet(s.db.QueryRow(
-		`SELECT `+walletColumns+` FROM wallets WHERE id = ? AND user_id = ?`, walletID, userID,
+		`SELECT `+walletColumns+` FROM wallets
+		 WHERE id = ? AND workspace_id IN (SELECT workspace_id FROM workspace_members WHERE user_id = ?)`, walletID, userID,
 	))
 	return wallet, err == nil
+}
+
+func (s *Store) WorkspaceRole(workspaceID, userID string) (domain.WorkspaceRole, error) {
+	var role domain.WorkspaceRole
+	err := s.db.QueryRow(`SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?`, workspaceID, userID).Scan(&role)
+	if errors.Is(err, sql.ErrNoRows) {
+		return role, storecontract.ErrNotFound
+	}
+	if err != nil {
+		return role, fmt.Errorf("read workspace role: %w", err)
+	}
+	return role, nil
+}
+
+func (s *Store) WorkspaceMemberIDs(workspaceID string) ([]string, error) {
+	rows, err := s.db.Query(`SELECT user_id FROM workspace_members WHERE workspace_id = ?`, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("list workspace members: %w", err)
+	}
+	defer rows.Close()
+	userIDs := []string{}
+	for rows.Next() {
+		var userID string
+		if err := rows.Scan(&userID); err != nil {
+			return nil, fmt.Errorf("scan workspace member: %w", err)
+		}
+		userIDs = append(userIDs, userID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate workspace members: %w", err)
+	}
+	return userIDs, nil
 }
 
 func (s *Store) WalletByID(walletID string) (domain.Wallet, bool) {
@@ -143,16 +178,16 @@ func (s *Store) SetWalletBalance(walletID, balance string) error {
 }
 
 // DeleteWallet removes the wallet and its transaction history atomically.
-func (s *Store) DeleteWallet(userID, walletID string) error {
+func (s *Store) DeleteWallet(walletID string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("delete wallet: %w", err)
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec(`DELETE FROM transactions WHERE wallet_id = ? AND user_id = ?`, walletID, userID); err != nil {
+	if _, err := tx.Exec(`DELETE FROM transactions WHERE wallet_id = ?`, walletID); err != nil {
 		return fmt.Errorf("delete wallet transactions: %w", err)
 	}
-	if _, err := tx.Exec(`DELETE FROM wallets WHERE id = ? AND user_id = ?`, walletID, userID); err != nil {
+	if _, err := tx.Exec(`DELETE FROM wallets WHERE id = ?`, walletID); err != nil {
 		return fmt.Errorf("delete wallet: %w", err)
 	}
 	if err := tx.Commit(); err != nil {

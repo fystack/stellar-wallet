@@ -2,7 +2,6 @@ package handler
 
 import (
 	"errors"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"stellar-wallet-backend/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 type AuthHandler struct {
@@ -129,7 +129,7 @@ func (h *AuthHandler) oauthCallback(c *gin.Context) {
 			code = failure.Code
 		}
 		// Never log authorization codes, state, cookies, tokens or raw provider bodies.
-		log.Printf("OAuth callback failed provider=%s code=%s", c.Param("provider"), code)
+		zap.L().Warn("OAuth callback failed", zap.String("provider", c.Param("provider")), zap.String("code", code))
 		destination += "?auth_error=" + url.QueryEscape(code)
 	} else if result.Token != "" {
 		h.sessions.SetSession(c, result.Token)

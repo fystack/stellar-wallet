@@ -49,7 +49,7 @@ func TestCreatePaymentHTTPContract(t *testing.T) {
 				tt.setup(service, c, signer)
 			}
 			manager := auth.New(service.authRepo, false)
-			router := NewRouter(Dependencies{Auth: manager, Hub: service.hub, TransactionService: service.service}, "http://localhost")
+			router := NewRouter(Dependencies{AuthRateLimit: 30, Auth: manager, Hub: service.hub, TransactionService: service.service}, "http://localhost")
 			userID := tt.userID
 			if userID == "" {
 				userID = "owner"
@@ -154,7 +154,10 @@ func newTestTransactionService(t *testing.T) (*paymentFixture, *paymentChainStub
 	}
 	t.Cleanup(func() { db.Close() })
 	wallets := sqlite.NewStore(db)
-	if err := wallets.CreateWallet(domain.Wallet{ID: "wallet-1", UserID: "owner", Chain: "stellar", Symbol: "XLM", Status: "ready"}); err != nil {
+	if err := sqlite.NewWorkspaceRepository(db).EnsurePersonalWorkspace("owner", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := wallets.CreateWallet(domain.Wallet{ID: "wallet-1", UserID: "owner", WorkspaceID: domain.PersonalWorkspaceID("owner"), Chain: "stellar", Symbol: "XLM", Status: "ready"}); err != nil {
 		t.Fatal(err)
 	}
 	payments := sqlite.NewTransactionRepository(db)

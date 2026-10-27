@@ -65,16 +65,21 @@ func (s *TransactionRepository) exists(query string, args ...any) (bool, error) 
 	return count > 0, nil
 }
 
-func (s *TransactionRepository) TransactionsByWallet(userID, walletID string) ([]domain.Transaction, error) {
+func (s *TransactionRepository) TransactionsByWallet(walletID string) ([]domain.Transaction, error) {
 	return s.transactions(
 		`SELECT `+transactionColumns+` FROM transactions
-		 WHERE wallet_id = ? AND user_id = ? ORDER BY created_at DESC`, walletID, userID,
+		 WHERE wallet_id = ? ORDER BY created_at DESC`, walletID,
 	)
 }
 
+// TransactionForUser returns the transaction only when userID is a member of its wallet's workspace.
 func (s *TransactionRepository) TransactionForUser(transactionID, userID string) (domain.Transaction, bool) {
 	transaction, err := scanTransaction(s.db.QueryRow(
-		`SELECT `+transactionColumns+` FROM transactions WHERE id = ? AND user_id = ?`,
+		`SELECT `+transactionColumns+` FROM transactions
+		 WHERE id = ? AND wallet_id IN (
+		   SELECT wallets.id FROM wallets
+		   JOIN workspace_members ON workspace_members.workspace_id = wallets.workspace_id
+		   WHERE workspace_members.user_id = ?)`,
 		transactionID, userID,
 	))
 	return transaction, err == nil

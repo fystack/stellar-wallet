@@ -90,6 +90,7 @@ The Stellar Horizon RPC endpoint is set with `horizon_url` in the backend config
 
 - **Testnet only** — Horizon testnet + Friendbot. Mainnet not enabled.
 - Google/GitHub social login, account linking and revocable cookie sessions. Configure provider credentials and public HTTPS URLs using the [OAuth setup guide](docs/oauth.md).
+- Team workspaces with email invites, owner/member roles and a wallet per member. See the [workspace guide](docs/workspaces.md).
 
 ## Backend API (`/api/v1`)
 

@@ -3,7 +3,6 @@ package service
 import (
 	"encoding/hex"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	"stellar-wallet-backend/internal/repository/sqlite"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 // PaymentChain is the Stellar boundary used by payment creation and broadcast.
@@ -60,7 +60,7 @@ type PaymentInput struct {
 }
 
 func (s *TransactionService) Create(userID string, body PaymentInput) (domain.Transaction, error) {
-	wallet, err := readyWallet(s.wallets, userID, body.WalletID)
+	wallet, err := signableWallet(s.wallets, userID, body.WalletID)
 	if err != nil {
 		return domain.Transaction{}, err
 	}
@@ -130,11 +130,11 @@ func (s *TransactionService) dispatch(wallet domain.Wallet, transaction domain.T
 		return fmt.Errorf("persist %s transaction: %w", transaction.Type, err)
 	}
 	if err := s.mpc.Sign(wallet.ID, transaction.ID, domain.Chains[wallet.Chain].Network, hash); err != nil {
-		s.failSigning(transaction.UserID, transaction.ID, "signing could not be started")
+		s.failSigning(transaction.ID, "signing could not be started")
 		return apperror.SignDispatchFailed.Wrap(fmt.Errorf("dispatch signing: %w", err))
 	}
-	s.WatchSignTimeout(transaction.UserID, transaction.ID)
-	s.hub.PublishTransaction(transaction.UserID, transaction)
+	s.WatchSignTimeout(transaction.ID)
+	publishTransaction(s.wallets, s.hub, transaction)
 	return nil
 }
 
@@ -146,7 +146,7 @@ func (s *TransactionService) ListForWallet(userID, walletID string) ([]domain.Tr
 	if _, err := ownedWallet(s.wallets, userID, walletID); err != nil {
 		return nil, err
 	}
-	return s.transactions.TransactionsByWallet(userID, walletID)
+	return s.transactions.TransactionsByWallet(walletID)
 }
 
 func (s *TransactionService) Get(userID, transactionID string) (domain.Transaction, error) {
@@ -182,15 +182,13 @@ func (s *TransactionService) OnSign(result mpc.SignResult) *domain.Transaction {
 	if !ok {
 		return nil
 	}
-	userID := transaction.UserID
-
 	if !result.Successful {
 		reason := result.Error
 		if reason == "" {
 			reason = "MPC signing failed"
 		}
-		log.Printf("sign failed tx=%s reason=%s", transaction.ID, reason)
-		s.failSigning(userID, transaction.ID, reason)
+		zap.L().Warn("sign failed", zap.String("transaction", transaction.ID), zap.String("reason", reason))
+		s.failSigning(transaction.ID, reason)
 		return nil
 	}
 
@@ -200,51 +198,51 @@ func (s *TransactionService) OnSign(result mpc.SignResult) *domain.Transaction {
 		return nil
 	}
 	if !claimed {
-		log.Printf("ignored sign result tx=%s: transaction is no longer signing", transaction.ID)
+		zap.L().Info("ignored sign result: transaction is no longer signing", zap.String("transaction", transaction.ID))
 		return nil
 	}
-	s.publishTransactionByID(userID, transaction.ID)
+	s.publishTransactionByID(transaction.ID)
 
 	wallet, ok := s.wallets.WalletByID(transaction.WalletID)
 	if !ok {
 		logError("broadcast tx="+transaction.ID, s.transactions.FailTransaction(transaction.ID, "wallet not found"))
-		s.publishTransactionByID(userID, transaction.ID)
+		s.publishTransactionByID(transaction.ID)
 		return nil
 	}
 	hash, err := s.chain.Submit(transaction.EnvelopeXDR, wallet.Pubkey, result.Signature)
 	if err != nil {
-		log.Printf("broadcast failed tx=%s: %v", transaction.ID, err)
+		zap.L().Warn("broadcast failed", zap.String("transaction", transaction.ID), zap.Error(err))
 		logError("broadcast failed tx="+transaction.ID, s.transactions.FailTransaction(transaction.ID, "broadcast: "+err.Error()))
-		s.publishTransactionByID(userID, transaction.ID)
+		s.publishTransactionByID(transaction.ID)
 		return nil
 	}
 	logError("confirm tx="+transaction.ID, s.transactions.ConfirmTransaction(transaction.ID, hash))
-	s.publishTransactionByID(userID, transaction.ID)
+	s.publishTransactionByID(transaction.ID)
 	return &transaction
 }
 
-func (s *TransactionService) failSigning(userID, transactionID, reason string) {
+func (s *TransactionService) failSigning(transactionID, reason string) {
 	failed, err := s.transactions.FailSigning(transactionID, reason)
 	if err != nil {
 		logError("fail signing tx="+transactionID, err)
 		return
 	}
 	if failed {
-		s.publishTransactionByID(userID, transactionID)
+		s.publishTransactionByID(transactionID)
 	}
 }
 
-func (s *TransactionService) publishTransactionByID(userID, transactionID string) {
+func (s *TransactionService) publishTransactionByID(transactionID string) {
 	if transaction, ok := s.transactions.TransactionByID(transactionID); ok {
-		s.hub.PublishTransaction(userID, transaction)
+		publishTransaction(s.wallets, s.hub, transaction)
 	}
 }
 
 // WatchSignTimeout fails a transaction still signing after the timeout,
 // covering nodes that die or never respond after dispatch.
-func (s *TransactionService) WatchSignTimeout(userID, transactionID string) {
+func (s *TransactionService) WatchSignTimeout(transactionID string) {
 	time.AfterFunc(signTimeout, func() {
-		s.failSigning(userID, transactionID, "signing timed out — MPC nodes did not respond")
+		s.failSigning(transactionID, "signing timed out — MPC nodes did not respond")
 	})
 }
 
@@ -257,10 +255,10 @@ func (s *TransactionService) ReconcilePending() {
 	signOK := s.cluster.OnlineCount() >= SignQuorum
 	for _, transaction := range pending {
 		if signOK {
-			s.WatchSignTimeout(transaction.UserID, transaction.ID)
+			s.WatchSignTimeout(transaction.ID)
 			continue
 		}
-		s.failSigning(transaction.UserID, transaction.ID, "signing aborted — MPC cluster below quorum")
-		log.Printf("reconcile: failed stuck tx=%s (cluster below quorum)", transaction.ID)
+		s.failSigning(transaction.ID, "signing aborted — MPC cluster below quorum")
+		zap.L().Warn("reconcile: failed stuck transaction, cluster below quorum", zap.String("transaction", transaction.ID))
 	}
 }

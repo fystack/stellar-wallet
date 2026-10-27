@@ -58,7 +58,10 @@ func newTestTransactionService(t *testing.T) (*TransactionService, *paymentChain
 	}
 	t.Cleanup(func() { db.Close() })
 	wallets := sqlite.NewStore(db)
-	if err := wallets.CreateWallet(domain.Wallet{ID: "wallet-1", UserID: "owner", Chain: "stellar", Symbol: "XLM", Pubkey: "public-key", Status: "ready"}); err != nil {
+	if err := sqlite.NewWorkspaceRepository(db).EnsurePersonalWorkspace("owner", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := wallets.CreateWallet(domain.Wallet{ID: "wallet-1", UserID: "owner", WorkspaceID: domain.PersonalWorkspaceID("owner"), Chain: "stellar", Symbol: "XLM", Pubkey: "public-key", Status: "ready"}); err != nil {
 		t.Fatal(err)
 	}
 	c := &paymentChainStub{resolved: chain.Resolved{Address: "resolved-address", Memo: "42", MemoType: "id"}}
@@ -219,7 +222,7 @@ func TestSignResultIsAppliedOnlyWhileSigning(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		s.failSigning(transaction.UserID, transaction.ID, "signing timed out")
+		s.failSigning(transaction.ID, "signing timed out")
 		if s.OnSign(mpc.SignResult{TransactionID: transaction.ID, Successful: true, Signature: []byte{1}}) != nil {
 			t.Fatal("late result was broadcast")
 		}

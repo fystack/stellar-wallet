@@ -19,9 +19,11 @@ type Store interface {
 	CustomAssets() ([]domain.CustomAsset, error)
 	AddAsset(domain.CustomAsset) error
 	RemoveAsset(code, issuer string) error
-	ListWallets(userID string) ([]domain.Wallet, error)
+	ListWallets(workspaceID string) ([]domain.Wallet, error)
 	CreateWallet(domain.Wallet) error
 	WalletFor(userID, walletID string) (domain.Wallet, bool)
+	WorkspaceMemberIDs(workspaceID string) ([]string, error)
+	WorkspaceRole(workspaceID, userID string) (domain.WorkspaceRole, error)
 	WalletByID(walletID string) (domain.Wallet, bool)
 	WalletByAddress(address string) (domain.Wallet, bool)
 	ReadyWallets() ([]domain.Wallet, error)
@@ -29,5 +31,5 @@ type Store interface {
 	SetWalletStatus(walletID string, status domain.WalletStatus) error
 	CompleteWalletKeygen(walletID, address, publicKey string) error
 	SetWalletBalance(walletID, balance string) error
-	DeleteWallet(userID, walletID string) error
+	DeleteWallet(walletID string) error
 }

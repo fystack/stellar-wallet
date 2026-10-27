@@ -31,3 +31,34 @@ func TestAuthConfigurationRejectsUnsafeOrigins(t *testing.T) {
 		})
 	}
 }
+
+func TestSMTPAndRateLimitValidation(t *testing.T) {
+	cases := []struct {
+		name  string
+		apply func(cfg *Config)
+		valid bool
+	}{
+		{"smtp disabled", func(*Config) {}, true},
+		{"named from", func(cfg *Config) {
+			cfg.SMTP = SMTPConfig{Host: "smtp.example.com", Port: 587, From: "Stellar MPC Wallet <no-reply@example.com>"}
+		}, true},
+		{"bare from", func(cfg *Config) {
+			cfg.SMTP = SMTPConfig{Host: "smtp.example.com", Port: 587, From: "no-reply@example.com"}
+		}, true},
+		{"from without address", func(cfg *Config) {
+			cfg.SMTP = SMTPConfig{Host: "smtp.example.com", Port: 587, From: "Stellar MPC Wallet"}
+		}, false},
+		{"missing port", func(cfg *Config) { cfg.SMTP = SMTPConfig{Host: "smtp.example.com", From: "no-reply@example.com"} }, false},
+		{"zero rate limit", func(cfg *Config) { cfg.AuthRateLimit = 0 }, false},
+		{"unknown log format", func(cfg *Config) { cfg.Log.Format = "xml" }, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := defaults()
+			tc.apply(&cfg)
+			if err := cfg.Validate(); (err == nil) != tc.valid {
+				t.Fatalf("validation=%v, want valid=%v", err, tc.valid)
+			}
+		})
+	}
+}

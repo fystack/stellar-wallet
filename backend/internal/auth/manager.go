@@ -79,6 +79,7 @@ func (m *Manager) Middleware() gin.HandlerFunc {
 			return
 		}
 		c.Set("userID", session.UserID)
+		c.Set("workspaceID", session.WorkspaceID)
 		c.Header("Cache-Control", "no-store")
 		c.Next()
 	}

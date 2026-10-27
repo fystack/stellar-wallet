@@ -22,10 +22,12 @@ type Dependencies struct {
 	SwapService        *service.SwapService
 	TrustlineService   *service.TrustlineService
 	SettingsService    *service.SettingsService
+	WorkspaceService   *service.WorkspaceService
 	Cluster            *cluster.Client
 	Hub                *realtime.Hub
 	FrontendURL        string
 	PublicURL          string
+	AuthRateLimit      int
 }
 
 func NewRouter(d Dependencies, corsOrigin string) *gin.Engine {
@@ -40,6 +42,7 @@ func NewRouter(d Dependencies, corsOrigin string) *gin.Engine {
 	swaps := &SwapHandler{swaps: d.SwapService}
 	settings := &SettingsHandler{settings: d.SettingsService, cluster: d.Cluster}
 	events := &EventsHandler{sessions: d.Auth, hub: d.Hub}
+	workspaces := &WorkspaceHandler{workspaces: d.WorkspaceService}
 
 	router := gin.New()
 	router.HandleMethodNotAllowed = true
@@ -49,7 +52,7 @@ func NewRouter(d Dependencies, corsOrigin string) *gin.Engine {
 		requestLogger(),
 		recoverPanics(),
 		corsMiddleware(corsOrigin),
-		authRateLimit(),
+		authRateLimit(d.AuthRateLimit),
 		csrfProtection(d.FrontendURL, d.PublicURL),
 	)
 
@@ -66,6 +69,7 @@ func NewRouter(d Dependencies, corsOrigin string) *gin.Engine {
 	v1.GET("/auth/:provider/callback", authHandler.oauthCallback)
 	v1.POST("/auth/logout", authHandler.logout)
 	v1.GET("/prices", settings.getPrices)
+	v1.GET("/invites/:token", workspaces.previewInvite)
 
 	protected := v1.Group("")
 	protected.Use(d.Auth.Middleware())
@@ -90,6 +94,18 @@ func NewRouter(d Dependencies, corsOrigin string) *gin.Engine {
 	protected.GET("/transactions/:id", transactions.get)
 	protected.GET("/tx/:hash/chain", transactions.onChain)
 	protected.GET("/resolve", transactions.resolveRecipient)
+
+	protected.GET("/workspaces", workspaces.list)
+	protected.POST("/workspaces", workspaces.create)
+	protected.POST("/workspaces/:id/switch", workspaces.switchActive)
+	protected.GET("/workspaces/:id/members", workspaces.members)
+	protected.DELETE("/workspaces/:id/members/:userId", workspaces.removeMember)
+	protected.POST("/workspaces/:id/invites", workspaces.invite)
+	protected.DELETE("/workspaces/:id/invites/:inviteId", workspaces.revokeInvite)
+	protected.POST("/invites/:token/accept", workspaces.acceptInvite)
+	protected.GET("/invitations", workspaces.invitations)
+	protected.POST("/invitations/:id/accept", workspaces.acceptInvitation)
+	protected.POST("/invitations/:id/decline", workspaces.declineInvitation)
 
 	protected.GET("/chains", settings.getChains)
 	protected.GET("/config", settings.getConfig)

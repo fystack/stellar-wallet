@@ -58,6 +58,7 @@ internal/
       auth.go                # Accounts, identities, sessions and OAuth state
       transactions.go        # Concrete transaction repository
       store.go               # Existing user/wallet/settings SQL
+      workspaces.go          # Workspace, membership and invite SQL
       database.go            # Schema and database setup
   apperror/                  # Business errors and wrapped causes
   httpapi/                   # JSON envelopes and HTTP error mapping
@@ -67,6 +68,7 @@ internal/
   mpc/                       # mpcium/NATS adapter
   cluster/                   # MPC node health and discovery
   realtime/                  # Per-user SSE hub
+  mail/                      # SMTP mailer for invite emails
 ```
 
 Payment requests follow `handler/transaction.go → service/transaction.go →
@@ -82,6 +84,16 @@ uses; `router.go` builds them and lists every route. Every handler method
 follows the same shape: bind the request, call one service method, write the
 response. Swaps and trustlines build their own envelopes, then reuse
 `TransactionService`'s dispatch to persist, sign and broadcast.
+
+Wallets belong to workspaces. Every user has a personal workspace (created
+with the account, and backfilled at startup for older databases) and can join
+team workspaces by invite. `WorkspaceService` owns workspaces, members and
+invites: invite links are single-use, expire after seven days and are emailed
+when `smtp` is configured; the link is always returned so owners can share it.
+Accepting an invite switches the session's active workspace and provisions a
+wallet for the new member. Wallet access is checked by workspace membership,
+owners alone create and delete wallets or manage members, and realtime events
+go to every member of the wallet's workspace.
 
 Wallet and transaction statuses and transaction types are typed constants in
 `domain/status.go`. Repository writes return errors: request paths return them

@@ -18,16 +18,17 @@ type User struct {
 }
 
 type Wallet struct {
-	ID        string       `json:"id"`
-	UserID    string       `json:"-"`
-	Name      string       `json:"name"`
-	Chain     string       `json:"chain"`
-	Symbol    string       `json:"symbol"`
-	Address   string       `json:"address"`
-	Pubkey    string       `json:"pubkey"`
-	Balance   string       `json:"balance"`
-	Status    WalletStatus `json:"status"`
-	CreatedAt string       `json:"created_at"`
+	ID          string       `json:"id"`
+	UserID      string       `json:"-"`
+	WorkspaceID string       `json:"workspaceId"`
+	Name        string       `json:"name"`
+	Chain       string       `json:"chain"`
+	Symbol      string       `json:"symbol"`
+	Address     string       `json:"address"`
+	Pubkey      string       `json:"pubkey"`
+	Balance     string       `json:"balance"`
+	Status      WalletStatus `json:"status"`
+	CreatedAt   string       `json:"created_at"`
 }
 
 type Transaction struct {
