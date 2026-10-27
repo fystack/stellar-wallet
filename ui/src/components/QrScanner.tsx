@@ -116,7 +116,7 @@ export default function QrScanner({
             <div className="pointer-events-none absolute inset-6 border-2 border-white/70" />
           </div>
         ) : (
-          <p className="bg-warning-soft px-3 py-2 text-sm text-warning">
+          <p className="notice notice-warning">
             Live camera scanning isn't supported here. Upload a QR image below.
           </p>
         )}
@@ -127,7 +127,7 @@ export default function QrScanner({
 
         <button
           type="button"
-          className="cta-secondary w-full"
+          className="btn btn-secondary w-full"
           onClick={() => fileRef.current?.click()}
         >
           Upload QR image

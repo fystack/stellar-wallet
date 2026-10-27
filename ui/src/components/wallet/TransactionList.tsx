@@ -26,8 +26,7 @@ export default function TransactionList({
           type="button"
           onClick={onRefresh}
           disabled={refreshing}
-          title="Refresh transactions"
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-ink-soft hover:bg-card disabled:opacity-60"
+          className="btn btn-sm text-ink-soft hover:bg-card"
         >
           {refreshing ? <SpinnerIcon size={14} /> : <RefreshIcon size={14} />}
           {refreshing ? 'Refreshing…' : 'Refresh'}

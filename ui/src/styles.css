@@ -9,24 +9,93 @@ body,
 }
 
 body {
-  @apply bg-[#f7f8fa] text-ink antialiased;
+  @apply bg-page text-ink antialiased;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
     Arial, sans-serif;
 }
 
 @layer components {
-  .cta {
-    @apply inline-block cursor-pointer  bg-brand
-      px-11 py-[18px] text-lg font-bold text-white transition
-      hover:bg-brand-deep active:scale-[0.99]
-      disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
+  /* Buttons: one .btn base, one variant, optional size (default is medium). */
+  .btn {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 px-4 py-2.5 text-[15px] font-semibold
+      transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand
+      focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
+  }
+  .btn-sm {
+    @apply gap-1.5 px-3 py-1.5 text-sm;
+  }
+  .btn-lg {
+    @apply px-8 py-4 text-lg font-bold;
+  }
+  .btn-primary {
+    @apply bg-brand text-white hover:bg-brand-deep;
+  }
+  .btn-secondary {
+    @apply border border-line bg-white text-ink hover:border-line-strong hover:bg-hover;
+  }
+  .btn-danger {
+    @apply bg-danger text-white hover:bg-danger-deep;
+  }
+  .btn-danger-soft {
+    @apply bg-danger-soft text-danger hover:bg-danger-line;
+  }
+  .btn-ghost {
+    @apply px-0 py-0 text-muted hover:text-ink;
+  }
+  .btn-ghost-danger {
+    @apply px-0 py-0 text-muted hover:text-danger;
+  }
+  .btn-link {
+    @apply px-0 py-0 text-brand hover:underline;
   }
 
-  .cta-secondary {
-    @apply inline-block cursor-pointer border border-line bg-white
-      px-6 py-3 text-base font-semibold text-ink transition
-      hover:bg-hover active:scale-[0.99]
-      disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
+  /* Badges: labels such as roles. Counts use .count. */
+  .badge {
+    @apply inline-flex shrink-0 items-center gap-1 px-2 py-0.5 text-xs font-semibold;
+  }
+  .badge-neutral {
+    @apply bg-card text-ink-soft;
+  }
+  .badge-brand {
+    @apply bg-brand-soft text-brand;
+  }
+  .badge-success {
+    @apply bg-success-soft text-success;
+  }
+  .badge-warning {
+    @apply bg-warning-soft text-warning;
+  }
+  .badge-danger {
+    @apply bg-danger-soft text-danger;
+  }
+  .count {
+    @apply inline-grid h-5 min-w-5 shrink-0 place-items-center bg-brand px-1.5 text-xs font-bold leading-none text-white;
+  }
+
+  /* Status reads as a dot plus a word; colour the dot with bg-success / bg-warning / bg-danger / bg-line-strong. */
+  .dot {
+    @apply inline-block h-2 w-2 shrink-0 rounded-full;
+  }
+
+  .avatar {
+    @apply grid h-9 w-9 shrink-0 place-items-center bg-ink text-sm font-semibold uppercase text-white;
+  }
+  .avatar-brand {
+    @apply bg-brand-soft font-bold text-brand;
+  }
+
+  /* Callouts: inline notices inside a page or card. */
+  .notice {
+    @apply px-3.5 py-3 text-sm;
+  }
+  .notice-info {
+    @apply bg-card text-ink-soft;
+  }
+  .notice-warning {
+    @apply bg-warning-soft text-warning;
+  }
+  .notice-danger {
+    @apply border border-danger-line bg-danger-soft text-danger;
   }
 
   /* Shimmering placeholder for loading states. */

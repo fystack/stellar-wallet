@@ -1,13 +1,15 @@
 import { useState } from 'react'
-import { ChevronDownIcon } from '../icons.tsx'
-import { FystackLogo } from '../logos.tsx'
-import type { Workspace, WorkspaceInvite } from '../types.ts'
+import type { ReactNode } from 'react'
+import { ChevronDownIcon } from '../../icons.tsx'
+import { FystackLogo } from '../../logos.tsx'
+import type { Workspace, WorkspaceInvite } from '../../types.ts'
 import CreateWorkspaceModal from './CreateWorkspaceModal.tsx'
 import InvitationList from './InvitationList.tsx'
+import { roleLabels } from '../../lib/roles.ts'
 
 export function workspaceLabel(workspace: Workspace) {
   if (workspace.personal) return 'Personal'
-  return workspace.role === 'owner' ? 'Owner' : 'Member'
+  return roleLabels[workspace.role]
 }
 
 export default function WorkspacePicker({
@@ -21,6 +23,8 @@ export default function WorkspacePicker({
   invitationsVerified,
   onAcceptInvitation,
   onDeclineInvitation,
+  onBack,
+  linkInvite,
 }: {
   userEmail: string
   workspaces: Workspace[]
@@ -32,10 +36,13 @@ export default function WorkspacePicker({
   onCreate: (name: string) => Promise<void>
   signingOut: boolean
   onSignOut: () => void
+  onBack?: () => void
+  linkInvite?: ReactNode
 }) {
   const [pickingId, setPickingId] = useState('')
+  const invitationCount = invitations.length + (linkInvite ? 1 : 0)
   const [showCreate, setShowCreate] = useState(false)
-  const [tab, setTab] = useState<'workspaces' | 'invitations'>(invitations.length > 0 ? 'invitations' : 'workspaces')
+  const [tab, setTab] = useState<'workspaces' | 'invitations'>(linkInvite || invitations.length > 0 ? 'invitations' : 'workspaces')
 
   async function pick(id: string) {
     setPickingId(id)
@@ -47,8 +54,13 @@ export default function WorkspacePicker({
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-[#f7f8fa] p-4">
+    <div className="flex min-h-full items-center justify-center bg-page p-4">
       <div className="w-full max-w-[440px]">
+        {onBack && (
+          <button type="button" onClick={onBack} className="btn btn-link mb-4 text-sm">
+            ← Back
+          </button>
+        )}
         <div className="mb-6 text-center sm:mb-8">
           <div className="mx-auto mb-4 w-fit sm:mb-5">
             <FystackLogo height={44} />
@@ -59,7 +71,7 @@ export default function WorkspacePicker({
             <button
               onClick={onSignOut}
               disabled={signingOut}
-              className="font-semibold text-brand hover:underline disabled:opacity-50"
+              className="btn btn-link"
             >
               {signingOut ? 'Signing out…' : 'Sign out'}
             </button>
@@ -82,9 +94,9 @@ export default function WorkspacePicker({
               }
             >
               {key === 'workspaces' ? 'Workspaces' : 'Invitations'}
-              {key === 'invitations' && invitations.length > 0 && (
-                <span className="grid h-5 min-w-5 place-items-center bg-brand px-1.5 text-xs font-bold text-white">
-                  {invitations.length}
+              {key === 'invitations' && invitationCount > 0 && (
+                <span className="count">
+                  {invitationCount}
                 </span>
               )}
             </button>
@@ -93,12 +105,15 @@ export default function WorkspacePicker({
 
         {tab === 'invitations' && (
           <div id="picker-panel-invitations" role="tabpanel" aria-labelledby="picker-tab-invitations" className="border border-line bg-white">
-            <InvitationList
-              invitations={invitations}
-              verified={invitationsVerified}
-              onAccept={onAcceptInvitation}
-              onDecline={onDeclineInvitation}
-            />
+            {linkInvite}
+            {(!linkInvite || invitations.length > 0) && (
+              <InvitationList
+                invitations={invitations}
+                verified={invitationsVerified}
+                onAccept={onAcceptInvitation}
+                onDecline={onDeclineInvitation}
+              />
+            )}
           </div>
         )}
 
@@ -113,7 +128,7 @@ export default function WorkspacePicker({
                     onClick={() => void pick(workspace.id)}
                     className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-hover disabled:cursor-wait disabled:opacity-60"
                   >
-                    <span className="grid h-10 w-10 shrink-0 place-items-center bg-brand-soft text-sm font-bold uppercase text-brand">
+                    <span className="avatar avatar-brand h-10 w-10">
                       {workspace.name.charAt(0)}
                     </span>
                     <span className="min-w-0 flex-1">
@@ -132,7 +147,7 @@ export default function WorkspacePicker({
 
         <p className="mt-5 text-center text-sm text-muted">
           Need a new team?{' '}
-          <button onClick={() => setShowCreate(true)} className="font-semibold text-brand hover:underline">
+          <button onClick={() => setShowCreate(true)} className="btn btn-link">
             Create a workspace
           </button>
         </p>

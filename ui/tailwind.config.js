@@ -12,8 +12,12 @@ export default {
           deep: '#0b53e6',
           soft: '#e8f0ff',
         },
+        page: '#f7f8fa',
         card: '#f4f6f9',
-        line: '#eceef2',
+        line: {
+          DEFAULT: '#eceef2',
+          strong: '#d5dbe4',
+        },
         hover: '#f2f5f9',
         danger: {
           DEFAULT: '#d33a3a',

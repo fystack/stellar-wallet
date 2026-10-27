@@ -11,12 +11,12 @@ export default function ConfirmActions({
 }) {
   return (
     <div className="flex gap-3">
-      <button type="button" className="cta-secondary flex-1" disabled={busy} onClick={onCancel}>
+      <button type="button" className="btn btn-secondary flex-1" disabled={busy} onClick={onCancel}>
         Cancel
       </button>
       <button
         type="button"
-        className="cta flex-1 !px-6 !py-3 !text-base"
+        className="btn btn-primary flex-1 py-3 font-bold"
         disabled={busy}
         onClick={onConfirm}
       >

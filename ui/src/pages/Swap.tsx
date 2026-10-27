@@ -30,7 +30,7 @@ export default function Swap({
       <EmptyState
         icon={<SwapIcon size={32} />}
         title="View-only access"
-        body="Only workspace owners can send, swap or add assets for now. Payment approvals for members are coming next."
+        body="Only workspace owners can swap. Operators can send payments, which may need approval."
       />
     )
   }
@@ -118,7 +118,7 @@ export default function Swap({
 
         {form.needsTrustline ? (
           <>
-            <div className="flex items-start gap-2 bg-warning-soft px-3.5 py-3 text-sm text-warning">
+            <div className="notice notice-warning flex items-start gap-2">
               <span className="shrink-0">⚠</span>
               <span>
                 You need a trustline to <strong>{assetLabel(form.receiveAsset)}</strong> before you
@@ -127,7 +127,7 @@ export default function Swap({
             </div>
             <button
               type="button"
-              className="cta w-full"
+              className="btn btn-primary btn-lg w-full"
               disabled={form.addingTrustline}
               onClick={form.addTrustline}
             >
@@ -137,7 +137,7 @@ export default function Swap({
             </button>
           </>
         ) : (
-          <button className="cta w-full" type="submit" disabled={!form.canSubmit}>
+          <button className="btn btn-primary btn-lg w-full" type="submit" disabled={!form.canSubmit}>
             {form.submitting ? 'Submitting…' : 'Review & sign swap'}
           </button>
         )}

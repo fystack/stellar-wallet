@@ -2,7 +2,7 @@ export type Chain = 'stellar'
 
 export type WalletStatus = 'generating' | 'ready' | 'failed'
 
-export type WorkspaceRole = 'owner' | 'member'
+export type WorkspaceRole = 'owner' | 'operator' | 'member'
 
 export type Workspace = {
   id: string
@@ -25,6 +25,7 @@ export type WorkspaceInvite = {
   workspaceName?: string
   email: string
   invitedBy: string
+  role: WorkspaceRole
   createdAt: string
   expiresAt: number
 }
@@ -32,6 +33,7 @@ export type WorkspaceInvite = {
 export type InviteStatus = 'pending' | 'accepted' | 'revoked' | 'expired'
 
 export type InvitePreview = {
+  inviteId: string
   workspaceName: string
   invitedBy: string
   email: string
@@ -119,3 +121,63 @@ export type SwapInput = {
 }
 
 export type CustomAsset = { code: string; issuer: string }
+
+export type ApprovalPolicy = {
+  workspaceId: string
+  thresholdXlm: string
+  requiredApprovals: number
+  belowThreshold: 'send' | 'approve'
+  updatedAt: string
+}
+
+export type ApprovalPolicySettings = {
+  policy: ApprovalPolicy | null
+  maxApprovals: number
+}
+
+export type PaymentRequestStatus =
+  | 'pending'
+  | 'executing'
+  | 'executed'
+  | 'failed'
+  | 'rejected'
+  | 'cancelled'
+  | 'expired'
+
+export type PaymentRequestVote = {
+  userId: string
+  email: string
+  decision: 'approve' | 'reject'
+  createdAt: string
+}
+
+export type PaymentRequest = {
+  id: string
+  workspaceId: string
+  walletId: string
+  walletName: string
+  initiatorId: string
+  initiatorEmail: string
+  destination: string
+  amount: string
+  assetCode?: string
+  assetIssuer?: string
+  symbol: string
+  memo?: string
+  memoType?: string
+  requiredApprovals: number
+  status: PaymentRequestStatus
+  transactionId?: string
+  transactionStatus?: TxStatus
+  txHash?: string
+  reason?: string
+  createdAt: string
+  expiresAt: number
+  decidedAt?: string
+  votes: PaymentRequestVote[]
+}
+
+export type PaymentResult = {
+  transaction?: Transaction
+  request?: PaymentRequest
+}

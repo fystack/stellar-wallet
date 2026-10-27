@@ -75,7 +75,7 @@ export default function CreateWalletModal({
               <CopyAddress address={created.address} className="break-all" />
             </div>
             <button
-              className="cta w-full !py-3.5"
+              className="btn btn-primary btn-lg w-full !py-3.5"
               onClick={() => onOpen(created.id)}
             >
               Open wallet
@@ -132,7 +132,7 @@ export default function CreateWalletModal({
                       ? 'border-brand bg-brand-soft'
                       : c.disabled
                         ? 'cursor-not-allowed border-line bg-card opacity-60'
-                      : 'border-line hover:border-[#c9d2df]')
+                      : 'border-line hover:border-line-strong')
                   }
                 >
                   <ChainLogo chain={c.id} size={36} />
@@ -194,7 +194,7 @@ export default function CreateWalletModal({
             >
               Cancel
             </button>
-            <button type="submit" className="cta flex-1 !py-3.5">
+            <button type="submit" className="btn btn-primary btn-lg flex-1 !py-3.5">
               Create wallet
             </button>
           </div>

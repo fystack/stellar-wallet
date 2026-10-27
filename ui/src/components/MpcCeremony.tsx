@@ -80,10 +80,10 @@ export default function MpcCeremony({ mode, done = false }: Props) {
                 className={
                   'grid h-12 w-12 place-items-center border-2 transition-all duration-500 ' +
                   (state === 'done'
-                    ? 'border-green-500 bg-green-50 text-green-600'
+                    ? 'border-success bg-success-soft text-success'
                     : state === 'active'
                       ? 'scale-110 border-brand bg-brand-soft text-brand'
-                      : 'border-line bg-[#f5f6f8] text-muted')
+                      : 'border-line bg-card text-muted')
                 }
               >
                 {state === 'done' ? (
@@ -101,7 +101,7 @@ export default function MpcCeremony({ mode, done = false }: Props) {
                 className={
                   'mb-4 h-0.5 w-8 transition-colors duration-500 ' +
                   (display[i] === 'done' && display[i + 1] !== 'idle'
-                    ? 'bg-green-400'
+                    ? 'bg-success'
                     : 'bg-line')
                 }
               />

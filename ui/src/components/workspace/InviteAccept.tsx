@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { api } from '../api.ts'
-import type { InvitePreview, JoinResult } from '../types.ts'
+import { useState } from 'react'
+import { api } from '../../api.ts'
+import type { InvitePreview, JoinResult } from '../../types.ts'
 
 const statusMessages: Record<Exclude<InvitePreview['status'], 'pending'>, string> = {
   accepted: 'This invite has already been used.',
@@ -14,49 +14,47 @@ export default function InviteAccept({
   onJoined,
   onDismiss,
   onSignOut,
+  preview,
+  loadError,
 }: {
   token: string
   userEmail: string
   onJoined: (result: JoinResult) => void
   onDismiss: () => void
   onSignOut: () => void
+  preview: InvitePreview | null
+  loadError: string
 }) {
-  const [preview, setPreview] = useState<InvitePreview | null>(null)
-  const [error, setError] = useState('')
+  const [acceptError, setAcceptError] = useState('')
   const [busy, setBusy] = useState(false)
-
-  useEffect(() => {
-    api.previewInvite(token).then(setPreview).catch((failure: unknown) => {
-      setError(failure instanceof Error ? failure.message : 'This invite link is invalid.')
-    })
-  }, [token])
+  const error = loadError || acceptError
 
   async function accept() {
     setBusy(true)
-    setError('')
+    setAcceptError('')
     try {
       onJoined(await api.acceptInvite(token))
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'Unable to accept the invite.')
+      setAcceptError(failure instanceof Error ? failure.message : 'Unable to accept the invite.')
       setBusy(false)
     }
   }
 
   const wrongAccount = preview && preview.email.toLowerCase() !== userEmail.toLowerCase()
+  if (!preview && !error) return null
 
   return (
-    <section className="surface mx-auto mb-6 max-w-[640px]" aria-labelledby="invite-title">
+    <section className="border-b border-line px-5 py-5" aria-labelledby="invite-title">
       <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-brand">Workspace invite</div>
-      {!preview && !error && <p role="status" className="text-sm text-muted">Loading invite…</p>}
       {preview && (
         <>
           <h2 id="invite-title" className="mb-1 text-xl font-bold">Join {preview.workspaceName || 'a workspace'}</h2>
           <p className="mb-4 text-sm text-muted">
-            {preview.invitedBy} invited {preview.email}. You'll share the workspace's wallets and get your own wallet when you join.
+            {preview.invitedBy} invited {preview.email}. You'll see the workspace's wallets when you join.
           </p>
           {preview.status !== 'pending' && <p className="mb-4 text-sm text-ink-soft">{statusMessages[preview.status]}</p>}
           {preview.status === 'pending' && wrongAccount && (
-            <p className="mb-4 bg-[#fff6e5] px-3 py-2 text-sm text-[#8a5a00]">
+            <p className="notice notice-warning mb-4">
               You're signed in as {userEmail}. Sign in as {preview.email} to accept this invite.
             </p>
           )}
@@ -65,17 +63,17 @@ export default function InviteAccept({
       {error && <div role="alert" className="mb-4 bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
       <div className="flex flex-wrap gap-2">
         {preview?.status === 'pending' && !wrongAccount && (
-          <button className="cta" disabled={busy} onClick={() => void accept()}>
+          <button className="btn btn-primary btn-lg" disabled={busy} onClick={() => void accept()}>
             {busy ? 'Joining…' : 'Accept invite'}
           </button>
         )}
         {preview?.status === 'pending' && wrongAccount && (
-          <button className="cta" onClick={onSignOut}>
+          <button className="btn btn-primary btn-lg" onClick={onSignOut}>
             Sign out and switch account
           </button>
         )}
         <button
-          className="border border-line bg-white px-4 py-2.5 font-semibold text-ink-soft hover:bg-hover"
+          className="btn btn-secondary"
           onClick={onDismiss}
         >
           {preview?.status === 'pending' && !wrongAccount ? 'Not now' : 'Dismiss'}

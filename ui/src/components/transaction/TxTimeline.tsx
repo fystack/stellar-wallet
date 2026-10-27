@@ -1,5 +1,5 @@
-import { CheckIcon, CloseIcon } from '../icons.tsx'
-import type { TxStatus } from '../types.ts'
+import { CheckIcon, CloseIcon } from '../../icons.tsx'
+import type { TxStatus } from '../../types.ts'
 
 const steps: { status: TxStatus; label: string; description: string }[] = [
   {

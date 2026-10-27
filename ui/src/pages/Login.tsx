@@ -77,7 +77,7 @@ export default function Login({
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-[#f7f8fa] p-4">
+    <div className="flex min-h-full items-center justify-center bg-page p-4">
       <div className="w-full max-w-[400px]">
         <div className="mb-6 text-center sm:mb-8">
           <div className="mx-auto mb-4 w-fit sm:mb-5">
@@ -170,7 +170,7 @@ export default function Login({
                 )}
 
                 <button
-                  className="cta w-full !py-3.5"
+                  className="btn btn-primary btn-lg w-full !py-3.5"
                   type="submit"
                   disabled={!canSubmit || busy}
                 >
@@ -189,7 +189,7 @@ export default function Login({
           <div className="flex flex-col gap-3" aria-label="Social sign-in">
             {socialProviders.map((provider) => {
               const enabled = providers.some((entry) => entry.id === provider && entry.enabled)
-              return <button key={provider} type="button" className="flex items-center justify-center gap-2.5 border border-line bg-white px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50" disabled={!enabled || busy} onClick={() => window.location.assign(api.oauthStartURL(provider))}>
+              return <button key={provider} type="button" className="btn btn-secondary py-3" disabled={!enabled || busy} onClick={() => window.location.assign(api.oauthStartURL(provider))}>
                 {provider === 'google' ? <GoogleLogo /> : <GithubLogo />}
                 {isRegister && !socialOnly ? 'Sign up' : 'Continue'} with {providerName(provider)}
               </button>
@@ -208,7 +208,7 @@ export default function Login({
                 setError('')
                 setConfirmPassword('')
               }}
-              className="font-semibold text-brand hover:underline"
+              className="btn btn-link"
             >
               {mode === 'login' ? 'Create one' : 'Sign in'}
             </button>

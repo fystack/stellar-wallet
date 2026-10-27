@@ -260,7 +260,7 @@ export default function KeygenMesh({ done = false }: { done?: boolean }) {
 
       {/* round stepper */}
       {done ? (
-        <p className="flex items-center gap-1.5 text-center text-sm font-semibold text-green-600">
+        <p className="flex items-center gap-1.5 text-center text-sm font-semibold text-success">
           <CheckIcon size={15} /> Key split across 3 nodes — never assembled
         </p>
       ) : (
@@ -281,7 +281,7 @@ export default function KeygenMesh({ done = false }: { done?: boolean }) {
                         ? 'scale-125 bg-brand'
                         : i < step
                           ? 'bg-brand/40'
-                          : 'bg-[#d5dbe4]')
+                          : 'bg-line-strong')
                     }
                   />
                   {label}

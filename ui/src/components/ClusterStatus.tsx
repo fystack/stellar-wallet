@@ -28,7 +28,7 @@ export default function ClusterStatus() {
 
   return (
     <div className="flex flex-wrap items-center gap-2 border border-line bg-white px-4 py-3 text-sm text-ink-soft sm:gap-2.5 sm:px-5 sm:py-3.5 sm:text-[15px]">
-      <span className={allOnline ? 'text-green-600' : 'text-[#d97706]'}>
+      <span className={allOnline ? 'text-success' : 'text-warning'}>
         <ShieldIcon size={18} />
       </span>
       <span className="inline-flex gap-1.5">
@@ -36,8 +36,8 @@ export default function ClusterStatus() {
           <i
             key={i}
             className={
-              'inline-block h-2 w-2 rounded-full ' +
-              (i < online ? 'bg-green-600' : 'bg-[#d5dbe4]')
+              'dot ' +
+              (i < online ? 'bg-success' : 'bg-line-strong')
             }
           />
         ))}

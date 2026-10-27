@@ -1,6 +1,10 @@
 import type {
+  ApprovalPolicy,
+  ApprovalPolicySettings,
   InvitePreview,
   JoinResult,
+  PaymentRequest,
+  PaymentResult,
   ResolvedRecipient,
   SwapQuote,
   Transaction,
@@ -8,6 +12,7 @@ import type {
   Workspace,
   WorkspaceInvite,
   WorkspaceMember,
+  WorkspaceRole,
 } from './types.ts'
 
 export const BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8090'
@@ -20,8 +25,12 @@ export type Account = {
 export type SocialProvider = { id: 'google' | 'github'; enabled: boolean }
 
 export function clearLegacySession() {
-  localStorage.removeItem('wallet_token')
-  localStorage.removeItem('wallet_email')
+  try {
+    localStorage.removeItem('wallet_token')
+    localStorage.removeItem('wallet_email')
+  } catch {
+    // Nothing to clear when storage is blocked.
+  }
 }
 
 export type ApiResponse<T> = { data: T; meta?: Record<string, unknown> }
@@ -87,6 +96,7 @@ async function auth(kind: 'login' | 'register', email: string, password: string)
 export const api = {
   me: () => req<Account>('/api/v1/auth/me'),
   logout: () => req<void>('/api/v1/auth/logout', { method: 'POST' }),
+  logoutEverywhere: () => req<void>('/api/v1/auth/logout-all', { method: 'POST' }),
   providers: () => req<SocialProvider[]>('/api/v1/auth/providers'),
   oauthStartURL: (provider: SocialProvider['id']) => `${BASE}/api/v1/auth/${provider}/start`,
   linkProvider: (provider: SocialProvider['id']) => req<{ url: string }>(`/api/v1/auth/${provider}/link`, { method: 'POST' }),
@@ -103,11 +113,25 @@ export const api = {
     req<{ members: WorkspaceMember[]; invites: WorkspaceInvite[] }>(`/api/v1/workspaces/${id}/members`),
   removeMember: (id: string, userId: string) =>
     req<void>(`/api/v1/workspaces/${id}/members/${userId}`, { method: 'DELETE' }),
-  invite: (id: string, email: string) =>
+  invite: (id: string, email: string, role: WorkspaceRole) =>
     req<{ invite: WorkspaceInvite; link: string; emailSent: boolean }>(`/api/v1/workspaces/${id}/invites`, {
       method: 'POST',
-      json: { email },
+      json: { email, role },
     }),
+  changeRole: (id: string, userId: string, role: WorkspaceRole) =>
+    req<void>(`/api/v1/workspaces/${id}/members/${userId}`, { method: 'PATCH', json: { role } }),
+  approvalPolicy: (id: string) =>
+    req<ApprovalPolicySettings>(`/api/v1/workspaces/${id}/approval-policy`),
+  setApprovalPolicy: (id: string, policy: Pick<ApprovalPolicy, 'thresholdXlm' | 'requiredApprovals' | 'belowThreshold'>) =>
+    req<ApprovalPolicySettings>(`/api/v1/workspaces/${id}/approval-policy`, { method: 'PUT', json: policy }),
+  disableApprovalPolicy: (id: string) =>
+    req<void>(`/api/v1/workspaces/${id}/approval-policy`, { method: 'DELETE' }),
+  paymentRequests: (workspaceId: string, status: 'pending' | 'history') =>
+    req<PaymentRequest[]>(`/api/v1/workspaces/${workspaceId}/payment-requests?status=${status}`),
+  paymentRequest: (id: string) => req<PaymentRequest>(`/api/v1/payment-requests/${id}`),
+  approvePayment: (id: string) => req<PaymentRequest>(`/api/v1/payment-requests/${id}/approve`, { method: 'POST' }),
+  rejectPayment: (id: string) => req<PaymentRequest>(`/api/v1/payment-requests/${id}/reject`, { method: 'POST' }),
+  cancelPayment: (id: string) => req<PaymentRequest>(`/api/v1/payment-requests/${id}/cancel`, { method: 'POST' }),
   revokeInvite: (id: string, inviteId: string) =>
     req<void>(`/api/v1/workspaces/${id}/invites/${inviteId}`, { method: 'DELETE' }),
   invitations: () => req<{ invites: WorkspaceInvite[]; verified: boolean }>('/api/v1/invitations'),
@@ -134,7 +158,7 @@ export const api = {
     asset?: { code: string; issuer: string },
     memoType?: string,
   ) =>
-    req<Transaction>('/api/v1/transactions', {
+    req<PaymentResult>('/api/v1/transactions', {
       method: 'POST',
       json: {
         wallet_id: walletId,

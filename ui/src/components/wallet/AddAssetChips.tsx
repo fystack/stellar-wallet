@@ -26,7 +26,7 @@ export default function AddAssetChips({
         <button
           key={asset.code + asset.issuer}
           onClick={() => onAdd(asset)}
-          className="flex items-center gap-1.5 border border-line px-2.5 py-1 text-xs font-semibold text-ink-soft transition-colors hover:border-brand hover:text-brand"
+          className="btn btn-secondary px-2.5 py-1 text-xs text-ink-soft hover:border-brand hover:text-brand"
         >
           <TokenLogo symbol={asset.code} size={16} />+ {asset.code}
         </button>

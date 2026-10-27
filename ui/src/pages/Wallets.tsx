@@ -1,3 +1,5 @@
+import { readPreference, writePreference } from '../lib/preferences.ts'
+import Tooltip from '../components/ui/Tooltip.tsx'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -68,7 +70,7 @@ function WalletGrid({
         >
           <div className="mb-4 flex items-center justify-between">
             <ChainLogo chain={w.chain} size={40} />
-            <span className="bg-brand-soft px-2.5 py-1 text-xs font-semibold uppercase text-brand">
+            <span className="badge badge-brand uppercase">
               {w.chain} · 2-of-3
             </span>
           </div>
@@ -104,12 +106,12 @@ export default function Wallets({ loading, failed, onRetry, wallets, workspaceNa
   const hasWallets = wallets.length > 0
   // Shared with the Settings "Hide balances" pref, and persisted.
   const [hidden, setHidden] = useState(
-    () => localStorage.getItem('pref_hide') === '1',
+    () => readPreference('pref_hide') === '1',
   )
   const toggleHidden = () =>
     setHidden((h) => {
       const next = !h
-      localStorage.setItem('pref_hide', next ? '1' : '0')
+      writePreference('pref_hide', next ? '1' : '0')
       return next
     })
 
@@ -117,7 +119,7 @@ export default function Wallets({ loading, failed, onRetry, wallets, workspaceNa
     return (
       <div role="alert" className="mx-auto mt-10 max-w-[1040px] text-center">
         <p className="text-ink-soft">Unable to load wallets for {workspaceName || 'this workspace'}.</p>
-        <button className="cta mt-4" onClick={onRetry}>
+        <button className="btn btn-primary btn-lg mt-4" onClick={onRetry}>
           Try again
         </button>
       </div>
@@ -142,18 +144,19 @@ export default function Wallets({ loading, failed, onRetry, wallets, workspaceNa
             {workspaceName && <p className="truncate text-sm text-muted">{workspaceName}</p>}
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={toggleHidden}
-              className="border border-line p-2 text-muted hover:bg-hover"
-              aria-label={hidden ? 'Show balances' : 'Hide balances'}
-              title={hidden ? 'Show balances' : 'Hide balances'}
-            >
-              {hidden ? <EyeOffIcon /> : <EyeIcon />}
-            </button>
+            <Tooltip label={hidden ? 'Show balances' : 'Hide balances'}>
+              <button
+                onClick={toggleHidden}
+                className="btn btn-secondary p-2 text-muted"
+                aria-label={hidden ? 'Show balances' : 'Hide balances'}
+              >
+                {hidden ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </Tooltip>
             {onCreate && (
               <button
                 onClick={onCreate}
-                className="bg-brand px-4 py-2.5 font-semibold text-white transition-colors hover:bg-brand-deep"
+                className="btn btn-primary"
               >
                 + New wallet
               </button>
@@ -194,7 +197,7 @@ export default function Wallets({ loading, failed, onRetry, wallets, workspaceNa
         </div>
 
         {onCreate ? (
-          <button className="cta mt-8 w-full !px-6 sm:mt-11 sm:w-auto" onClick={onCreate}>
+          <button className="btn btn-primary btn-lg mt-8 w-full !px-6 sm:mt-11 sm:w-auto" onClick={onCreate}>
             Create your first wallet
           </button>
         ) : (

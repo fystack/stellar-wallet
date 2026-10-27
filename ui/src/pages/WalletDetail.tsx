@@ -6,7 +6,7 @@ import { assetKey } from '../hooks/useBalances.ts'
 import { useWalletDetail } from '../hooks/useWalletDetail.ts'
 import CopyAddress from '../components/CopyAddress.tsx'
 import ReceiveModal from '../components/ReceiveModal.tsx'
-import TxDetailModal from '../components/TxDetailModal.tsx'
+import TxDetailModal from '../components/transaction/TxDetailModal.tsx'
 import DeleteWalletBar from '../components/wallet/DeleteWalletBar.tsx'
 import BalanceList from '../components/wallet/BalanceList.tsx'
 import AddAssetChips from '../components/wallet/AddAssetChips.tsx'
@@ -28,7 +28,7 @@ export default function WalletDetail({
   focusTxId?: string | null
   onFocusHandled?: () => void
   onBack: () => void
-  onSend: () => void
+  onSend?: () => void
   // Undefined for members: only workspace owners delete wallets.
   onDelete?: (id: string) => Promise<void>
   readOnly?: boolean
@@ -57,7 +57,7 @@ export default function WalletDetail({
         {onDelete && (
           <button
             onClick={() => setConfirmDelete(true)}
-            className="flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-danger"
+            className="btn btn-ghost-danger text-sm"
           >
             <TrashIcon size={16} /> Delete
           </button>
@@ -103,28 +103,28 @@ export default function WalletDetail({
           />
         )}
 
-        {readOnly && (
-          <p className="mb-3 bg-card px-3.5 py-2.5 text-sm text-ink-soft">Only workspace owners can send, swap or add assets for now.</p>
+        {!onSend && (
+          <p className="notice notice-info mb-3">Only workspace owners and operators can send. Ask an owner to make you an operator.</p>
         )}
         <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3">
-          {!readOnly && (
+          {onSend && (
             <button
               onClick={onSend}
-              className="flex items-center justify-center gap-2 bg-brand px-4 py-3 font-semibold text-white transition-colors hover:bg-brand-deep sm:px-5"
+              className="btn btn-primary py-3 sm:px-5"
             >
               <SendIcon size={18} /> Send
             </button>
           )}
           <button
             onClick={() => setShowReceive(true)}
-            className="border border-line px-4 py-3 font-semibold text-ink-soft transition-colors hover:bg-hover sm:px-5"
+            className="btn btn-secondary py-3 sm:px-5"
           >
             Receive
           </button>
           <button
             onClick={() => void detail.fund()}
             disabled={detail.funding}
-            className="col-span-2 border border-line px-4 py-3 font-semibold text-ink-soft transition-colors hover:bg-hover disabled:opacity-50 sm:col-auto sm:px-5"
+            className="btn btn-secondary col-span-2 py-3 sm:col-auto sm:px-5"
           >
             {detail.funding ? 'Funding…' : 'Fund (testnet)'}
           </button>
