@@ -51,7 +51,7 @@ Go (Gin) + SQLite API. Testnet only. Follow these when adding or changing backen
 
 - Names are full words matching the domain (`transaction`, not `tx`; `wallet`, not `w`). Exceptions: receivers (`s` for services and repositories, `h` for handlers) and `tx` for a `*sql.Tx`.
 - Import groups: stdlib, then `stellar-wallet-backend/...`, then third-party.
-- Keep `backend/README.md` in sync when you add a service, handler or convention.
+- Keep `backend/README.md` in sync when you add a package, a main flow or a convention; it lists packages, not files.
 
 ## Commits
 
