@@ -6,17 +6,6 @@ import CopyAddress from './CopyAddress.tsx'
 import { ChainLogo, TokenLogo, chainTokens } from '../logos.tsx'
 import type { Chain, Wallet } from '../types.ts'
 
-type ChainOption = {
-  id: Chain
-  name: string
-  symbol: string
-  disabled?: boolean
-}
-
-const chains: ChainOption[] = [
-  { id: 'stellar', name: 'Stellar', symbol: 'XLM' },
-]
-
 type Props = {
   wallets: Wallet[]
   onClose: () => void
@@ -31,7 +20,6 @@ export default function CreateWalletModal({
   onOpen,
 }: Props) {
   const [name, setName] = useState('')
-  const [chain, setChain] = useState<Chain>('stellar')
   const [creatingId, setCreatingId] = useState<string | null>(null)
   const [error, setError] = useState('')
 
@@ -43,7 +31,6 @@ export default function CreateWalletModal({
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const selected = chains.find((c) => c.id === chain)!
   const created = wallets.find((w) => w.id === creatingId) ?? null
   const ready = created?.status === 'ready'
 
@@ -52,8 +39,8 @@ export default function CreateWalletModal({
     setError('')
     try {
       const id = await onCreate({
-        name: name.trim() || `${selected.name} Wallet`,
-        chain,
+        name: name.trim() || 'Stellar Wallet',
+        chain: 'stellar',
       })
       setCreatingId(id)
     } catch {
@@ -101,7 +88,7 @@ export default function CreateWalletModal({
       >
         <div className="mb-5 flex items-start justify-between gap-3 sm:mb-6">
           <div className="min-w-0">
-            <h2 className="text-xl font-bold sm:text-2xl">Create a new wallet</h2>
+            <h2 className="text-xl font-bold sm:text-2xl">Create a Stellar wallet</h2>
             <p className="mt-1 text-[15px] text-muted">
               Secured by 2-of-3 threshold signatures.
             </p>
@@ -116,44 +103,18 @@ export default function CreateWalletModal({
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="mb-2 text-sm font-semibold text-ink-soft">Choose chain</div>
-          <div className="mb-5 grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3">
-            {chains.map((c) => {
-              const active = c.id === chain
-              return (
-                <button
-                  type="button"
-                  key={c.id}
-                  disabled={c.disabled}
-                  onClick={() => setChain(c.id)}
-                  className={
-                    'flex items-center gap-3 border p-3.5 text-left transition ' +
-                    (active
-                      ? 'border-brand bg-brand-soft'
-                      : c.disabled
-                        ? 'cursor-not-allowed border-line bg-card opacity-60'
-                      : 'border-line hover:border-line-strong')
-                  }
-                >
-                  <ChainLogo chain={c.id} size={36} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-semibold leading-tight">
-                      {c.name}
-                    </span>
-                    <span className="mt-1 flex items-center gap-1">
-                      {chainTokens[c.id].map((t) => (
-                        <TokenLogo key={t} symbol={t} size={16} />
-                      ))}
-                      {c.disabled && (
-                        <span className="ml-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                          Coming soon
-                        </span>
-                      )}
-                    </span>
-                  </span>
-                </button>
-              )
-            })}
+          <div className="mb-5 flex items-center gap-3 border border-line p-3.5">
+            <ChainLogo chain="stellar" size={36} />
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold leading-tight">Stellar</span>
+              <span className="mt-1 flex items-center gap-1">
+                {chainTokens.stellar.map((token) => (
+                  <TokenLogo key={token} symbol={token} size={16} />
+                ))}
+                <span className="ml-1 text-xs text-muted">and any Stellar asset</span>
+              </span>
+            </span>
+            <span className="badge badge-neutral">Testnet</span>
           </div>
 
           <label className="mb-5 flex flex-col gap-2">
@@ -163,7 +124,7 @@ export default function CreateWalletModal({
             <input
               className="field-input"
               type="text"
-              placeholder={`${selected.name} Wallet`}
+              placeholder="Stellar Wallet"
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoFocus
