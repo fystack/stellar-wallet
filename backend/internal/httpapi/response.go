@@ -25,6 +25,19 @@ type ErrorResponse struct {
 	Error ErrorDetail `json:"error"`
 }
 
+type CursorMeta struct {
+	NextCursor *string `json:"next_cursor"`
+	HasMore    bool    `json:"has_more"`
+}
+
+// Cursor builds the pagination meta; an empty next means the last page.
+func Cursor(next string) CursorMeta {
+	if next == "" {
+		return CursorMeta{}
+	}
+	return CursorMeta{NextCursor: &next, HasMore: true}
+}
+
 func Success(c *gin.Context, status int, data any) {
 	SuccessWithMeta(c, status, data, nil)
 }

@@ -109,6 +109,9 @@ func NewRouter(d Dependencies, corsOrigin string) *gin.Engine {
 	protected.DELETE("/workspaces/:id/approval-policy", workspaces.disableApprovalPolicy)
 	protected.POST("/workspaces/:id/invites", workspaces.invite)
 	protected.DELETE("/workspaces/:id/invites/:inviteId", workspaces.revokeInvite)
+	protected.GET("/workspaces/:id/assets", workspaces.assets)
+	protected.POST("/workspaces/:id/assets", workspaces.addAsset)
+	protected.DELETE("/workspaces/:id/assets", workspaces.removeAsset)
 	protected.POST("/invites/:token/accept", workspaces.acceptInvite)
 	protected.GET("/invitations", workspaces.invitations)
 	protected.POST("/invitations/:id/accept", workspaces.acceptInvitation)
@@ -122,8 +125,6 @@ func NewRouter(d Dependencies, corsOrigin string) *gin.Engine {
 
 	protected.GET("/chains", settings.getChains)
 	protected.GET("/config", settings.getConfig)
-	protected.POST("/assets", settings.addAsset)
-	protected.DELETE("/assets", settings.removeAsset)
 
 	return router
 }

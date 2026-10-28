@@ -141,6 +141,9 @@ export default function WalletDetail({
       <TransactionList
         key={wallet.id}
         transactions={detail.transactions}
+        hasMore={detail.hasMoreHistory}
+        loadingMore={detail.loadingMoreHistory}
+        onLoadMore={detail.loadMoreHistory}
         refreshing={detail.refreshing}
         onRefresh={() => void detail.refresh()}
         onOpen={setOpenTxId}

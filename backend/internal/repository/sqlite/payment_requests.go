@@ -74,9 +74,14 @@ func (s *PaymentRequestRepository) OpenPaymentRequests(workspaceID string, now i
 }
 
 // ClosedPaymentRequests lists decided and expired requests, newest first.
-func (s *PaymentRequestRepository) ClosedPaymentRequests(workspaceID string, now int64, limit int) ([]domain.PaymentRequest, error) {
-	return s.paymentRequests(`WHERE payment_requests.workspace_id = ? AND (payment_requests.status != ? OR payment_requests.expires_at <= ?)
-		ORDER BY payment_requests.created_at DESC LIMIT ?`, workspaceID, domain.PaymentRequestPending, now, limit)
+func (s *PaymentRequestRepository) ClosedPaymentRequests(workspaceID string, now int64, before storecontract.Cursor, limit int) ([]domain.PaymentRequest, error) {
+	closed := `WHERE payment_requests.workspace_id = ? AND (payment_requests.status != ? OR payment_requests.expires_at <= ?) `
+	order := `ORDER BY payment_requests.created_at DESC, payment_requests.id DESC LIMIT ?`
+	if before.ID == "" {
+		return s.paymentRequests(closed+order, workspaceID, domain.PaymentRequestPending, now, limit)
+	}
+	return s.paymentRequests(closed+`AND (payment_requests.created_at, payment_requests.id) < (?, ?) `+order,
+		workspaceID, domain.PaymentRequestPending, now, before.CreatedAt, before.ID, limit)
 }
 
 func (s *PaymentRequestRepository) paymentRequests(where string, args ...any) ([]domain.PaymentRequest, error) {
@@ -110,9 +115,15 @@ func (s *PaymentRequestRepository) attachVotes(requests []domain.PaymentRequest)
 	for index, request := range requests {
 		args[index] = request.ID
 	}
+	args = append([]any{domain.RoleOwner, domain.RoleOperator}, args...)
 	rows, err := s.db.Query(
-		`SELECT payment_request_votes.request_id, payment_request_votes.user_id, COALESCE(users.email, ''), payment_request_votes.decision, payment_request_votes.created_at
-		 FROM payment_request_votes LEFT JOIN users ON users.id = payment_request_votes.user_id
+		`SELECT payment_request_votes.request_id, payment_request_votes.user_id, COALESCE(users.email, ''), payment_request_votes.decision,
+			payment_request_votes.created_at, COALESCE(workspace_members.role IN (?, ?), 0)
+		 FROM payment_request_votes
+		 JOIN payment_requests ON payment_requests.id = payment_request_votes.request_id
+		 LEFT JOIN users ON users.id = payment_request_votes.user_id
+		 LEFT JOIN workspace_members ON workspace_members.user_id = payment_request_votes.user_id
+			AND workspace_members.workspace_id = payment_requests.workspace_id
 		 WHERE payment_request_votes.request_id IN (`+strings.TrimSuffix(strings.Repeat("?,", len(requests)), ",")+`)
 		 ORDER BY payment_request_votes.created_at`, args...,
 	)
@@ -124,7 +135,7 @@ func (s *PaymentRequestRepository) attachVotes(requests []domain.PaymentRequest)
 	for rows.Next() {
 		var requestID string
 		var vote domain.PaymentRequestVote
-		if err := rows.Scan(&requestID, &vote.UserID, &vote.Email, &vote.Decision, &vote.CreatedAt); err != nil {
+		if err := rows.Scan(&requestID, &vote.UserID, &vote.Email, &vote.Decision, &vote.CreatedAt, &vote.Counted); err != nil {
 			return fmt.Errorf("scan vote: %w", err)
 		}
 		votes[requestID] = append(votes[requestID], vote)
@@ -231,10 +242,18 @@ func (s *PaymentRequestRepository) AssignTransaction(requestID, transactionID st
 		transactionID, requestID, domain.PaymentRequestExecuting)
 }
 
-func (s *PaymentRequestRepository) CompletePaymentRequest(requestID string) error {
-	return exec(s.db, "complete payment request",
-		`UPDATE payment_requests SET status = ? WHERE id = ? AND status = ?`,
-		domain.PaymentRequestExecuted, requestID, domain.PaymentRequestExecuting)
+// SettleByTransaction returns the settled request id, or "" when no executing request owns the transaction.
+func (s *PaymentRequestRepository) SettleByTransaction(transactionID string, status domain.PaymentRequestStatus, reason string) (string, error) {
+	var requestID string
+	err := s.db.QueryRow(`UPDATE payment_requests SET status = ?, reason = ? WHERE transaction_id = ? AND status = ? RETURNING id`,
+		status, reason, transactionID, domain.PaymentRequestExecuting).Scan(&requestID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("settle payment request: %w", err)
+	}
+	return requestID, nil
 }
 
 func (s *PaymentRequestRepository) FailPaymentRequest(requestID, reason string) error {

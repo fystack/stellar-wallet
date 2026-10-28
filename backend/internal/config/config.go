@@ -101,8 +101,7 @@ func Load() (Config, error) {
 	return cfg, cfg.Validate()
 }
 
-// Validate prevents credentialed auth from being deployed with wildcard origins
-// or insecure cookies on public hosts. HTTP is supported for local development.
+// Validate rejects wildcard origins and insecure cookies on public hosts; HTTP is allowed only locally.
 func (c Config) Validate() error {
 	for name, value := range map[string]string{"public_url": c.PublicURL, "frontend_url": c.FrontendURL, "cors_origin": c.CORSOrigin} {
 		u, err := url.Parse(value)

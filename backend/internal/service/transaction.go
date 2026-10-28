@@ -32,8 +32,6 @@ type PaymentSigner interface {
 
 type SigningCluster interface{ OnlineCount() int }
 
-// TransactionService owns payment creation and the shared signing/broadcast lifecycle.
-// Other transaction types still build their own envelopes, then use this lifecycle.
 type TransactionService struct {
 	wallets      repository.Store
 	transactions *sqlite.TransactionRepository
@@ -118,8 +116,7 @@ func (s *TransactionService) preparePayment(wallet domain.Wallet, body PaymentIn
 		return preparedPayment{}, apperror.RecipientRequired.New()
 	}
 
-	// Resolve federation / muxed recipients to a concrete address. If the
-	// server requires a memo and the user didn't supply one, adopt it.
+	// A federation server's required memo is used when the user gave none.
 	memo, memoType := strings.TrimSpace(body.Memo), body.MemoType
 	destination := strings.TrimSpace(body.To)
 	if wallet.Chain == "stellar" {
@@ -198,11 +195,21 @@ func (s *TransactionService) requireSigning() error {
 	return requireQuorum(s.cluster, SignQuorum, "signing")
 }
 
-func (s *TransactionService) ListForWallet(userID, walletID string) ([]domain.Transaction, error) {
-	if _, err := ownedWallet(s.wallets, userID, walletID); err != nil {
-		return nil, err
+func (s *TransactionService) ListForWallet(userID, walletID string, input PageInput) (Page[domain.Transaction], error) {
+	before, limit, err := input.resolve()
+	if err != nil {
+		return Page[domain.Transaction]{}, err
 	}
-	return s.transactions.TransactionsByWallet(walletID)
+	if _, err := ownedWallet(s.wallets, userID, walletID); err != nil {
+		return Page[domain.Transaction]{}, err
+	}
+	transactions, err := s.transactions.TransactionsByWallet(walletID, before, limit+1)
+	if err != nil {
+		return Page[domain.Transaction]{}, err
+	}
+	return pageOf(transactions, limit, func(transaction domain.Transaction) repository.Cursor {
+		return repository.Cursor{CreatedAt: transaction.CreatedAt, ID: transaction.ID}
+	}), nil
 }
 
 func (s *TransactionService) Get(userID, transactionID string) (domain.Transaction, error) {
@@ -230,9 +237,7 @@ func (s *TransactionService) OnChain(hash string) (map[string]any, error) {
 	return metadata, nil
 }
 
-// OnSign broadcasts a signed transaction. Only the first result for a transaction that is
-// still signing is applied, so late or duplicate results can never broadcast twice.
-// It returns the transaction when balances should be refreshed.
+// OnSign returns the transaction when balances should be refreshed.
 func (s *TransactionService) OnSign(result mpc.SignResult) *domain.Transaction {
 	transaction, ok := s.transactions.TransactionByID(result.TransactionID)
 	if !ok {
@@ -289,13 +294,16 @@ func (s *TransactionService) failSigning(transactionID, reason string) {
 }
 
 func (s *TransactionService) publishTransactionByID(transactionID string) {
-	if transaction, ok := s.transactions.TransactionByID(transactionID); ok {
-		publishTransaction(s.wallets, s.hub, transaction)
+	transaction, ok := s.transactions.TransactionByID(transactionID)
+	if !ok {
+		return
+	}
+	publishTransaction(s.wallets, s.hub, transaction)
+	if s.approvals != nil {
+		s.approvals.settle(transaction)
 	}
 }
 
-// WatchSignTimeout fails a transaction still signing after the timeout,
-// covering nodes that die or never respond after dispatch.
 func (s *TransactionService) WatchSignTimeout(transactionID string) {
 	time.AfterFunc(signTimeout, func() {
 		s.failSigning(transactionID, "signing timed out — MPC nodes did not respond")

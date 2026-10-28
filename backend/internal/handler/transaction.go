@@ -15,12 +15,17 @@ type TransactionHandler struct {
 }
 
 func (h *TransactionHandler) listForWallet(c *gin.Context) {
-	transactions, err := h.transactions.ListForWallet(c.GetString("userID"), c.Param("id"))
+	var page service.PageInput
+	if err := c.ShouldBindQuery(&page); err != nil {
+		httpapi.Error(c, apperror.InvalidPage.New())
+		return
+	}
+	transactions, err := h.transactions.ListForWallet(c.GetString("userID"), c.Param("id"), page)
 	if err != nil {
 		httpapi.Error(c, err)
 		return
 	}
-	httpapi.Success(c, http.StatusOK, transactions)
+	httpapi.SuccessWithMeta(c, http.StatusOK, transactions.Items, httpapi.Cursor(transactions.Next))
 }
 
 func (h *TransactionHandler) get(c *gin.Context) {

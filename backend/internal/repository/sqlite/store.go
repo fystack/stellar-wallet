@@ -20,37 +20,6 @@ func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
-func (s *Store) CustomAssets() ([]domain.CustomAsset, error) {
-	rows, err := s.db.Query(`SELECT code, issuer FROM custom_assets ORDER BY code`)
-	if err != nil {
-		return nil, fmt.Errorf("list custom assets: %w", err)
-	}
-	defer rows.Close()
-
-	assets := []domain.CustomAsset{}
-	for rows.Next() {
-		var asset domain.CustomAsset
-		if err := rows.Scan(&asset.Code, &asset.Issuer); err != nil {
-			return nil, fmt.Errorf("scan custom asset: %w", err)
-		}
-		assets = append(assets, asset)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate custom assets: %w", err)
-	}
-	return assets, nil
-}
-
-func (s *Store) AddAsset(asset domain.CustomAsset) error {
-	return exec(s.db, "add asset",
-		`INSERT OR IGNORE INTO custom_assets (code, issuer) VALUES (?, ?)`, asset.Code, asset.Issuer,
-	)
-}
-
-func (s *Store) RemoveAsset(code, issuer string) error {
-	return exec(s.db, "remove asset", `DELETE FROM custom_assets WHERE code = ? AND issuer = ?`, code, issuer)
-}
-
 const walletColumns = `id, user_id, workspace_id, name, chain, symbol, address, pubkey, balance, status, created_at`
 
 func scanWallet(scanner interface{ Scan(...any) error }) (domain.Wallet, error) {

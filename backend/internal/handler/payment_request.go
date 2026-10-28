@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	"stellar-wallet-backend/internal/apperror"
 	"stellar-wallet-backend/internal/httpapi"
 	"stellar-wallet-backend/internal/service"
 
@@ -14,12 +15,17 @@ type PaymentRequestHandler struct {
 }
 
 func (h *PaymentRequestHandler) list(c *gin.Context) {
-	requests, err := h.requests.List(c.GetString("userID"), c.Param("id"), c.Query("status"))
+	var page service.PageInput
+	if err := c.ShouldBindQuery(&page); err != nil {
+		httpapi.Error(c, apperror.InvalidPage.New())
+		return
+	}
+	requests, err := h.requests.List(c.GetString("userID"), c.Param("id"), c.Query("status"), page)
 	if err != nil {
 		httpapi.Error(c, err)
 		return
 	}
-	httpapi.Success(c, http.StatusOK, requests)
+	httpapi.SuccessWithMeta(c, http.StatusOK, requests.Items, httpapi.Cursor(requests.Next))
 }
 
 func (h *PaymentRequestHandler) get(c *gin.Context) {

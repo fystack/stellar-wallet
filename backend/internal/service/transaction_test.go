@@ -246,3 +246,38 @@ func TestSignResultIsAppliedOnlyWhileSigning(t *testing.T) {
 		}
 	})
 }
+
+func TestListForWalletPages(t *testing.T) {
+	s, _, _ := newTestTransactionService(t)
+	for _, created := range []struct{ id, at string }{
+		{"a", "2026-10-01T00:00:00Z"}, {"b", "2026-10-02T00:00:00Z"}, {"c", "2026-10-02T00:00:00Z"}, {"d", "2026-10-03T00:00:00Z"},
+	} {
+		if err := s.transactions.CreateTransaction(domain.Transaction{ID: created.id, WalletID: "wallet-1", UserID: "owner", Type: domain.TransactionOut, Status: domain.TransactionConfirmed, CreatedAt: created.at}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first, err := s.ListForWallet("owner", "wallet-1", PageInput{Limit: 2})
+	if err != nil || len(first.Items) != 2 || first.Items[0].ID != "d" || first.Items[1].ID != "c" || first.Next == "" {
+		t.Fatalf("first page = %#v, %v", first, err)
+	}
+	second, err := s.ListForWallet("owner", "wallet-1", PageInput{Limit: 2, Cursor: first.Next})
+	if err != nil || len(second.Items) != 2 || second.Items[0].ID != "b" || second.Items[1].ID != "a" || second.Next != "" {
+		t.Fatalf("second page = %#v, %v", second, err)
+	}
+	rejections := []struct {
+		name   string
+		userID string
+		page   PageInput
+		code   string
+	}{
+		{"another user's wallet", "stranger", PageInput{}, "wallet_not_found"},
+		{"page too large", "owner", PageInput{Limit: maxPageSize + 1}, "invalid_request"},
+		{"malformed cursor", "owner", PageInput{Cursor: "%%%"}, "invalid_request"},
+	}
+	for _, tc := range rejections {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := s.ListForWallet(tc.userID, "wallet-1", tc.page)
+			assertCode(t, err, tc.code)
+		})
+	}
+}

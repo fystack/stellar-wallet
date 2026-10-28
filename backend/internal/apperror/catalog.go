@@ -93,6 +93,7 @@ var (
 	PaymentRequestClosed          = define(Conflict, "payment_request_closed", "This payment request was already decided, cancelled or has expired.")
 	PaymentRequestCancelForbidden = define(Forbidden, "payment_request_cancel_forbidden", "Only the person who started this payment or a workspace owner can cancel it.")
 	InvalidPaymentRequestFilter   = define(Invalid, "invalid_request", "Status must be pending or history.")
+	InvalidPage                   = define(Invalid, "invalid_request", "Page size must be 1 to 100, with a cursor from a previous page.")
 	ApprovalRoleRequired          = define(Forbidden, "approval_role_required", "Only workspace owners and operators can approve payments.")
 	ApprovalSelfNotAllowed        = define(Forbidden, "approval_self_not_allowed", "You can't approve or reject a payment you started.")
 	ApprovalAlreadyVoted          = define(Conflict, "approval_already_voted", "You already responded to this payment request.")

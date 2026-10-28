@@ -89,6 +89,28 @@ func TestWorkspaceInviteHTTPContract(t *testing.T) {
 		t.Fatalf("member invite = %d %#v", status, body)
 	}
 
+	assetsPath := "/workspaces/" + workspaceID + "/assets"
+	status, body = request("GET", assetsPath, "", teammate)
+	if status != http.StatusOK || len(data(body)["assets"].([]any)) != 4 {
+		t.Fatalf("member lists assets = %d %#v", status, body)
+	}
+	euro := `{"code":"EURC","issuer":"GEURISSUER"}`
+	if status, body = request("POST", assetsPath, euro, teammate); status != http.StatusForbidden || errorCode(body) != "workspace_owner_required" {
+		t.Fatalf("member adds asset = %d %#v", status, body)
+	}
+	if status, body = request("DELETE", assetsPath+"?code=EURC&issuer=GEURISSUER", "", teammate); status != http.StatusForbidden || errorCode(body) != "workspace_owner_required" {
+		t.Fatalf("member removes asset = %d %#v", status, body)
+	}
+	if status, body = request("POST", assetsPath, `{"code":"","issuer":""}`, owner); status != http.StatusBadRequest || errorCode(body) != "invalid_asset" {
+		t.Fatalf("empty asset = %d %#v", status, body)
+	}
+	if status, body = request("POST", assetsPath, euro, owner); status != http.StatusOK || len(data(body)["assets"].([]any)) != 5 {
+		t.Fatalf("owner adds asset = %d %#v", status, body)
+	}
+	if status, body = request("DELETE", assetsPath+"?code=EURC&issuer=GEURISSUER", "", owner); status != http.StatusOK || len(data(body)["assets"].([]any)) != 4 {
+		t.Fatalf("owner removes asset = %d %#v", status, body)
+	}
+
 	policyPath := "/workspaces/" + workspaceID + "/approval-policy"
 	status, body = request("GET", policyPath, "", teammate)
 	if status != http.StatusOK || data(body)["policy"] != nil || data(body)["maxApprovals"] != float64(0) {

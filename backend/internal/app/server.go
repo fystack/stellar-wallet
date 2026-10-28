@@ -48,7 +48,7 @@ type Server struct {
 func NewServer(d Dependencies) *Server {
 	transactions := service.NewTransactionService(d.Store, d.Transactions, d.Chain, d.Cluster, d.Hub)
 	wallets := service.NewWalletService(d.Store, d.Transactions, d.Workspaces, d.Chain, d.Cluster, d.Hub)
-	settings := service.NewSettingsService(d.Store, d.Chain)
+	settings := service.NewSettingsService(d.Chain)
 	approvals := service.NewPaymentRequestService(d.Store, d.Workspaces, d.PaymentRequests, transactions, d.Hub, d.Mailer, d.FrontendURL)
 	transactions.SetApprovals(approvals)
 	routes := handler.Dependencies{

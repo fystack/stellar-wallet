@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"stellar-wallet-backend/internal/apperror"
@@ -18,19 +19,19 @@ import (
 
 const (
 	paymentRequestTTL     = 7 * 24 * time.Hour
-	closedRequestsShown   = 100
 	PaymentRequestsOpen   = "pending"
 	PaymentRequestsClosed = "history"
 )
 
 type PaymentRequestService struct {
-	wallets     repository.Store
-	workspaces  *sqlite.WorkspaceRepository
-	requests    *sqlite.PaymentRequestRepository
-	payments    *TransactionService
-	hub         *realtime.Hub
-	mailer      Mailer
-	frontendURL string
+	wallets       repository.Store
+	workspaces    *sqlite.WorkspaceRepository
+	requests      *sqlite.PaymentRequestRepository
+	payments      *TransactionService
+	hub           *realtime.Hub
+	mailer        Mailer
+	frontendURL   string
+	notifications sync.WaitGroup
 }
 
 func NewPaymentRequestService(wallets repository.Store, workspaces *sqlite.WorkspaceRepository, requests *sqlite.PaymentRequestRepository, payments *TransactionService, hub *realtime.Hub, mailer Mailer, frontendURL string) *PaymentRequestService {
@@ -101,32 +102,44 @@ func (s *PaymentRequestService) hold(wallet domain.Wallet, initiatorID string, p
 		return nil, err
 	}
 	s.publish(stored)
-	s.notifyApprovers(stored)
+	s.notifications.Add(1)
+	go func() {
+		defer s.notifications.Done()
+		s.notifyApprovers(stored)
+	}()
 	return &stored, nil
 }
 
-func (s *PaymentRequestService) List(userID, workspaceID, filter string) ([]domain.PaymentRequest, error) {
+// List returns every open request; history comes a page at a time.
+func (s *PaymentRequestService) List(userID, workspaceID, filter string, input PageInput) (Page[domain.PaymentRequest], error) {
+	before, limit, err := input.resolve()
+	if err != nil {
+		return Page[domain.PaymentRequest]{}, err
+	}
 	if _, err := memberWorkspace(s.workspaces, workspaceID, userID); err != nil {
-		return nil, err
+		return Page[domain.PaymentRequest]{}, err
 	}
 	now := time.Now().Unix()
-	var requests []domain.PaymentRequest
-	var err error
+	var page Page[domain.PaymentRequest]
 	switch filter {
 	case PaymentRequestsOpen, "":
-		requests, err = s.requests.OpenPaymentRequests(workspaceID, now)
+		page.Items, err = s.requests.OpenPaymentRequests(workspaceID, now)
 	case PaymentRequestsClosed:
-		requests, err = s.requests.ClosedPaymentRequests(workspaceID, now, closedRequestsShown)
+		var requests []domain.PaymentRequest
+		requests, err = s.requests.ClosedPaymentRequests(workspaceID, now, before, limit+1)
+		page = pageOf(requests, limit, func(request domain.PaymentRequest) repository.Cursor {
+			return repository.Cursor{CreatedAt: request.CreatedAt, ID: request.ID}
+		})
 	default:
-		return nil, apperror.InvalidPaymentRequestFilter.New()
+		return page, apperror.InvalidPaymentRequestFilter.New()
 	}
 	if err != nil {
-		return nil, err
+		return Page[domain.PaymentRequest]{}, err
 	}
-	for index := range requests {
-		requests[index] = withEffectiveStatus(requests[index], now)
+	for index := range page.Items {
+		page.Items[index] = withEffectiveStatus(page.Items[index], now)
 	}
-	return requests, nil
+	return page, nil
 }
 
 func (s *PaymentRequestService) Get(userID, requestID string) (domain.PaymentRequest, error) {
@@ -186,7 +199,7 @@ func (s *PaymentRequestService) Cancel(userID, requestID string) (domain.Payment
 	return s.refreshed(request.ID)
 }
 
-// ReconcileExecuting settles requests a previous run claimed: sent if their transaction was saved, failed otherwise.
+// ReconcileExecuting settles requests a previous run claimed from the state of their transaction.
 func (s *PaymentRequestService) ReconcileExecuting() {
 	requests, err := s.requests.ExecutingPaymentRequests()
 	if err != nil {
@@ -194,12 +207,33 @@ func (s *PaymentRequestService) ReconcileExecuting() {
 		return
 	}
 	for _, request := range requests {
-		if _, sent := s.payments.transactions.TransactionByID(request.TransactionID); sent {
-			logError("complete payment request="+request.ID, s.requests.CompletePaymentRequest(request.ID))
-			s.publishByID(request.ID)
+		transaction, saved := s.payments.transactions.TransactionByID(request.TransactionID)
+		if !saved {
+			s.fail(request.ID, "The server restarted before this payment was sent. Start the payment again.")
 			continue
 		}
-		s.fail(request.ID, "The server restarted before this payment was sent. Start the payment again.")
+		s.settle(transaction)
+	}
+}
+
+// settle closes the executing request that owns a transaction once that transaction confirms or fails.
+func (s *PaymentRequestService) settle(transaction domain.Transaction) {
+	var status domain.PaymentRequestStatus
+	switch transaction.Status {
+	case domain.TransactionConfirmed:
+		status = domain.PaymentRequestExecuted
+	case domain.TransactionFailed:
+		status = domain.PaymentRequestFailed
+	default:
+		return
+	}
+	requestID, err := s.requests.SettleByTransaction(transaction.ID, status, transaction.Error)
+	if err != nil {
+		logError("settle payment request tx="+transaction.ID, err)
+		return
+	}
+	if requestID != "" {
+		s.publishByID(requestID)
 	}
 }
 
@@ -245,7 +279,6 @@ func (s *PaymentRequestService) execute(request domain.PaymentRequest) {
 		s.fail(request.ID, reason)
 		return
 	}
-	logError("complete payment request="+request.ID, s.requests.CompletePaymentRequest(request.ID))
 	s.publishByID(request.ID)
 }
 

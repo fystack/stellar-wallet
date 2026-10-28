@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"stellar-wallet-backend/internal/domain"
+	storecontract "stellar-wallet-backend/internal/repository"
 )
 
 // TransactionRepository persists sends, swaps, trustlines and incoming payments.
@@ -65,11 +66,14 @@ func (s *TransactionRepository) exists(query string, args ...any) (bool, error) 
 	return count > 0, nil
 }
 
-func (s *TransactionRepository) TransactionsByWallet(walletID string) ([]domain.Transaction, error) {
-	return s.transactions(
-		`SELECT `+transactionColumns+` FROM transactions
-		 WHERE wallet_id = ? ORDER BY created_at DESC`, walletID,
-	)
+func (s *TransactionRepository) TransactionsByWallet(walletID string, before storecontract.Cursor, limit int) ([]domain.Transaction, error) {
+	if before.ID == "" {
+		return s.transactions(`SELECT `+transactionColumns+` FROM transactions
+			WHERE wallet_id = ? ORDER BY created_at DESC, id DESC LIMIT ?`, walletID, limit)
+	}
+	return s.transactions(`SELECT `+transactionColumns+` FROM transactions
+		WHERE wallet_id = ? AND (created_at, id) < (?, ?) ORDER BY created_at DESC, id DESC LIMIT ?`,
+		walletID, before.CreatedAt, before.ID, limit)
 }
 
 // TransactionForUser returns the transaction only when userID is a member of its wallet's workspace.
@@ -119,8 +123,7 @@ func (s *TransactionRepository) transactions(query string, args ...any) ([]domai
 	return transactions, nil
 }
 
-// ClaimSignature stores the signature and moves a signing transaction to broadcast.
-// It returns false when the transaction already left signing (timed out, failed or a duplicate result).
+// ClaimSignature returns false when the transaction already left signing (timed out, failed or a duplicate result).
 func (s *TransactionRepository) ClaimSignature(transactionID, signature string) (bool, error) {
 	return transition(s.db, "claim signature",
 		`UPDATE transactions SET signature = ?, status = ? WHERE id = ? AND status = ?`,

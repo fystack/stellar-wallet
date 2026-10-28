@@ -8,6 +8,7 @@ import (
 
 	"stellar-wallet-backend/internal/chain"
 	"stellar-wallet-backend/internal/domain"
+	"stellar-wallet-backend/internal/mpc"
 	"stellar-wallet-backend/internal/realtime"
 	"stellar-wallet-backend/internal/repository/sqlite"
 )
@@ -110,6 +111,7 @@ func TestApprovalPolicyRoutesPayments(t *testing.T) {
 func TestHeldPaymentEmailsOtherSendersOnly(t *testing.T) {
 	f := newApprovalFixture(t, oneApprovalAbove10)
 	request := f.held(t, "teammate", "20")
+	f.approvals.notifications.Wait()
 	if len(f.mailer.sent) != 1 || !strings.HasPrefix(f.mailer.sent[0], "owner@example.com\n") || !strings.Contains(f.mailer.sent[0], "/#/approvals/"+request.ID) {
 		t.Fatalf("emails = %#v", f.mailer.sent)
 	}
@@ -125,7 +127,7 @@ func TestApprovalExecutesHeldPayment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if approved.Status != domain.PaymentRequestExecuted || approved.TransactionID == "" || approved.TransactionStatus != domain.TransactionSigning || f.signer.calls != 1 {
+	if approved.Status != domain.PaymentRequestExecuting || approved.TransactionID == "" || approved.TransactionStatus != domain.TransactionSigning || f.signer.calls != 1 {
 		t.Fatalf("approved = %#v, sign calls = %d", approved, f.signer.calls)
 	}
 	if len(approved.Votes) != 1 || approved.Votes[0].Email != "owner@example.com" || approved.Votes[0].Decision != domain.VoteApprove {
@@ -167,7 +169,7 @@ func TestPaymentWaitsForEveryRequiredApproval(t *testing.T) {
 		assertCode(t, err, "approval_already_voted")
 	}
 	second, err := f.approvals.Approve("stranger", request.ID)
-	if err != nil || second.Status != domain.PaymentRequestExecuted || f.signer.calls != 1 || len(second.Votes) != 2 {
+	if err != nil || second.Status != domain.PaymentRequestExecuting || f.signer.calls != 1 || len(second.Votes) != 2 {
 		t.Fatalf("after second approval = %#v, %v, sign calls = %d", second, err, f.signer.calls)
 	}
 }
@@ -191,7 +193,7 @@ func TestConcurrentFinalApprovalsSendOnce(t *testing.T) {
 	}
 	wait.Wait()
 	stored, err := f.approvals.Get("owner", request.ID)
-	if err != nil || stored.Status != domain.PaymentRequestExecuted || f.signer.calls != 1 {
+	if err != nil || stored.Status != domain.PaymentRequestExecuting || f.signer.calls != 1 {
 		t.Fatalf("request = %#v, %v, sign calls = %d", stored, err, f.signer.calls)
 	}
 }
@@ -363,28 +365,83 @@ func TestListPaymentRequests(t *testing.T) {
 	if _, err := f.approvals.Cancel("teammate", closed.ID); err != nil {
 		t.Fatal(err)
 	}
-	pending, err := f.approvals.List("stranger", f.team.ID, PaymentRequestsOpen)
-	if err != nil || len(pending) != 1 || pending[0].ID != open.ID {
+	pending, err := f.approvals.List("stranger", f.team.ID, PaymentRequestsOpen, PageInput{})
+	if err != nil || len(pending.Items) != 1 || pending.Items[0].ID != open.ID || pending.Next != "" {
 		t.Fatalf("pending = %#v, %v", pending, err)
 	}
-	history, err := f.approvals.List("stranger", f.team.ID, PaymentRequestsClosed)
-	if err != nil || len(history) != 1 || history[0].ID != closed.ID {
+	history, err := f.approvals.List("stranger", f.team.ID, PaymentRequestsClosed, PageInput{})
+	if err != nil || len(history.Items) != 1 || history.Items[0].ID != closed.ID || history.Next != "" {
 		t.Fatalf("history = %#v, %v", history, err)
 	}
-	_, err = f.approvals.List("outsider", f.team.ID, PaymentRequestsOpen)
-	assertCode(t, err, "workspace_not_found")
-	_, err = f.approvals.List("owner", f.team.ID, "everything")
-	assertCode(t, err, "invalid_request")
+	rejections := []struct {
+		name   string
+		userID string
+		filter string
+		page   PageInput
+		code   string
+	}{
+		{"outsider", "outsider", PaymentRequestsOpen, PageInput{}, "workspace_not_found"},
+		{"unknown filter", "owner", "everything", PageInput{}, "invalid_request"},
+		{"page too large", "owner", PaymentRequestsClosed, PageInput{Limit: maxPageSize + 1}, "invalid_request"},
+		{"negative page size", "owner", PaymentRequestsClosed, PageInput{Limit: -1}, "invalid_request"},
+		{"malformed cursor", "owner", PaymentRequestsClosed, PageInput{Cursor: "not a cursor"}, "invalid_request"},
+	}
+	for _, tc := range rejections {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := f.approvals.List(tc.userID, f.team.ID, tc.filter, tc.page)
+			assertCode(t, err, tc.code)
+		})
+	}
+}
+
+func TestPaymentRequestHistoryPages(t *testing.T) {
+	f := newApprovalFixture(t, oneApprovalAbove10)
+	var cancelled []string
+	for range 5 {
+		request := f.held(t, "teammate", "20")
+		if _, err := f.approvals.Cancel("teammate", request.ID); err != nil {
+			t.Fatal(err)
+		}
+		cancelled = append(cancelled, request.ID)
+	}
+	seen := map[string]bool{}
+	page := PageInput{Limit: 2}
+	for pages := 1; ; pages++ {
+		result, err := f.approvals.List("owner", f.team.ID, PaymentRequestsClosed, page)
+		if err != nil || len(result.Items) == 0 || len(result.Items) > 2 {
+			t.Fatalf("page %d = %#v, %v", pages, result, err)
+		}
+		for _, request := range result.Items {
+			if seen[request.ID] {
+				t.Fatalf("request %s returned twice", request.ID)
+			}
+			seen[request.ID] = true
+		}
+		if result.Next == "" {
+			if pages != 3 {
+				t.Fatalf("pages = %d, want 3", pages)
+			}
+			break
+		}
+		page.Cursor = result.Next
+	}
+	for _, id := range cancelled {
+		if !seen[id] {
+			t.Fatalf("request %s never returned", id)
+		}
+	}
 }
 
 func TestReconcileSettlesClaimedRequests(t *testing.T) {
 	cases := []struct {
-		name            string
-		transactionSent bool
-		want            domain.PaymentRequestStatus
+		name              string
+		transactionStatus domain.TransactionStatus
+		want              domain.PaymentRequestStatus
 	}{
-		{"transaction never saved", false, domain.PaymentRequestFailed},
-		{"transaction saved before the restart", true, domain.PaymentRequestExecuted},
+		{"transaction never saved", "", domain.PaymentRequestFailed},
+		{"transaction still signing", domain.TransactionSigning, domain.PaymentRequestExecuting},
+		{"transaction confirmed", domain.TransactionConfirmed, domain.PaymentRequestExecuted},
+		{"transaction failed", domain.TransactionFailed, domain.PaymentRequestFailed},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -393,14 +450,50 @@ func TestReconcileSettlesClaimedRequests(t *testing.T) {
 			if _, err := f.db.Exec(`UPDATE payment_requests SET status = ?, transaction_id = ? WHERE id = ?`, domain.PaymentRequestExecuting, "tx-1", request.ID); err != nil {
 				t.Fatal(err)
 			}
-			if tc.transactionSent {
-				if err := f.payments.transactions.CreateTransaction(domain.Transaction{ID: "tx-1", WalletID: "team-wallet", UserID: "teammate", Type: domain.TransactionOut, Status: domain.TransactionSigning}); err != nil {
+			if tc.transactionStatus != "" {
+				if err := f.payments.transactions.CreateTransaction(domain.Transaction{ID: "tx-1", WalletID: "team-wallet", UserID: "teammate", Type: domain.TransactionOut, Status: tc.transactionStatus}); err != nil {
 					t.Fatal(err)
 				}
 			}
 			f.approvals.ReconcileExecuting()
 			stored, err := f.approvals.Get("owner", request.ID)
 			if err != nil || stored.Status != tc.want {
+				t.Fatalf("stored = %#v, %v", stored, err)
+			}
+		})
+	}
+}
+
+func TestApprovedPaymentSettlesWithItsTransaction(t *testing.T) {
+	cases := []struct {
+		name       string
+		result     func(transactionID string) mpc.SignResult
+		submitErr  error
+		want       domain.PaymentRequestStatus
+		wantReason string
+	}{
+		{"broadcast confirms", func(id string) mpc.SignResult {
+			return mpc.SignResult{TransactionID: id, Successful: true, Signature: []byte("signature")}
+		}, nil, domain.PaymentRequestExecuted, ""},
+		{"signing fails", func(id string) mpc.SignResult {
+			return mpc.SignResult{TransactionID: id, Error: "node rejected"}
+		}, nil, domain.PaymentRequestFailed, "node rejected"},
+		{"broadcast fails", func(id string) mpc.SignResult {
+			return mpc.SignResult{TransactionID: id, Successful: true, Signature: []byte("signature")}
+		}, errors.New("tx_bad_seq"), domain.PaymentRequestFailed, "broadcast: tx_bad_seq"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newApprovalFixture(t, oneApprovalAbove10)
+			request := f.held(t, "teammate", "20")
+			approved, err := f.approvals.Approve("owner", request.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.chain.submitErr = tc.submitErr
+			f.payments.OnSign(tc.result(approved.TransactionID))
+			stored, err := f.approvals.Get("owner", request.ID)
+			if err != nil || stored.Status != tc.want || stored.Reason != tc.wantReason {
 				t.Fatalf("stored = %#v, %v", stored, err)
 			}
 		})
@@ -423,8 +516,8 @@ func TestApprovalsCountOnlyCurrentSenders(t *testing.T) {
 		t.Fatal(err)
 	}
 	approved, err := f.approvals.Approve("owner", request.ID)
-	if err != nil || approved.Status != domain.PaymentRequestPending || f.signer.calls != 0 {
-		t.Fatalf("approved = %#v, %v, sign calls = %d", approved.Status, err, f.signer.calls)
+	if err != nil || approved.Status != domain.PaymentRequestPending || approved.Approvals() != 1 || f.signer.calls != 0 {
+		t.Fatalf("approved = %#v, %v, sign calls = %d", approved, err, f.signer.calls)
 	}
 }
 

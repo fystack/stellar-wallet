@@ -10,8 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Bound anonymous login/state creation work. This deliberately keys on the direct
-// peer, not untrusted forwarded headers. Reverse proxies share their peer limit.
+// Keyed on the direct peer, not forwarded headers, which clients can forge.
 func authRateLimit(perMinute int) gin.HandlerFunc {
 	type window struct {
 		attempts int

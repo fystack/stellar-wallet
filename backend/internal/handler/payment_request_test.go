@@ -82,18 +82,25 @@ func TestPaymentApprovalHTTPContract(t *testing.T) {
 	}
 
 	status, body = request("GET", "/workspaces/"+workspaceID+"/payment-requests?status=pending", "", owner)
-	if status != http.StatusOK || len(body["data"].([]any)) != 1 {
+	if status != http.StatusOK || len(body["data"].([]any)) != 1 || body["meta"].(map[string]any)["has_more"] != false {
 		t.Fatalf("pending list = %d %#v", status, body)
+	}
+	status, body = request("GET", "/workspaces/"+workspaceID+"/payment-requests?status=history&limit=1", "", owner)
+	if meta := body["meta"].(map[string]any); status != http.StatusOK || len(body["data"].([]any)) != 0 || meta["next_cursor"] != nil || meta["has_more"] != false {
+		t.Fatalf("history page = %d %#v", status, body)
+	}
+	if status, body = request("GET", "/workspaces/"+workspaceID+"/payment-requests?status=history&limit=many", "", owner); status != http.StatusBadRequest || errorCode(body) != "invalid_request" {
+		t.Fatalf("bad page size = %d %#v", status, body)
 	}
 	if status, body = request("POST", "/payment-requests/"+requestID+"/approve", "", operator); status != http.StatusForbidden || errorCode(body) != "approval_self_not_allowed" {
 		t.Fatalf("self approval = %d %#v", status, body)
 	}
 	status, body = request("POST", "/payment-requests/"+requestID+"/approve", "", owner)
-	if status != http.StatusOK || data(body)["status"] != "executed" || data(body)["transactionId"] == nil || signer.transactionID == "" {
+	if status != http.StatusOK || data(body)["status"] != "executing" || data(body)["transactionId"] == nil || signer.transactionID == "" {
 		t.Fatalf("approve = %d %#v", status, body)
 	}
 	if status, body = request("POST", "/payment-requests/"+requestID+"/cancel", "", operator); status != http.StatusConflict || errorCode(body) != "payment_request_closed" {
-		t.Fatalf("cancel executed = %d %#v", status, body)
+		t.Fatalf("cancel executing = %d %#v", status, body)
 	}
 	status, body = request("GET", "/payment-requests/"+requestID, "", operator)
 	if status != http.StatusOK || len(data(body)["votes"].([]any)) != 1 {

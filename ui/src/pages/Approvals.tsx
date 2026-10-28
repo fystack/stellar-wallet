@@ -69,12 +69,18 @@ export default function Approvals({
   historyLoaded,
   historyFailed,
   onLoadHistory,
+  hasMoreHistory,
+  loadingMoreHistory,
+  onLoadMoreHistory,
 }: {
   updates: Record<string, PaymentRequest>
   history: PaymentRequest[]
   historyLoaded: boolean
   historyFailed: boolean
   onLoadHistory: () => Promise<void>
+  hasMoreHistory: boolean
+  loadingMoreHistory: boolean
+  onLoadMoreHistory: () => Promise<void>
   canApprove: boolean
   isOwner: boolean
   workspace: Workspace | null
@@ -147,7 +153,18 @@ export default function Approvals({
   } else if (history.length === 0) {
     body = <p className="text-muted">No approved, rejected or cancelled payments yet.</p>
   } else {
-    body = <RequestList requests={history} onOpen={setSelected} />
+    body = (
+      <>
+        <RequestList requests={history} onOpen={setSelected} />
+        {hasMoreHistory && (
+          <div className="pt-4">
+            <button className="btn btn-secondary btn-sm" disabled={loadingMoreHistory} onClick={() => void onLoadMoreHistory()}>
+              {loadingMoreHistory ? 'Loading…' : 'Load older requests'}
+            </button>
+          </div>
+        )}
+      </>
+    )
   }
 
   return (

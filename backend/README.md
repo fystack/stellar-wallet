@@ -59,6 +59,7 @@ Coding rules for this layout are in [CLAUDE.md](CLAUDE.md).
   always do. A held payment is saved as a payment request with its inputs only,
   since envelopes expire 300 s after they are built. The last approval claims the
   request in the same SQL transaction as the vote, so it is sent at most once.
+  The request stays `executing` until its transaction confirms (`executed`) or fails (`failed`).
   `POST /transactions` returns `201 {transaction}` when sent, `202 {request}` when held.
 - **Balances.** A refresher polls Horizon every 30 s, only for wallets in
   workspaces someone has open; public Horizon allows 2,000 requests per 5 minutes per IP.
@@ -75,6 +76,8 @@ Routes live in `internal/handler/router.go` under `/api/v1`.
 {"error": {"code": "wallet_not_found", "message": "Wallet not found."}}
 ```
 
+- Wallet transactions and payment request history are paged newest first:
+  `?limit=` (default 50, max 100) and `?cursor=` taken from `meta.next_cursor`.
 - Clients branch on `error.code`, never the message. Unexpected failures return
   `500 internal_error` without internal details.
 - Status codes: `201` create, `200` read/action, `204` no body, `400` invalid,

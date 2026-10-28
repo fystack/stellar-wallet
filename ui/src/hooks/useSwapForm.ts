@@ -26,7 +26,7 @@ export function useSwapForm(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preselectId])
 
-  const { held, receivable, reload } = useSwapAssets(from)
+  const { held, receivable, reload } = useSwapAssets(from, wallets.find((wallet) => wallet.id === from)?.workspaceId ?? '')
   const reloadAssets = useCallback(() => {
     reload().catch(() => {})
   }, [reload])

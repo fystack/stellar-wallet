@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError } from '../api.ts'
+import { toast } from '../toast.tsx'
 import type { ApprovalPolicySettings, PaymentRequest } from '../types.ts'
 
 export function useApprovals(workspaceId: string, onUnauthorized: () => void) {
@@ -13,6 +14,8 @@ export function useApprovals(workspaceId: string, onUnauthorized: () => void) {
   const [history, setHistory] = useState<PaymentRequest[]>([])
   const [historyFor, setHistoryFor] = useState('')
   const [historyFailed, setHistoryFailed] = useState(false)
+  const [historyNext, setHistoryNext] = useState<string | null>(null)
+  const [loadingMoreHistory, setLoadingMoreHistory] = useState(false)
   // A response for a workspace the user has since left must not overwrite the current one.
   const currentWorkspace = useRef(workspaceId)
   currentWorkspace.current = workspaceId
@@ -27,7 +30,7 @@ export function useApprovals(workspaceId: string, onUnauthorized: () => void) {
       ])
       if (currentWorkspace.current !== workspaceId) return
       setPolicy(settings)
-      setPending(requests)
+      setPending(requests.items)
       setLoadedFor(workspaceId)
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) onUnauthorized()
@@ -50,9 +53,10 @@ export function useApprovals(workspaceId: string, onUnauthorized: () => void) {
     if (!workspaceId) return
     setHistoryFailed(false)
     try {
-      const requests = await api.paymentRequests(workspaceId, 'history')
+      const page = await api.paymentRequests(workspaceId, 'history')
       if (currentWorkspace.current !== workspaceId) return
-      setHistory(requests)
+      setHistory(page.items)
+      setHistoryNext(page.nextCursor)
       setHistoryFor(workspaceId)
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) onUnauthorized()
@@ -60,11 +64,28 @@ export function useApprovals(workspaceId: string, onUnauthorized: () => void) {
     }
   }, [workspaceId, onUnauthorized])
 
+  const loadMoreHistory = useCallback(async () => {
+    if (!workspaceId || !historyNext) return
+    setLoadingMoreHistory(true)
+    try {
+      const page = await api.paymentRequests(workspaceId, 'history', historyNext)
+      if (currentWorkspace.current !== workspaceId) return
+      setHistory((current) => [...current, ...page.items.filter((request) => !current.some((item) => item.id === request.id))])
+      setHistoryNext(page.nextCursor)
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) onUnauthorized()
+      else toast.error(error instanceof Error ? error.message : 'Unable to load older requests.')
+    } finally {
+      setLoadingMoreHistory(false)
+    }
+  }, [workspaceId, historyNext, onUnauthorized])
+
   useEffect(() => {
     setPolicy(null)
     setPending([])
     setUpdates({})
     setHistory([])
+    setHistoryNext(null)
     setHistoryFor('')
     setLoadedFor('')
     void reload()
@@ -97,5 +118,8 @@ export function useApprovals(workspaceId: string, onUnauthorized: () => void) {
     historyLoaded: historyFor === workspaceId,
     historyFailed,
     loadHistory,
+    hasMoreHistory: historyFor === workspaceId && !!historyNext,
+    loadingMoreHistory,
+    loadMoreHistory,
   }
 }

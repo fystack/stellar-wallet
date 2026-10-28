@@ -79,6 +79,11 @@ export type SwapQuote = {
   path: SwapAsset[]
 }
 
+export type Page<T> = {
+  items: T[]
+  nextCursor: string | null
+}
+
 export type Transaction = {
   id: string
   walletId: string
@@ -149,6 +154,7 @@ export type PaymentRequestVote = {
   email: string
   decision: 'approve' | 'reject'
   createdAt: string
+  counted: boolean
 }
 
 export type PaymentRequest = {

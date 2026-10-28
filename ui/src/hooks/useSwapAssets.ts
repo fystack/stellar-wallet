@@ -13,7 +13,7 @@ const SUGGESTED_TESTNET_ASSETS: AssetOption[] = [
 ]
 
 // Held assets fund the pay side; held, registered and suggested assets are valid receive targets.
-export function useSwapAssets(walletId: string) {
+export function useSwapAssets(walletId: string, workspaceId: string) {
   const [held, setHeld] = useState<AssetOption[]>([])
   const [receivable, setReceivable] = useState<AssetOption[]>([])
   const latestRequest = useRef(0)
@@ -21,9 +21,9 @@ export function useSwapAssets(walletId: string) {
   const reload = useCallback(async () => {
     if (!walletId) return
     const request = ++latestRequest.current
-    const [balance, config] = await Promise.all([
+    const [balance, registry] = await Promise.all([
       api.balance(walletId),
-      api.getConfig().catch(() => null),
+      workspaceId ? api.listAssets(workspaceId).catch(() => null) : null,
     ])
     if (request !== latestRequest.current) return
     const heldOptions = balance.assets.map((a) => ({
@@ -33,7 +33,7 @@ export function useSwapAssets(walletId: string) {
     }))
     const targets = new Map<string, AssetOption>([['XLM', { label: 'XLM', value: 'XLM' }]])
     heldOptions.forEach((option) => targets.set(option.value, option))
-    config?.assets.forEach((a) =>
+    registry?.assets.forEach((a) =>
       targets.set(`${a.code}:${a.issuer}`, { label: a.code, value: `${a.code}:${a.issuer}` }),
     )
     SUGGESTED_TESTNET_ASSETS.forEach((option) => {
@@ -41,7 +41,7 @@ export function useSwapAssets(walletId: string) {
     })
     setHeld(heldOptions)
     setReceivable([...targets.values()])
-  }, [walletId])
+  }, [walletId, workspaceId])
 
   useEffect(() => {
     reload().catch(() => {})

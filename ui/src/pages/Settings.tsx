@@ -7,7 +7,7 @@ import { toast } from '../toast.tsx'
 import LinkedAccounts from '../components/LinkedAccounts.tsx'
 import WorkspaceMembers from '../components/workspace/WorkspaceMembers.tsx'
 import ApprovalPolicyCard from '../components/approvals/ApprovalPolicyCard.tsx'
-import type { ApprovalPolicySettings, Workspace } from '../types.ts'
+import type { ApprovalPolicySettings, CustomAsset, Workspace } from '../types.ts'
 
 type ChainStat = { chain: string; online: boolean }
 
@@ -151,9 +151,9 @@ export default function Settings({
   const [nodes, setNodes] = useState<NodeStatus[]>([])
   const [threshold, setThreshold] = useState('2-of-3')
 
-  // Chain / RPC config + custom asset registry.
   const [horizonUrl, setHorizonUrl] = useState('')
-  const [assets, setAssets] = useState<{ code: string; issuer: string }[]>([])
+  const [registry, setRegistry] = useState<{ workspaceId: string; assets: CustomAsset[] | null }>({ workspaceId: '', assets: null })
+  const [assetsReload, setAssetsReload] = useState(0)
   const [newCode, setNewCode] = useState('')
   const [newIssuer, setNewIssuer] = useState('')
   const [chains, setChains] = useState<ChainStat[]>([])
@@ -186,19 +186,31 @@ export default function Settings({
   useEffect(() => {
     api
       .getConfig()
-      .then((r) => {
-        setHorizonUrl(r.horizonUrl)
-        setAssets(r.assets)
-      })
+      .then((r) => setHorizonUrl(r.horizonUrl))
       .catch(() => {})
   }, [])
+
+  const workspaceId = workspace?.id ?? ''
+  useEffect(() => {
+    if (!workspaceId) return
+    let current = true
+    api
+      .listAssets(workspaceId)
+      .then((r) => current && setRegistry({ workspaceId, assets: r.assets }))
+      .catch(() => current && setRegistry({ workspaceId, assets: null }))
+    return () => {
+      current = false
+    }
+  }, [workspaceId, assetsReload])
+  const assetsLoaded = registry.workspaceId === workspaceId
+  const assets = assetsLoaded ? registry.assets : null
 
 
   async function addAsset() {
     if (!newCode.trim() || !newIssuer.trim()) return
     try {
-      const r = await api.addAsset(newCode.trim(), newIssuer.trim())
-      setAssets(r.assets)
+      const r = await api.addAsset(workspaceId, newCode.trim(), newIssuer.trim())
+      setRegistry({ workspaceId, assets: r.assets })
       setNewCode('')
       setNewIssuer('')
       toast.success('Asset added')
@@ -208,8 +220,12 @@ export default function Settings({
   }
 
   async function removeAsset(code: string, issuer: string) {
-    const r = await api.removeAsset(code, issuer)
-    setAssets(r.assets)
+    try {
+      const r = await api.removeAsset(workspaceId, code, issuer)
+      setRegistry({ workspaceId, assets: r.assets })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not remove asset')
+    }
   }
 
   return (
@@ -304,10 +320,15 @@ export default function Settings({
 
       <section className="surface mb-5">
         <h3 className="mb-[18px] text-[17px] font-bold">Custom assets</h3>
-        {assets.length === 0 ? (
+        {!assetsLoaded ? null : !assets ? (
+          <div role="alert" className="mb-4">
+            <p className="mb-3 text-sm text-muted">Unable to load this workspace's assets.</p>
+            <button className="btn btn-secondary" onClick={() => setAssetsReload((count) => count + 1)}>Try again</button>
+          </div>
+        ) : assets.length === 0 ? (
           <div className="mb-4 text-sm text-muted">
             No custom assets. Add a Stellar asset (code + issuer) to make it
-            available to your wallets.
+            available to this workspace's wallets.
           </div>
         ) : (
           <div className="mb-4 flex flex-col">

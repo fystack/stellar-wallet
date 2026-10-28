@@ -30,9 +30,19 @@ func (s *WorkspaceRepository) EnsurePersonalWorkspace(userID, createdAt string) 
 
 func insertPersonalWorkspace(tx *sql.Tx, userID, createdAt string) error {
 	workspaceID := domain.PersonalWorkspaceID(userID)
-	if _, err := tx.Exec(`INSERT OR IGNORE INTO workspaces (id, name, created_by, created_at) VALUES (?, ?, ?, ?)`,
-		workspaceID, personalName, userID, createdAt); err != nil {
+	result, err := tx.Exec(`INSERT OR IGNORE INTO workspaces (id, name, created_by, created_at) VALUES (?, ?, ?, ?)`,
+		workspaceID, personalName, userID, createdAt)
+	if err != nil {
 		return fmt.Errorf("create personal workspace: %w", err)
+	}
+	created, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("create personal workspace: %w", err)
+	}
+	if created == 1 {
+		if err := seedWorkspaceAssets(tx, workspaceID); err != nil {
+			return err
+		}
 	}
 	if _, err := tx.Exec(`INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)`,
 		workspaceID, userID, domain.RoleOwner, createdAt); err != nil {
@@ -54,6 +64,9 @@ func (s *WorkspaceRepository) CreateWorkspace(workspace domain.Workspace, ownerI
 	if _, err := tx.Exec(`INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)`,
 		workspace.ID, ownerID, domain.RoleOwner, workspace.CreatedAt); err != nil {
 		return fmt.Errorf("add workspace owner: %w", err)
+	}
+	if err := seedWorkspaceAssets(tx, workspace.ID); err != nil {
+		return err
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("create workspace: %w", err)

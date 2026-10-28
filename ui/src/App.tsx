@@ -14,8 +14,7 @@ export default function App() {
   const signedIn = useRef(false)
   signedIn.current = !!auth.user
 
-  // Pasting an invite or approval link into an open tab only changes the hash, without a reload.
-  // Signed in, the app's own navigation also writes #/approvals/:id, so only a signed-out tab keeps it for later.
+  // In-app navigation also writes #/approvals/:id, so only a signed-out tab stores it.
   useEffect(() => {
     function onHashChange() {
       if (window.location.hash.startsWith('#/invite/')) setInviteToken(capturePendingInvite())

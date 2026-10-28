@@ -14,13 +14,13 @@ var (
 	ErrTooFewSenders  = errors.New("repository: approval policy needs more senders")
 )
 
-// Store is the persistence port consumed by the application layer.
-// Database adapters implement this contract without leaking driver-specific
-// types, queries, or transaction details into handlers and use cases.
+// Cursor marks the last row of a page ordered by created_at DESC, id DESC; the zero value starts at the newest row.
+type Cursor struct {
+	CreatedAt string
+	ID        string
+}
+
 type Store interface {
-	CustomAssets() ([]domain.CustomAsset, error)
-	AddAsset(domain.CustomAsset) error
-	RemoveAsset(code, issuer string) error
 	ListWallets(workspaceID string) ([]domain.Wallet, error)
 	CreateWallet(domain.Wallet) error
 	WalletFor(userID, walletID string) (domain.Wallet, bool)

@@ -3,9 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"stellar-wallet-backend/internal/apperror"
 	"stellar-wallet-backend/internal/cluster"
-	"stellar-wallet-backend/internal/domain"
 	"stellar-wallet-backend/internal/httpapi"
 	"stellar-wallet-backend/internal/service"
 
@@ -22,35 +20,7 @@ func (h *SettingsHandler) getChains(c *gin.Context) {
 }
 
 func (h *SettingsHandler) getConfig(c *gin.Context) {
-	settings, err := h.settings.Get()
-	if err != nil {
-		httpapi.Error(c, err)
-		return
-	}
-	httpapi.Success(c, http.StatusOK, settings)
-}
-
-func (h *SettingsHandler) addAsset(c *gin.Context) {
-	var asset domain.CustomAsset
-	if err := c.ShouldBindJSON(&asset); err != nil {
-		httpapi.Error(c, apperror.InvalidAsset.New())
-		return
-	}
-	assets, err := h.settings.AddAsset(asset)
-	if err != nil {
-		httpapi.Error(c, err)
-		return
-	}
-	httpapi.Success(c, http.StatusOK, gin.H{"assets": assets})
-}
-
-func (h *SettingsHandler) removeAsset(c *gin.Context) {
-	assets, err := h.settings.RemoveAsset(c.Query("code"), c.Query("issuer"))
-	if err != nil {
-		httpapi.Error(c, err)
-		return
-	}
-	httpapi.Success(c, http.StatusOK, gin.H{"assets": assets})
+	httpapi.Success(c, http.StatusOK, h.settings.Get())
 }
 
 func (h *SettingsHandler) getPrices(c *gin.Context) {

@@ -10,12 +10,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// MPC quorum + timeout policy.
-//
-// A threshold signature is 2-of-3: signing only needs a majority of nodes,
-// but keygen must reach every node so each holds a share. If the cluster is
-// short of quorum we reject up front; if it goes quiet mid-flight the watchdog
-// fails the pending record so the UI never hangs on "Signing".
 const (
 	SignQuorum   = 2 // nodes required to produce a signature (2-of-3)
 	KeygenQuorum = 3 // nodes required to generate a full key (all shares)
@@ -34,10 +28,7 @@ func requireQuorum(cluster SigningCluster, quorum int, action string) error {
 	return nil
 }
 
-// ReconcilePending recovers records left mid-flight by a previous run. On boot
-// there is no in-flight NATS request behind a "signing"/"generating" row, so if
-// the cluster is below quorum they can never complete — fail them immediately.
-// If quorum is met, arm a fresh watchdog (mpcium may re-deliver from JetStream).
+// ReconcilePending fails rows left mid-flight when below quorum; otherwise mpcium may still re-deliver, so it re-arms the watchdog.
 func (s *WalletService) ReconcilePending() {
 	generating, err := s.store.GeneratingWallets()
 	if err != nil {

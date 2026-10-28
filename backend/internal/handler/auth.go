@@ -32,12 +32,13 @@ func (h *AuthHandler) register(c *gin.Context) {
 		httpapi.Error(c, apperror.InvalidRequest.New())
 		return
 	}
-	user, token, err := h.accounts.Register(body.Email, body.Password, auth.CookieToken(c.Request))
+	account, token, err := h.accounts.Register(body.Email, body.Password, auth.CookieToken(c.Request))
 	if err != nil {
 		httpapi.Error(c, err)
 		return
 	}
-	h.loginResponse(c, http.StatusCreated, user.ID, token)
+	h.sessions.SetSession(c, token)
+	httpapi.Success(c, http.StatusCreated, account)
 }
 func (h *AuthHandler) login(c *gin.Context) {
 	var body credentials
@@ -45,22 +46,13 @@ func (h *AuthHandler) login(c *gin.Context) {
 		httpapi.Error(c, apperror.InvalidRequest.New())
 		return
 	}
-	user, token, err := h.accounts.Login(body.Email, body.Password, auth.CookieToken(c.Request))
+	account, token, err := h.accounts.Login(body.Email, body.Password, auth.CookieToken(c.Request))
 	if err != nil {
-		httpapi.Error(c, err)
-		return
-	}
-	h.loginResponse(c, http.StatusOK, user.ID, token)
-}
-func (h *AuthHandler) loginResponse(c *gin.Context, status int, userID, token string) {
-	account, err := h.accounts.Account(userID)
-	if err != nil {
-		h.accounts.Logout(token)
 		httpapi.Error(c, err)
 		return
 	}
 	h.sessions.SetSession(c, token)
-	httpapi.Success(c, status, account)
+	httpapi.Success(c, http.StatusOK, account)
 }
 func (h *AuthHandler) me(c *gin.Context) {
 	account, err := h.accounts.Account(c.GetString("userID"))

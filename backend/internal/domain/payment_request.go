@@ -32,12 +32,14 @@ type PaymentRequestVote struct {
 	Email     string       `json:"email"`
 	Decision  VoteDecision `json:"decision"`
 	CreatedAt string       `json:"createdAt"`
+	// Counted is false once the voter is no longer an owner or operator.
+	Counted bool `json:"counted"`
 }
 
 func (r PaymentRequest) Approvals() int {
 	approvals := 0
 	for _, vote := range r.Votes {
-		if vote.Decision == VoteApprove {
+		if vote.Decision == VoteApprove && vote.Counted {
 			approvals++
 		}
 	}

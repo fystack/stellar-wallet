@@ -33,6 +33,10 @@ export function useSendForm(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preselectId])
 
+  useEffect(() => {
+    if (wallets.length > 0 && !wallets.some((wallet) => wallet.id === from)) setFrom(wallets[0].id)
+  }, [wallets, from])
+
   const { assets } = useBalances(from)
   useEffect(() => {
     if (assets) setAssetId(assets[0] ? assetKey(assets[0]) : 'XLM')

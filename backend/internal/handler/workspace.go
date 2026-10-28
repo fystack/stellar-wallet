@@ -187,3 +187,35 @@ func (h *WorkspaceHandler) declineInvitation(c *gin.Context) {
 	}
 	httpapi.Success(c, http.StatusNoContent, nil)
 }
+
+func (h *WorkspaceHandler) assets(c *gin.Context) {
+	assets, err := h.workspaces.Assets(c.GetString("userID"), c.Param("id"))
+	if err != nil {
+		httpapi.Error(c, err)
+		return
+	}
+	httpapi.Success(c, http.StatusOK, gin.H{"assets": assets})
+}
+
+func (h *WorkspaceHandler) addAsset(c *gin.Context) {
+	var asset domain.CustomAsset
+	if err := c.ShouldBindJSON(&asset); err != nil {
+		httpapi.Error(c, apperror.InvalidAsset.New())
+		return
+	}
+	assets, err := h.workspaces.AddAsset(c.GetString("userID"), c.Param("id"), asset)
+	if err != nil {
+		httpapi.Error(c, err)
+		return
+	}
+	httpapi.Success(c, http.StatusOK, gin.H{"assets": assets})
+}
+
+func (h *WorkspaceHandler) removeAsset(c *gin.Context) {
+	assets, err := h.workspaces.RemoveAsset(c.GetString("userID"), c.Param("id"), c.Query("code"), c.Query("issuer"))
+	if err != nil {
+		httpapi.Error(c, err)
+		return
+	}
+	httpapi.Success(c, http.StatusOK, gin.H{"assets": assets})
+}

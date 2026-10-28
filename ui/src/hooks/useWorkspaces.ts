@@ -46,8 +46,10 @@ export function useWorkspaces(onUnauthorized: () => void) {
       await api.switchWorkspace(id)
       setActiveId(id)
       setSelected(true)
+      return true
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to switch workspace.')
+      return false
     }
   }, [])
 

@@ -92,8 +92,7 @@ func (s *AuthRepository) Account(userID string) (domain.Account, error) {
 	return account, rows.Err()
 }
 
-// SocialUser resolves an identity, or links it atomically to an authenticated user.
-// A matching email alone never authorizes account linking.
+// SocialUser never links an account by matching email alone.
 func (s *AuthRepository) SocialUser(identity domain.Identity, linkUserID string) (domain.User, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -152,7 +151,7 @@ func (s *AuthRepository) CreateSession(session domain.Session) error {
 	if _, err := s.db.Exec(`DELETE FROM auth_sessions WHERE expires_at<=?`, time.Now().Unix()); err != nil {
 		return fmt.Errorf("clean expired sessions: %w", err)
 	}
-	_, err := s.db.Exec(`INSERT INTO auth_sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)`, session.Hash, session.UserID, session.CreatedAt, session.ExpiresAt)
+	_, err := s.db.Exec(`INSERT INTO auth_sessions(token_hash,user_id,workspace_id,created_at,expires_at) VALUES(?,?,?,?,?)`, session.Hash, session.UserID, session.WorkspaceID, session.CreatedAt, session.ExpiresAt)
 	if err != nil {
 		return fmt.Errorf("create session: %w", err)
 	}

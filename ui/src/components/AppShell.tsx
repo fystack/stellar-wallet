@@ -90,7 +90,8 @@ export default function AppShell({
     void (async () => {
       try {
         const request = await api.paymentRequest(requestId)
-        if (needsPick || request.workspaceId !== activeId) await switchTo(request.workspaceId)
+        const switched = needsPick || request.workspaceId !== activeId ? await switchTo(request.workspaceId) : true
+        if (!switched) return
         applyApprovalUpdate(request)
         openRequest(requestId)
       } catch (error) {
@@ -155,7 +156,7 @@ export default function AppShell({
   }
 
   async function switchWorkspace(id: string) {
-    await workspaces.switchTo(id)
+    if (!(await workspaces.switchTo(id))) return
     setChoosingWorkspace(false)
     route.reset()
   }
@@ -361,6 +362,9 @@ export default function AppShell({
                 historyLoaded={approvals.historyLoaded}
                 historyFailed={approvals.historyFailed}
                 onLoadHistory={approvals.loadHistory}
+                hasMoreHistory={approvals.hasMoreHistory}
+                loadingMoreHistory={approvals.loadingMoreHistory}
+                onLoadMoreHistory={approvals.loadMoreHistory}
                 isOwner={canManageWallets}
                 onFocusHandled={route.clearRequest}
               />

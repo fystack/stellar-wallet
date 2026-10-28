@@ -121,6 +121,8 @@ func Open(path string) (*sql.DB, error) {
 		decided_at         TEXT NOT NULL DEFAULT ''
 	);
 	CREATE INDEX IF NOT EXISTS payment_requests_workspace ON payment_requests(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS payment_requests_transaction ON payment_requests(transaction_id);
+	CREATE INDEX IF NOT EXISTS payment_requests_history ON payment_requests(workspace_id, created_at, id);
 	CREATE TABLE IF NOT EXISTS payment_request_votes (
 		request_id TEXT NOT NULL REFERENCES payment_requests(id),
 		user_id    TEXT NOT NULL,
@@ -132,10 +134,11 @@ func Open(path string) (*sql.DB, error) {
 		key   TEXT PRIMARY KEY,
 		value TEXT NOT NULL
 	);
-	CREATE TABLE IF NOT EXISTS custom_assets (
-		code   TEXT NOT NULL,
-		issuer TEXT NOT NULL,
-		PRIMARY KEY (code, issuer)
+	CREATE TABLE IF NOT EXISTS workspace_assets (
+		workspace_id TEXT NOT NULL,
+		code         TEXT NOT NULL,
+		issuer       TEXT NOT NULL,
+		PRIMARY KEY (workspace_id, code, issuer)
 	);
 	CREATE TABLE IF NOT EXISTS transactions (
 		id           TEXT PRIMARY KEY,
@@ -155,12 +158,12 @@ func Open(path string) (*sql.DB, error) {
 		error        TEXT NOT NULL DEFAULT '',
 		created_at   TEXT NOT NULL
 	);
+	CREATE INDEX IF NOT EXISTS transactions_wallet ON transactions(wallet_id, created_at, id);
 	`
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
 		return nil, err
 	}
-	// Idempotent migrations for databases created before these columns existed.
 	// SQLite has no "ADD COLUMN IF NOT EXISTS"; a duplicate-column error is fine.
 	for _, migration := range []string{
 		`ALTER TABLE transactions ADD COLUMN recv_amount TEXT NOT NULL DEFAULT ''`,
@@ -175,18 +178,38 @@ func Open(path string) (*sql.DB, error) {
 		db.Close()
 		return nil, err
 	}
-	// Seed default Stellar testnet assets so they're swappable/sendable out of the
-	// box. INSERT OR IGNORE keeps it idempotent; users can still delete them.
-	const testnetMarketMaker = "GAHPYWLK6YRN7CVYZOO4H3VDRZ7PVF5UJGLZCSPAEIKJE2XSWF5LAGER"
-	for _, seed := range [][2]string{
-		{"USDC", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
-		{"USDT", testnetMarketMaker},
-		{"BTC", testnetMarketMaker},
-		{"ETH", testnetMarketMaker},
-	} {
-		_, _ = db.Exec(`INSERT OR IGNORE INTO custom_assets (code, issuer) VALUES (?, ?)`, seed[0], seed[1])
+	if err := moveSharedAssetsToWorkspaces(db); err != nil {
+		db.Close()
+		return nil, err
 	}
 	return db, nil
+}
+
+// moveSharedAssetsToWorkspaces copies the old shared asset list into every workspace once, then drops it.
+func moveSharedAssetsToWorkspaces(db *sql.DB) error {
+	var legacy int
+	if err := db.QueryRow(`SELECT COUNT(1) FROM sqlite_master WHERE type = 'table' AND name = 'custom_assets'`).Scan(&legacy); err != nil {
+		return fmt.Errorf("find shared assets: %w", err)
+	}
+	if legacy == 0 {
+		return nil
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("move shared assets: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO workspace_assets (workspace_id, code, issuer)
+		SELECT workspaces.id, custom_assets.code, custom_assets.issuer FROM workspaces, custom_assets`); err != nil {
+		return fmt.Errorf("copy shared assets: %w", err)
+	}
+	if _, err := tx.Exec(`DROP TABLE custom_assets`); err != nil {
+		return fmt.Errorf("drop shared assets: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("move shared assets: %w", err)
+	}
+	return nil
 }
 
 // backfillPersonalWorkspaces is idempotent: it runs on every start for pre-workspace databases.
