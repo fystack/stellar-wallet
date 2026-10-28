@@ -17,8 +17,8 @@ const FUNDED = '123.45'
 async function register(page: Page): Promise<string> {
   const email = `e2e_${Date.now()}_${Math.floor(Math.random() * 1e4)}@test.io`
   await page.goto('/')
-  await page.getByRole('button', { name: 'Create one' }).click()
-  await page.getByPlaceholder('you@example.com').fill(email)
+  await page.getByRole('button', { name: 'Create an account' }).click()
+  await page.getByLabel('Email').fill(email)
   await page.getByLabel('Password', { exact: true }).fill('secret123')
   await page.getByLabel('Confirm password').fill('secret123')
   await page.getByRole('button', { name: 'Create account' }).click()
@@ -33,7 +33,6 @@ async function createWalletAndOpen(page: Page, first: boolean): Promise<string> 
       name: first ? 'Create your first wallet' : '+ New wallet',
     })
     .click()
-  // Stellar is selected by default in the modal.
   await page.getByRole('button', { name: 'Create wallet' }).click()
   // Keygen ceremony → wallet ready.
   const open = page.getByRole('button', { name: 'Open wallet' })
@@ -167,9 +166,9 @@ test('wallet detail survives reload (hash routing)', async ({ page }) => {
 test('logout then login again', async ({ page }) => {
   const email = await register(page)
   await page.getByRole('button', { name: /Sign out/ }).click()
-  await expect(page.getByText('Welcome back')).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible()
 
-  await page.getByPlaceholder('you@example.com').fill(email)
+  await page.getByLabel('Email').fill(email)
   await page.getByLabel('Password', { exact: true }).fill('secret123')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
   await expect(page.getByText('Your keys, split — never whole')).toBeVisible()

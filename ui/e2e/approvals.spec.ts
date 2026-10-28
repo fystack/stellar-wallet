@@ -1,60 +1,11 @@
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
-import {
-  acceptByLink,
-  clusterOnline,
-  createWorkspace,
-  insertReadyWallet,
-  invite,
-  registerAccount,
-  requestPayment,
-  setApprovalPolicy,
-  signIn,
-  uniqueEmail,
-} from './helpers.ts'
+import { test, expect } from '@playwright/test'
+import { RECIPIENT, approvalTeam, clusterOnline, insertReadyWallet, openRequest, openWorkspace, requestPayment } from './helpers.ts'
 import { fundAccount } from './fund.ts'
 
 // Only the last test needs MPC nodes; it is skipped when they are offline.
 
 // Serial, with long waits: keygens queue on the shared local cluster.
 test.describe.configure({ mode: 'serial', timeout: 300_000 })
-
-const RECIPIENT = 'GAHPYWLK6YRN7CVYZOO4H3VDRZ7PVF5UJGLZCSPAEIKJE2XSWF5LAGER'
-
-// Creating the team starts a keygen for its first wallet.
-async function walletsSettled(owner: APIRequestContext, workspaceId: string) {
-  await expect
-    .poll(async () => {
-      const wallets: { status: string }[] = (await (await owner.get(`/api/v1/wallets?workspace_id=${workspaceId}`)).json()).data
-      return wallets.some((wallet) => wallet.status === 'generating')
-    }, { timeout: 180_000 })
-    .toBe(false)
-}
-
-async function approvalTeam() {
-  const owner = await registerAccount(uniqueEmail('owner'))
-  const operator = await registerAccount(uniqueEmail('operator'))
-  const viewer = await registerAccount(uniqueEmail('viewer'))
-  const name = `Treasury ${Math.floor(Math.random() * 1e6)}`
-  const workspaceId = await createWorkspace(owner.api, name)
-  await walletsSettled(owner.api, workspaceId)
-  await acceptByLink(operator.api, (await invite(owner.api, workspaceId, operator.email, 'operator')).token)
-  await acceptByLink(viewer.api, (await invite(owner.api, workspaceId, viewer.email)).token)
-  await setApprovalPolicy(owner.api, workspaceId, '10')
-  return { owner, operator, viewer, name, workspaceId }
-}
-
-async function openWorkspace(page: Page, email: string, workspaceName: string) {
-  await signIn(page, email)
-  await expect(page.getByRole('heading', { name: 'Choose a workspace' })).toBeVisible()
-  await page.getByRole('list', { name: 'Your workspaces' }).getByRole('button', { name: new RegExp(workspaceName) }).click()
-  await expect(page.getByRole('heading', { name: 'Choose a workspace' })).toBeHidden()
-}
-
-async function openRequest(page: Page, amount: string) {
-  await page.getByRole('button', { name: /^Approvals/ }).click()
-  await page.getByRole('button', { name: new RegExp(`Review ${amount} XLM`) }).click()
-  await expect(page.getByRole('heading', { name: 'Payment request' })).toBeVisible()
-}
 
 test('operator payment above the threshold waits for approval and the owner rejects it', async ({ page }) => {
   const team = await approvalTeam()

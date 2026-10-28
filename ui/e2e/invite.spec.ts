@@ -68,7 +68,7 @@ test('invite link pasted into an already-open login tab is picked up', async ({ 
   const team = await teamWithInvite(email)
 
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1, name: 'Welcome back' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible()
   await page.evaluate((path) => {
     window.location.hash = path.slice(1)
   }, team.invite.path)
@@ -99,7 +99,7 @@ test('signed in as a different account: mismatch is explained and switching keep
   const other = uniqueEmail('other')
 
   await page.goto('/')
-  await page.getByRole('button', { name: 'Create one' }).click()
+  await page.getByRole('button', { name: 'Create an account' }).click()
   await page.getByLabel('Email').fill(other)
   await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
   await page.getByLabel('Confirm password').fill(PASSWORD)
@@ -151,7 +151,7 @@ test('used invite cannot be accepted again', async ({ page }) => {
 test('garbled invite link shows an invalid-link message', async ({ page }) => {
   await page.goto('/#/invite/not-a-real-token')
   await expect(page.getByRole('alert')).toHaveText(/invite link is invalid/)
-  await expect(page.getByRole('heading', { level: 1, name: 'Welcome back' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible()
 })
 
 test('invitee who dismisses the invite is not asked again', async ({ page }) => {
@@ -207,6 +207,6 @@ test('sign out of all devices ends every session of the account', async ({ page 
   await page.getByRole('navigation').getByRole('button', { name: 'Settings' }).click()
   await page.getByRole('button', { name: 'Sign out all' }).click()
 
-  await expect(page.getByRole('heading', { level: 1, name: 'Welcome back' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible()
   expect((await account.get('/api/v1/auth/me')).status()).toBe(401)
 })
