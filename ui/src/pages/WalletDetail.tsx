@@ -67,6 +67,7 @@ export default function WalletDetail({
       {confirmDelete && onDelete && (
         <DeleteWalletBar
           walletName={wallet.name}
+          assets={detail.assets}
           onCancel={() => setConfirmDelete(false)}
           onDelete={() => onDelete(wallet.id)}
         />
