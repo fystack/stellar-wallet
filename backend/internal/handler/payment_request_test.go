@@ -20,7 +20,7 @@ func TestPaymentApprovalHTTPContract(t *testing.T) {
 	store := sqlite.NewStore(db)
 	workspaceRepo := sqlite.NewWorkspaceRepository(db)
 	hub := realtime.NewHub()
-	workspaces := service.NewWorkspaceService(workspaceRepo, repo, walletProvisionerStub{}, nil, "http://localhost")
+	workspaces := service.NewWorkspaceService(workspaceRepo, repo, nil, "http://localhost")
 	transactions := service.NewTransactionService(store, sqlite.NewTransactionRepository(db), &paymentChainStub{resolved: chain.Resolved{Address: "resolved-address"}}, &paymentClusterStub{online: 3}, hub)
 	signer := &paymentSignerStub{}
 	transactions.SetMPC(signer)

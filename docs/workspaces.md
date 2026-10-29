@@ -26,8 +26,8 @@ create a team workspace instead.
   with a **Copy** button, so invites work without an email provider.
 - The invitee opens the link, signs in or registers (email/password, Google or
   GitHub) with the **invited email**, then accepts. Accepting switches them to
-  the workspace and starts keygen for their wallet. If the MPC cluster is below
-  quorum, they still join and an owner can create the wallet later.
+  the workspace. No wallet is created on join or on workspace creation; an
+  owner creates the team's wallets from **Wallets**.
 
 ## In-app invitations
 
@@ -69,8 +69,8 @@ Any SMTP provider works in production (Resend, SES, Postmark, Gmail); set
 ## Reproduction checks
 
 1. Sign in as the owner. The sidebar switcher shows **Personal**.
-2. Open the switcher → create workspace "Treasury". A wallet starts generating
-   for the owner in Treasury.
+2. Open the switcher → create workspace "Treasury". It starts empty; create
+   its first wallet from **Wallets**.
 3. Settings → Members → invite `teammate@example.com`. Copy the link (or open it
    from Mailpit).
 4. In a private window, open the link. The login page shows who invited you.

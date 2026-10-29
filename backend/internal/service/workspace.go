@@ -11,6 +11,7 @@ import (
 	"stellar-wallet-backend/internal/apperror"
 	"stellar-wallet-backend/internal/auth"
 	"stellar-wallet-backend/internal/domain"
+	"stellar-wallet-backend/internal/mail"
 	"stellar-wallet-backend/internal/repository"
 	"stellar-wallet-backend/internal/repository/sqlite"
 
@@ -21,24 +22,18 @@ const inviteTTL = 7 * 24 * time.Hour
 
 // Mailer delivers invite emails. A nil Mailer means email is not configured.
 type Mailer interface {
-	Send(to, subject, body string) error
-}
-
-// WalletProvisioner creates the first wallet of a new team workspace.
-type WalletProvisioner interface {
-	Provision(userID, workspaceID, name, chainName string) (domain.Wallet, error)
+	Send(to string, message mail.Message) error
 }
 
 type WorkspaceService struct {
 	workspaces  *sqlite.WorkspaceRepository
 	accounts    *sqlite.AuthRepository
-	wallets     WalletProvisioner
 	mailer      Mailer
 	frontendURL string
 }
 
-func NewWorkspaceService(workspaces *sqlite.WorkspaceRepository, accounts *sqlite.AuthRepository, wallets WalletProvisioner, mailer Mailer, frontendURL string) *WorkspaceService {
-	return &WorkspaceService{workspaces: workspaces, accounts: accounts, wallets: wallets, mailer: mailer, frontendURL: strings.TrimRight(frontendURL, "/")}
+func NewWorkspaceService(workspaces *sqlite.WorkspaceRepository, accounts *sqlite.AuthRepository, mailer Mailer, frontendURL string) *WorkspaceService {
+	return &WorkspaceService{workspaces: workspaces, accounts: accounts, mailer: mailer, frontendURL: strings.TrimRight(frontendURL, "/")}
 }
 
 type WorkspaceList struct {
@@ -53,11 +48,8 @@ type WorkspaceMembers struct {
 	Invites []domain.WorkspaceInvite `json:"invites"`
 }
 
-// JoinResult carries WalletError instead of failing workspace creation when its first wallet can't be created.
 type JoinResult struct {
-	Workspace   domain.Workspace `json:"workspace"`
-	Wallet      *domain.Wallet   `json:"wallet,omitempty"`
-	WalletError string           `json:"walletError,omitempty"`
+	Workspace domain.Workspace `json:"workspace"`
 }
 
 func describeWorkspace(workspace domain.Workspace) domain.Workspace {
@@ -146,7 +138,7 @@ func (s *WorkspaceService) Create(userID, sessionToken, name string) (JoinResult
 	if err := s.accounts.SetSessionWorkspace(auth.HashToken(sessionToken), workspace.ID); err != nil {
 		return JoinResult{}, err
 	}
-	return s.provisionFirstWallet(userID, workspace), nil
+	return JoinResult{Workspace: workspace}, nil
 }
 
 func (s *WorkspaceService) Switch(userID, sessionToken, workspaceID string) (domain.Workspace, error) {
@@ -210,32 +202,4 @@ func (s *WorkspaceService) ChangeRole(userID, workspaceID, memberID string, role
 		return apperror.ApprovalPolicyNeedsMember.New()
 	}
 	return err
-}
-
-func (s *WorkspaceService) provisionFirstWallet(userID string, workspace domain.Workspace) JoinResult {
-	result := JoinResult{Workspace: workspace}
-	user, err := s.accounts.UserByID(userID)
-	if err != nil {
-		logError("read member for wallet workspace="+workspace.ID, err)
-		result.WalletError = "The workspace wallet could not be created. Create one from Wallets."
-		return result
-	}
-	wallet, err := s.wallets.Provision(userID, workspace.ID, memberWalletName(user.Email), "stellar")
-	if err != nil {
-		var failure *apperror.Error
-		if errors.As(err, &failure) {
-			result.WalletError = failure.Message
-		} else {
-			logError("provision member wallet workspace="+workspace.ID, err)
-			result.WalletError = "Your wallet could not be created. Please try again later."
-		}
-		return result
-	}
-	result.Wallet = &wallet
-	return result
-}
-
-func memberWalletName(email string) string {
-	local, _, _ := strings.Cut(email, "@")
-	return local + "'s wallet"
 }

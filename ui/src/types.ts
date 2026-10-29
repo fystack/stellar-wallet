@@ -45,8 +45,6 @@ export type InvitePreview = {
 
 export type JoinResult = {
   workspace: Workspace
-  wallet?: Wallet
-  walletError?: string
 }
 
 export type Wallet = {

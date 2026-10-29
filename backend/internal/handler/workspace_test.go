@@ -8,20 +8,13 @@ import (
 	"strings"
 	"testing"
 
-	"stellar-wallet-backend/internal/domain"
 	"stellar-wallet-backend/internal/repository/sqlite"
 	"stellar-wallet-backend/internal/service"
 )
 
-type walletProvisionerStub struct{}
-
-func (walletProvisionerStub) Provision(userID, workspaceID, name, _ string) (domain.Wallet, error) {
-	return domain.Wallet{ID: "wallet-" + userID, UserID: userID, WorkspaceID: workspaceID, Name: name}, nil
-}
-
 func TestWorkspaceInviteHTTPContract(t *testing.T) {
 	manager, accounts, repo, db := newAuthFixture(t)
-	workspaces := service.NewWorkspaceService(sqlite.NewWorkspaceRepository(db), repo, walletProvisionerStub{}, nil, "http://localhost")
+	workspaces := service.NewWorkspaceService(sqlite.NewWorkspaceRepository(db), repo, nil, "http://localhost")
 	router := NewRouter(Dependencies{AuthRateLimit: 30, Auth: manager, AuthService: accounts, WorkspaceService: workspaces}, "http://localhost")
 	request := func(method, path, body string, cookie *http.Cookie) (int, map[string]any) {
 		req := httptest.NewRequest(method, "/api/v1"+path, bytes.NewBufferString(body))

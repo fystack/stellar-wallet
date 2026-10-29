@@ -1,8 +1,9 @@
-import { approvalCount } from '../lib/paymentRequest.ts'
+import { approvalCount, hasVoted, isInitiator } from '../lib/paymentRequest.ts'
 import { useEffect, useState } from 'react'
 import { api } from '../api.ts'
 import { CheckShieldIcon } from '../icons.tsx'
-import { shortAddress } from '../lib/format.ts'
+import { formatAmount, shortAddress } from '../lib/format.ts'
+import { TokenLogo } from '../logos.tsx'
 import { toast } from '../toast.tsx'
 import EmptyState from '../components/EmptyState.tsx'
 import PaymentRequestModal from '../components/approvals/PaymentRequestModal.tsx'
@@ -11,30 +12,74 @@ import type { PaymentRequest, Workspace } from '../types.ts'
 
 type Tab = 'pending' | 'history'
 
-function RequestList({ requests, onOpen }: { requests: PaymentRequest[]; onOpen: (request: PaymentRequest) => void }) {
+function formatShortDate(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function ApprovalProgress({ approved, required }: { approved: number; required: number }) {
+  return (
+    <span className="flex items-center gap-2 text-[13px] text-muted">
+      <span aria-hidden className="flex gap-0.5">
+        {Array.from({ length: required }, (_, index) => (
+          <span key={index} className={'h-1.5 w-4 ' + (index < approved ? 'bg-success' : 'bg-line-strong')} />
+        ))}
+      </span>
+      {approved}/{required} approved
+    </span>
+  )
+}
+
+function RequestList({
+  requests,
+  userEmail,
+  canApprove,
+  onOpen,
+}: {
+  requests: PaymentRequest[]
+  userEmail: string
+  canApprove: boolean
+  onOpen: (request: PaymentRequest) => void
+}) {
   return (
     <ul className="surface !p-0">
       {requests.map((request) => {
         const approvals = approvalCount(request)
+        const yourTurn =
+          request.status === 'pending' &&
+          canApprove &&
+          !isInitiator(request, userEmail) &&
+          !hasVoted(request, userEmail)
         return (
           <li key={request.id} className="border-b border-line last:border-none">
             <button
               onClick={() => onOpen(request)}
               aria-label={`Review ${request.amount} ${request.symbol} from ${request.walletName}`}
-              className="flex w-full flex-col gap-1 px-4 py-3.5 text-left hover:bg-hover sm:flex-row sm:items-center sm:gap-4 sm:px-5"
+              className="grid min-h-[76px] w-full grid-cols-[36px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-4 py-3 text-left transition-colors hover:bg-hover sm:flex sm:px-5"
             >
+              <TokenLogo symbol={request.symbol} size={36} />
               <div className="min-w-0 flex-1">
-                <div className="font-semibold">
-                  {request.amount} {request.symbol} <span className="font-normal text-muted">to {shortAddress(request.destination)}</span>
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="font-semibold">
+                    {formatAmount(request.amount)} {request.symbol}
+                  </span>
+                  <span className="whitespace-nowrap text-[13px] text-muted">
+                    to <span className="font-mono">{shortAddress(request.destination)}</span>
+                  </span>
                 </div>
                 <div className="truncate text-[13px] text-muted">
-                  {request.walletName} · by {request.initiatorEmail} · {new Date(request.createdAt).toLocaleDateString()}
+                  {request.walletName} · {request.initiatorEmail} · {formatShortDate(request.createdAt)}
                 </div>
               </div>
-              <span className="shrink-0 text-[13px] text-ink-soft">
-                {approvals}/{request.requiredApprovals} approved
-              </span>
-              <RequestStatus status={request.status} />
+              <div className="col-start-2 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 sm:flex-col sm:items-end">
+                {yourTurn ? (
+                  <span className="badge badge-brand">Needs your approval</span>
+                ) : (
+                  <RequestStatus status={request.status} />
+                )}
+                <ApprovalProgress approved={approvals} required={request.requiredApprovals} />
+              </div>
             </button>
           </li>
         )
@@ -124,8 +169,8 @@ export default function Approvals({
     setSelected(request)
   }
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'pending', label: `Pending${loaded && pending.length ? ` (${pending.length})` : ''}` },
+  const tabs: { key: Tab; label: string; count?: number }[] = [
+    { key: 'pending', label: 'Pending', count: loaded ? pending.length : 0 },
     { key: 'history', label: 'History' },
   ]
 
@@ -144,18 +189,18 @@ export default function Approvals({
         />
       )
     } else {
-      body = <RequestList requests={pending} onOpen={setSelected} />
+      body = <RequestList requests={pending} userEmail={userEmail} canApprove={canApprove} onOpen={setSelected} />
     }
   } else if (historyFailed) {
     body = <LoadError message="Unable to load past requests." onRetry={() => void onLoadHistory()} />
   } else if (!historyLoaded) {
     body = <p role="status" className="text-muted">Loading past requests…</p>
   } else if (history.length === 0) {
-    body = <p className="text-muted">No approved, rejected or cancelled payments yet.</p>
+    body = <p className="surface text-center text-muted">No approved, rejected or cancelled payments yet.</p>
   } else {
     body = (
       <>
-        <RequestList requests={history} onOpen={setSelected} />
+        <RequestList requests={history} userEmail={userEmail} canApprove={canApprove} onOpen={setSelected} />
         {hasMoreHistory && (
           <div className="pt-4">
             <button className="btn btn-secondary btn-sm" disabled={loadingMoreHistory} onClick={() => void onLoadMoreHistory()}>
@@ -185,9 +230,10 @@ export default function Approvals({
             aria-selected={tab === item.key}
             aria-controls="approvals-panel"
             onClick={() => setTab(item.key)}
-            className={'-mb-px border-b-2 px-4 py-2.5 text-sm font-semibold ' + (tab === item.key ? 'border-brand text-brand' : 'border-transparent text-ink-soft hover:text-ink')}
+            className={'-mb-px flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ' + (tab === item.key ? 'border-brand text-brand' : 'border-transparent text-ink-soft hover:text-ink')}
           >
             {item.label}
+            {!!item.count && <span className="count">{item.count}</span>}
           </button>
         ))}
       </div>

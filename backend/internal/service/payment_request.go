@@ -9,6 +9,7 @@ import (
 
 	"stellar-wallet-backend/internal/apperror"
 	"stellar-wallet-backend/internal/domain"
+	"stellar-wallet-backend/internal/mail"
 	"stellar-wallet-backend/internal/realtime"
 	"stellar-wallet-backend/internal/repository"
 	"stellar-wallet-backend/internal/repository/sqlite"
@@ -382,14 +383,23 @@ func (s *PaymentRequestService) notifyApprovers(request domain.PaymentRequest) {
 		logError("read workspace payment request="+request.ID, err)
 		return
 	}
-	subject := fmt.Sprintf("Approval needed: %s %s from %s", request.Amount, request.Symbol, workspaceName)
-	body := fmt.Sprintf("%s wants to send %s %s from %q in the %q workspace to:\n%s\n\nReview it:\n%s\n\nIt needs %d approval(s) and expires in 7 days.\n",
-		request.InitiatorEmail, request.Amount, request.Symbol, request.WalletName, workspaceName, request.Destination,
-		s.frontendURL+"/#/approvals/"+request.ID, request.RequiredApprovals)
+	message := mail.Message{
+		Subject: fmt.Sprintf("Approval needed: %s %s from %s", request.Amount, request.Symbol, request.WalletName),
+		Heading: fmt.Sprintf("Approve %s %s?", request.Amount, request.Symbol),
+		Intro:   fmt.Sprintf("%s wants to send a payment from the %s workspace. It needs %d approval(s) before it is signed.", request.InitiatorEmail, workspaceName, request.RequiredApprovals),
+		Details: []mail.Detail{
+			{Label: "Amount", Value: request.Amount + " " + request.Symbol},
+			{Label: "From", Value: request.WalletName},
+			{Label: "To", Value: request.Destination, Mono: true},
+		},
+		ActionLabel: "Review request",
+		ActionURL:   s.frontendURL + "/#/approvals/" + request.ID,
+		Note:        "The request expires in 7 days if it is not approved.",
+	}
 	for _, member := range members {
 		if member.UserID == request.InitiatorID || !member.Role.CanSend() {
 			continue
 		}
-		logError("send approval email payment request="+request.ID, s.mailer.Send(member.Email, subject, body))
+		logError("send approval email payment request="+request.ID, s.mailer.Send(member.Email, message))
 	}
 }

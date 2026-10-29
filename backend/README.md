@@ -37,7 +37,7 @@ internal/
   chain/         Stellar Horizon client and transaction builders
   mpc/ cluster/  mpcium adapter and node health
   realtime/      per-user SSE hub
-  mail/          SMTP mailer
+  mail/          SMTP mailer and the HTML/plain-text email template
 ```
 
 Coding rules for this layout are in [CLAUDE.md](CLAUDE.md).
@@ -46,11 +46,16 @@ Coding rules for this layout are in [CLAUDE.md](CLAUDE.md).
 
 - **Workspaces.** Every user has a Personal workspace and can join team
   workspaces by invite (single-use links, 7 days, emailed when `smtp` is set).
-  Joining never creates a wallet; owners create the team's wallets.
+  Creating or joining a workspace never creates a wallet; owners create the
+  team's wallets.
   Details: [docs/workspaces.md](../docs/workspaces.md).
 - **Roles.** `owner` manages members, wallets and the approval policy;
   `operator` sends payments and approves others'; `member` is read-only.
   Swaps and trustlines are owner-only.
+- **MPC queues.** Keygen and signing requests go through `dispatchQueue`
+  (`service/dispatch_queue.go`) so a burst never floods mpcium: one keygen at a
+  time (`keygen_queue.go`) and two signatures at a time (`sign_queue.go`). The
+  next request leaves when one completes, fails or times out.
 - **Signing.** Payments, swaps and trustlines build an envelope, then go through
   `TransactionService.dispatch`: persist, MPC sign, broadcast, with timeouts and
   restart recovery. Status moves `signing → broadcast → confirmed` (or `failed`).

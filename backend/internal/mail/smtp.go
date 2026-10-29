@@ -5,9 +5,11 @@ import (
 	"crypto/tls"
 	"fmt"
 	"mime"
+	"mime/multipart"
 	"net"
 	"net/mail"
 	"net/smtp"
+	"net/textproto"
 	"strconv"
 	"strings"
 	"time"
@@ -29,19 +31,23 @@ func New(cfg config.SMTPConfig) *SMTPMailer {
 	return &SMTPMailer{config: cfg}
 }
 
-func (m *SMTPMailer) Send(to, subject, body string) error {
+func (m *SMTPMailer) Send(to string, message Message) error {
 	if strings.ContainsAny(to, "\r\n") {
 		return fmt.Errorf("send mail: invalid recipient")
 	}
-	message := strings.Join([]string{
+	body, boundary, err := multipartBody(message)
+	if err != nil {
+		return fmt.Errorf("send mail: %w", err)
+	}
+	raw := strings.Join([]string{
 		"From: " + m.config.From,
 		"To: " + to,
-		"Subject: " + mime.QEncoding.Encode("utf-8", subject),
+		"Subject: " + mime.QEncoding.Encode("utf-8", message.Subject),
 		"Date: " + time.Now().Format(time.RFC1123Z),
 		"MIME-Version: 1.0",
-		"Content-Type: text/plain; charset=utf-8",
+		"Content-Type: multipart/alternative; boundary=" + boundary,
 		"",
-		strings.ReplaceAll(body, "\n", "\r\n"),
+		body,
 	}, "\r\n")
 	var authentication smtp.Auth
 	if m.config.Username != "" {
@@ -51,10 +57,32 @@ func (m *SMTPMailer) Send(to, subject, body string) error {
 	if err != nil {
 		return fmt.Errorf("send mail: parse from address: %w", err)
 	}
-	if err := m.deliver(authentication, sender.Address, to, []byte(message)); err != nil {
+	if err := m.deliver(authentication, sender.Address, to, []byte(raw)); err != nil {
 		return fmt.Errorf("send mail: %w", err)
 	}
 	return nil
+}
+
+// multipartBody writes the text part first so clients without HTML support show it.
+func multipartBody(message Message) (body, boundary string, err error) {
+	var b strings.Builder
+	w := multipart.NewWriter(&b)
+	for _, part := range []struct{ kind, content string }{
+		{"text/plain", message.Text()},
+		{"text/html", message.HTML()},
+	} {
+		p, err := w.CreatePart(textproto.MIMEHeader{"Content-Type": {part.kind + "; charset=utf-8"}})
+		if err != nil {
+			return "", "", err
+		}
+		if _, err := p.Write([]byte(strings.ReplaceAll(part.content, "\n", "\r\n"))); err != nil {
+			return "", "", err
+		}
+	}
+	if err := w.Close(); err != nil {
+		return "", "", err
+	}
+	return b.String(), w.Boundary(), nil
 }
 
 // deliver is smtp.SendMail with a deadline, which SendMail lacks.

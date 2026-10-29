@@ -43,42 +43,52 @@ export default function InviteAccept({
   const wrongAccount = preview && preview.email.toLowerCase() !== userEmail.toLowerCase()
   if (!preview && !error) return null
 
+  const name = preview?.workspaceName || 'a workspace'
+  const pending = preview?.status === 'pending'
+
   return (
-    <section className="border-b border-line px-5 py-5" aria-labelledby="invite-title">
-      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-brand">Workspace invite</div>
-      {preview && (
-        <>
-          <h2 id="invite-title" className="mb-1 text-xl font-bold">Join {preview.workspaceName || 'a workspace'}</h2>
-          <p className="mb-4 text-sm text-muted">
-            {preview.invitedBy} invited {preview.email}. You'll see the workspace's wallets when you join.
-          </p>
-          {preview.status !== 'pending' && <p className="mb-4 text-sm text-ink-soft">{statusMessages[preview.status]}</p>}
-          {preview.status === 'pending' && wrongAccount && (
-            <p className="notice notice-warning mb-4">
-              You're signed in as {userEmail}. Sign in as {preview.email} to accept this invite.
+    <section className="border-b border-line last:border-none" aria-label={`Join ${name}`}>
+      <div className="flex flex-wrap items-center gap-3 px-5 py-4">
+        <span className="avatar avatar-brand h-10 w-10">{preview?.workspaceName?.charAt(0) || '·'}</span>
+        <span className="min-w-[9rem] flex-1">
+          <span className="block truncate font-semibold">{preview ? name : 'Workspace invite'}</span>
+          {preview && (
+            <span className="block truncate text-[13px] text-muted">
+              From {preview.invitedBy} · for {preview.email}
+            </span>
+          )}
+        </span>
+        <span className="ml-auto flex shrink-0 gap-1.5">
+          <button type="button" onClick={onDismiss} className="btn btn-secondary btn-sm">
+            {pending && !wrongAccount ? 'Not now' : 'Dismiss'}
+          </button>
+          {pending && !wrongAccount && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void accept()}
+              aria-label={`Accept invite to ${name}`}
+              className="btn btn-primary btn-sm"
+            >
+              {busy ? 'Joining…' : 'Accept'}
+            </button>
+          )}
+        </span>
+      </div>
+      {(error || (preview && !pending) || (pending && wrongAccount)) && (
+        <div className="flex flex-col items-start gap-3 px-5 pb-4">
+          {preview && preview.status !== 'pending' && <p className="text-sm text-ink-soft">{statusMessages[preview.status]}</p>}
+          {pending && wrongAccount && (
+            <p className="notice notice-warning w-full [overflow-wrap:anywhere]">
+              You're signed in as {userEmail}. Sign in as {preview.email} to accept this invite.{' '}
+              <button type="button" className="btn-link font-semibold" onClick={onSignOut}>
+                Sign out and switch account
+              </button>
             </p>
           )}
-        </>
+          {error && <div role="alert" className="w-full bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
+        </div>
       )}
-      {error && <div role="alert" className="mb-4 bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
-      <div className="flex flex-wrap gap-2">
-        {preview?.status === 'pending' && !wrongAccount && (
-          <button className="btn btn-primary btn-lg" disabled={busy} onClick={() => void accept()}>
-            {busy ? 'Joining…' : 'Accept invite'}
-          </button>
-        )}
-        {preview?.status === 'pending' && wrongAccount && (
-          <button className="btn btn-primary btn-lg" onClick={onSignOut}>
-            Sign out and switch account
-          </button>
-        )}
-        <button
-          className="btn btn-secondary"
-          onClick={onDismiss}
-        >
-          {preview?.status === 'pending' && !wrongAccount ? 'Not now' : 'Dismiss'}
-        </button>
-      </div>
     </section>
   )
 }

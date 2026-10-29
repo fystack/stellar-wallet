@@ -20,7 +20,7 @@ export default function AssetSelect({
         <TokenLogo symbol={selected?.label ?? value} size={22} />
       </span>
       <select
-        className="w-[140px] cursor-pointer appearance-none border border-line bg-white py-2.5 pl-11 pr-8 text-base font-bold text-ink outline-none transition focus:border-brand"
+        className="w-[140px] cursor-pointer appearance-none bg-none border border-line bg-white py-2.5 pl-11 pr-8 text-base font-bold text-ink outline-none transition focus:border-brand"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >

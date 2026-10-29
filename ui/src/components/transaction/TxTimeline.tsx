@@ -47,6 +47,10 @@ function stepState(step: TxStatus, current: TxStatus): State {
   return 'pending'
 }
 
+// Each step pops its dot, then grows the line into the next step.
+const STEP_MS = 420
+const DOT_MS = 300
+
 export default function TxTimeline({ status }: { status: TxStatus }) {
   return (
     <ol className="flex flex-col">
@@ -63,8 +67,8 @@ export default function TxTimeline({ status }: { status: TxStatus }) {
                 )}
                 <div
                   style={{
-                    animation: 'tlPop .4s cubic-bezier(.34,1.56,.64,1) both',
-                    animationDelay: `${i * 0.08}s`,
+                    animation: `tlPop ${DOT_MS}ms cubic-bezier(.34,1.56,.64,1) both`,
+                    animationDelay: `${i * STEP_MS}ms`,
                   }}
                   className={
                     'relative grid h-6 w-6 place-items-center rounded-full transition-colors duration-300 ' +
@@ -89,13 +93,15 @@ export default function TxTimeline({ status }: { status: TxStatus }) {
               </div>
               {!isLast && (
                 <div className="relative my-1 w-0.5 flex-1 overflow-hidden rounded-full bg-line">
-                  <div
-                    className="absolute inset-x-0 top-0 bg-brand transition-all duration-500"
-                    style={{
-                      height: state === 'done' ? '100%' : '0%',
-                      transitionDelay: `${i * 0.08 + 0.12}s`,
-                    }}
-                  />
+                  {state === 'done' && (
+                    <div
+                      className="absolute inset-x-0 top-0 bg-brand"
+                      style={{
+                        animation: `tlGrow ${STEP_MS - DOT_MS + 200}ms ease-out both`,
+                        animationDelay: `${i * STEP_MS + DOT_MS - 100}ms`,
+                      }}
+                    />
+                  )}
                 </div>
               )}
             </div>

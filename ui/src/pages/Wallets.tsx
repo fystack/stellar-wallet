@@ -10,7 +10,7 @@ import {
   EyeOffIcon,
 } from '../icons.tsx'
 import { ChainLogo, TokenLogo } from '../logos.tsx'
-import { formatAmount } from '../lib/format.ts'
+import { formatAmount, shortAddress } from '../lib/format.ts'
 import ClusterStatus from '../components/ClusterStatus.tsx'
 import type { Wallet } from '../types.ts'
 
@@ -65,7 +65,7 @@ function WalletGrid({
           type="button"
           onClick={() => w.status === 'ready' && onOpen(w.id)}
           disabled={w.status !== 'ready'}
-          className="border border-line bg-white p-5 text-left transition duration-200 enabled:hover:-translate-y-0.5 enabled:hover:border-brand enabled:hover:shadow-card disabled:cursor-default"
+          className="flex flex-col border border-line bg-white p-5 text-left transition duration-200 enabled:hover:-translate-y-0.5 enabled:hover:border-brand disabled:cursor-default"
           key={w.id}
         >
           <div className="mb-4 flex items-center justify-between">
@@ -83,11 +83,11 @@ function WalletGrid({
           ) : w.status === 'failed' ? (
             <div className="mb-4 mt-1 text-sm text-danger">Keygen failed</div>
           ) : (
-            <div className="mb-4 mt-1 break-all font-mono text-sm text-muted">
-              {w.address}
+            <div className="mb-4 mt-1 font-mono text-[13px] text-muted">
+              {shortAddress(w.address, 8, 8)}
             </div>
           )}
-          <div className="flex items-center gap-2">
+          <div className="mt-auto flex items-center gap-2">
             <TokenLogo symbol={w.symbol} size={22} />
             <div className="truncate text-2xl font-extrabold leading-none">
               {hidden ? '••••' : formatAmount(w.balance)}{' '}
@@ -197,7 +197,7 @@ export default function Wallets({ loading, failed, onRetry, wallets, workspaceNa
         </div>
 
         {onCreate ? (
-          <button className="btn btn-primary btn-lg mt-8 w-full !px-6 sm:mt-11 sm:w-auto" onClick={onCreate}>
+          <button className="btn btn-primary btn-lg mt-8 w-full sm:mt-11 sm:w-auto" onClick={onCreate}>
             Create your first wallet
           </button>
         ) : (

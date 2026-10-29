@@ -15,7 +15,7 @@ const (
 	KeygenQuorum = 3 // nodes required to generate a full key (all shares)
 
 	signTimeout = 60 * time.Second
-	// mpcium queues keygens (about 10 s each, a few at a time), so a burst of new wallets waits in line.
+	// Measured from dispatch; queued wallets wait their turn before the clock starts.
 	keygenTimeout = 3 * time.Minute
 )
 
@@ -49,16 +49,15 @@ func (s *WalletService) ReconcilePending() {
 	}
 }
 
-// WatchKeygenTimeout fails a wallet still "generating" after the timeout.
+// WatchKeygenTimeout fails a wallet still "generating" after the timeout and frees its queue slot.
 func (s *WalletService) WatchKeygenTimeout(walletID string) {
 	time.AfterFunc(keygenTimeout, func() {
 		wallet, ok := s.store.WalletByID(walletID)
 		if !ok || wallet.Status != domain.WalletGenerating {
+			s.keygenFinished(walletID)
 			return
 		}
-		logError("keygen timeout wallet="+walletID, s.store.SetWalletStatus(walletID, domain.WalletFailed))
-		if updated, found := s.store.WalletByID(walletID); found {
-			publishWallet(s.store, s.hub, updated)
-		}
+		zap.L().Warn("keygen timeout", zap.String("wallet", walletID))
+		s.failKeygen(walletID)
 	})
 }

@@ -56,14 +56,12 @@ export default function ConfirmSendModal({
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 text-sm text-muted">
-          <span className="shrink-0 text-brand">
-            <ShieldIcon size={16} />
-          </span>
-          <span>Signed by 2 of 3 nodes. This action broadcasts on-chain and can't be undone.</span>
-        </div>
-
         <ConfirmActions confirmLabel="Confirm & sign" onCancel={onCancel} onConfirm={onConfirm} />
+
+        <p className="flex items-center justify-center gap-1.5 text-xs text-muted">
+          <ShieldIcon size={14} />
+          Signed by 2 of 3 nodes. Broadcasts on-chain and can't be undone.
+        </p>
       </div>
     </Modal>
   )

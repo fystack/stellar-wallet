@@ -58,22 +58,17 @@ export default function ConfirmSwapModal({
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 text-sm text-muted">
-          <span className="shrink-0 text-brand">
-            <ShieldIcon size={16} />
-          </span>
-          <span>
-            Rate may move slightly. Signed by 2 of 3 nodes and broadcast on-chain — can't be
-            undone.
-          </span>
-        </div>
-
         <ConfirmActions
           confirmLabel={submitting ? 'Submitting…' : 'Confirm & swap'}
           busy={submitting}
           onCancel={onCancel}
           onConfirm={onConfirm}
         />
+
+        <p className="flex items-center justify-center gap-1.5 text-xs text-muted">
+          <ShieldIcon size={14} />
+          Rate may move slightly. Signed by 2 of 3 nodes and can't be undone.
+        </p>
       </div>
     </Modal>
   )

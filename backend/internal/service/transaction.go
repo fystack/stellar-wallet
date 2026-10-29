@@ -40,10 +40,11 @@ type TransactionService struct {
 	mpc          PaymentSigner
 	hub          *realtime.Hub
 	approvals    *PaymentRequestService
+	signs        signQueue
 }
 
 func NewTransactionService(wallets repository.Store, transactions *sqlite.TransactionRepository, chain PaymentChain, cluster SigningCluster, hub *realtime.Hub) *TransactionService {
-	return &TransactionService{wallets: wallets, transactions: transactions, chain: chain, cluster: cluster, hub: hub}
+	return &TransactionService{wallets: wallets, transactions: transactions, chain: chain, cluster: cluster, hub: hub, signs: signQueue{dispatchQueue: dispatchQueue{limit: maxInflightSigns}}}
 }
 
 func (s *TransactionService) SetMPC(client PaymentSigner) { s.mpc = client }
@@ -182,11 +183,10 @@ func (s *TransactionService) dispatch(wallet domain.Wallet, transaction domain.T
 	if err := s.transactions.CreateTransaction(transaction); err != nil {
 		return fmt.Errorf("persist %s transaction: %w", transaction.Type, err)
 	}
-	if err := s.mpc.Sign(wallet.ID, transaction.ID, domain.Chains[wallet.Chain].Network, hash); err != nil {
-		s.failSigning(transaction.ID, "signing could not be started")
+	job := signJob{walletID: wallet.ID, network: domain.Chains[wallet.Chain].Network, hash: hash}
+	if err := s.enqueueSign(transaction.ID, job); err != nil {
 		return apperror.SignDispatchFailed.Wrap(fmt.Errorf("dispatch signing: %w", err))
 	}
-	s.WatchSignTimeout(transaction.ID)
 	publishTransaction(s.wallets, s.hub, transaction)
 	return nil
 }
@@ -239,6 +239,7 @@ func (s *TransactionService) OnChain(hash string) (map[string]any, error) {
 
 // OnSign returns the transaction when balances should be refreshed.
 func (s *TransactionService) OnSign(result mpc.SignResult) *domain.Transaction {
+	defer s.signFinished(result.TransactionID)
 	transaction, ok := s.transactions.TransactionByID(result.TransactionID)
 	if !ok {
 		return nil
@@ -283,6 +284,7 @@ func (s *TransactionService) OnSign(result mpc.SignResult) *domain.Transaction {
 }
 
 func (s *TransactionService) failSigning(transactionID, reason string) {
+	defer s.signFinished(transactionID)
 	failed, err := s.transactions.FailSigning(transactionID, reason)
 	if err != nil {
 		logError("fail signing tx="+transactionID, err)

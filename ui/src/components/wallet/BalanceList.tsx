@@ -61,7 +61,7 @@ export default function BalanceList({
                 aria-label="Sort tokens"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortKey)}
-                className="border border-line bg-white px-2 py-1 text-xs font-semibold text-ink-soft"
+                className="border border-line bg-white py-1 pl-2 pr-7 text-xs font-semibold text-ink-soft [background-position:right_0.5rem_center]"
               >
                 <option value="amount">Sort: Amount</option>
                 <option value="name">Sort: Name</option>
