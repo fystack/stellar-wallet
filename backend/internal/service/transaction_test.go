@@ -72,7 +72,7 @@ func newTestTransactionService(t *testing.T) (*TransactionService, *paymentChain
 	}
 	c := &paymentChainStub{resolved: chain.Resolved{Address: "resolved-address", Memo: "42", MemoType: "id"}}
 	signer := &paymentSignerStub{}
-	service := &TransactionService{wallets: wallets, transactions: sqlite.NewTransactionRepository(db), chain: c, mpc: signer, cluster: paymentClusterStub(3), hub: realtime.NewHub()}
+	service := &TransactionService{wallets: wallets, transactions: sqlite.NewTransactionRepository(db), chain: c, mpc: signer, cluster: paymentClusterStub(3), hub: realtime.NewHub(), signs: signQueue{dispatchQueue: dispatchQueue{limit: maxInflightSigns}}}
 	return service, c, signer
 }
 

@@ -32,10 +32,11 @@ type WalletService struct {
 	hub          *realtime.Hub
 	mpc          WalletKeygen
 	workspaces   *sqlite.WorkspaceRepository
+	keygens      dispatchQueue
 }
 
 func NewWalletService(store repository.Store, transactions *sqlite.TransactionRepository, workspaces *sqlite.WorkspaceRepository, chain *chain.Client, cluster *cluster.Client, hub *realtime.Hub) *WalletService {
-	return &WalletService{store: store, transactions: transactions, workspaces: workspaces, chain: chain, cluster: cluster, hub: hub}
+	return &WalletService{store: store, transactions: transactions, workspaces: workspaces, chain: chain, cluster: cluster, hub: hub, keygens: dispatchQueue{limit: maxInflightKeygens}}
 }
 
 func (s *WalletService) SetMPC(client WalletKeygen) { s.mpc = client }
@@ -70,11 +71,10 @@ func (s *WalletService) Create(userID, sessionWorkspaceID, requestedWorkspaceID,
 	if workspace.Role != domain.RoleOwner {
 		return domain.Wallet{}, apperror.WorkspaceOwnerRequired.New()
 	}
-	return s.Provision(userID, workspace.ID, name, chainName)
+	return s.provision(userID, workspace.ID, name, chainName)
 }
 
-// Provision skips authorization; callers must have checked userID's access to workspaceID.
-func (s *WalletService) Provision(userID, workspaceID, name, chainName string) (domain.Wallet, error) {
+func (s *WalletService) provision(userID, workspaceID, name, chainName string) (domain.Wallet, error) {
 	metadata, ok := domain.Chains[chainName]
 	if !ok {
 		return domain.Wallet{}, apperror.UnsupportedChain.New()
@@ -101,11 +101,7 @@ func (s *WalletService) Provision(userID, workspaceID, name, chainName string) (
 	if err := s.store.CreateWallet(wallet); err != nil {
 		return domain.Wallet{}, fmt.Errorf("persist wallet: %w", err)
 	}
-	if err := s.mpc.CreateWallet(wallet.ID); err != nil {
-		logError("keygen dispatch wallet="+wallet.ID, s.store.SetWalletStatus(wallet.ID, domain.WalletFailed))
-		return domain.Wallet{}, apperror.KeygenDispatchFailed.Wrap(err)
-	}
-	s.WatchKeygenTimeout(wallet.ID)
+	s.enqueueKeygen(wallet.ID)
 	return wallet, nil
 }
 
@@ -179,6 +175,7 @@ func capitalize(value string) string {
 }
 
 func (s *WalletService) OnKeygen(result mpc.KeygenResult) {
+	defer s.keygenFinished(result.WalletID)
 	if !result.Successful {
 		zap.L().Warn("keygen failed", zap.String("wallet", result.WalletID), zap.String("reason", result.Error))
 		logError("keygen failed wallet="+result.WalletID, s.store.SetWalletStatus(result.WalletID, domain.WalletFailed))

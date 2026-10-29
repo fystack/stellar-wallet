@@ -46,7 +46,7 @@ func newApprovalFixture(t *testing.T, policy *ApprovalPolicyInput) *approvalFixt
 	stub := &paymentChainStub{resolved: chain.Resolved{Address: "resolved-address"}}
 	signer := &paymentSignerStub{}
 	hub := realtime.NewHub()
-	payments := &TransactionService{wallets: f.store, transactions: sqlite.NewTransactionRepository(f.db), chain: stub, mpc: signer, cluster: paymentClusterStub(3), hub: hub}
+	payments := &TransactionService{wallets: f.store, transactions: sqlite.NewTransactionRepository(f.db), chain: stub, mpc: signer, cluster: paymentClusterStub(3), hub: hub, signs: signQueue{dispatchQueue: dispatchQueue{limit: maxInflightSigns}}}
 	approvals := NewPaymentRequestService(f.store, f.workspaces, sqlite.NewPaymentRequestRepository(f.db), payments, hub, f.mailer, "http://localhost:5173/")
 	payments.SetApprovals(approvals)
 	f.mailer.sent = nil
