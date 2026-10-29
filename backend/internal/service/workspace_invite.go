@@ -3,7 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
-	"net/mail"
+	netmail "net/mail"
 	"slices"
 	"strings"
 	"time"
@@ -11,6 +11,7 @@ import (
 	"stellar-wallet-backend/internal/apperror"
 	"stellar-wallet-backend/internal/auth"
 	"stellar-wallet-backend/internal/domain"
+	"stellar-wallet-backend/internal/mail"
 	"stellar-wallet-backend/internal/repository"
 
 	"github.com/google/uuid"
@@ -53,7 +54,7 @@ func (s *WorkspaceService) Invite(userID, workspaceID, email string, role domain
 		return InviteResult{}, apperror.InvalidMemberRole.New()
 	}
 	email = strings.ToLower(strings.TrimSpace(email))
-	parsed, err := mail.ParseAddress(email)
+	parsed, err := netmail.ParseAddress(email)
 	if err != nil || parsed.Address != email {
 		return InviteResult{}, apperror.InvalidInviteEmail.New()
 	}
@@ -89,10 +90,15 @@ func (s *WorkspaceService) Invite(userID, workspaceID, email string, role domain
 	}
 	result := InviteResult{Invite: invite, Link: s.frontendURL + "/#/invite/" + token}
 	if s.mailer != nil {
-		subject := fmt.Sprintf("%s invited you to %s on Stellar MPC Wallet", inviter.Email, workspace.Name)
-		body := fmt.Sprintf("%s invited you to join the %q workspace on Stellar MPC Wallet.\n\nAccept the invite:\n%s\n\nThe link expires in 7 days and works once. Sign in with %s to accept it.\n",
-			inviter.Email, workspace.Name, result.Link, email)
-		if err := s.mailer.Send(email, subject, body); err != nil {
+		message := mail.Message{
+			Subject:     fmt.Sprintf("%s invited you to %s", inviter.Email, workspace.Name),
+			Heading:     "You're invited to " + workspace.Name,
+			Intro:       fmt.Sprintf("%s invited you to join the %s workspace as %s.", inviter.Email, workspace.Name, role),
+			ActionLabel: "Accept invite",
+			ActionURL:   result.Link,
+			Note:        fmt.Sprintf("This link works once and expires in 7 days. Sign in with %s to accept it. If you weren't expecting this, you can ignore this email.", email),
+		}
+		if err := s.mailer.Send(email, message); err != nil {
 			logError("send invite email workspace="+workspaceID, err)
 		} else {
 			result.EmailSent = true

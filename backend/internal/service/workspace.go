@@ -11,6 +11,7 @@ import (
 	"stellar-wallet-backend/internal/apperror"
 	"stellar-wallet-backend/internal/auth"
 	"stellar-wallet-backend/internal/domain"
+	"stellar-wallet-backend/internal/mail"
 	"stellar-wallet-backend/internal/repository"
 	"stellar-wallet-backend/internal/repository/sqlite"
 
@@ -21,7 +22,7 @@ const inviteTTL = 7 * 24 * time.Hour
 
 // Mailer delivers invite emails. A nil Mailer means email is not configured.
 type Mailer interface {
-	Send(to, subject, body string) error
+	Send(to string, message mail.Message) error
 }
 
 type WorkspaceService struct {

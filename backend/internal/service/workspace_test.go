@@ -10,6 +10,7 @@ import (
 	"stellar-wallet-backend/internal/apperror"
 	"stellar-wallet-backend/internal/auth"
 	"stellar-wallet-backend/internal/domain"
+	"stellar-wallet-backend/internal/mail"
 	"stellar-wallet-backend/internal/repository/sqlite"
 )
 
@@ -18,8 +19,8 @@ type mailerStub struct {
 	sent []string
 }
 
-func (m *mailerStub) Send(to, _, body string) error {
-	m.sent = append(m.sent, to+"\n"+body)
+func (m *mailerStub) Send(to string, message mail.Message) error {
+	m.sent = append(m.sent, to+"\n"+message.Text())
 	return m.err
 }
 

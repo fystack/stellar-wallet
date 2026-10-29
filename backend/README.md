@@ -37,7 +37,7 @@ internal/
   chain/         Stellar Horizon client and transaction builders
   mpc/ cluster/  mpcium adapter and node health
   realtime/      per-user SSE hub
-  mail/          SMTP mailer
+  mail/          SMTP mailer and the HTML/plain-text email template
 ```
 
 Coding rules for this layout are in [CLAUDE.md](CLAUDE.md).
