@@ -3,8 +3,7 @@
 # names) and node_health_url (nodes are separate hosts in Docker).
 addr: ":8090"
 db_path: "/data/wallet.db"
-cors_origin: "*"                    # UI is same-origin via nginx; * is harmless
-auth_secret: "dev-secret-change-me" # CHANGE for any real deployment
+cors_origin: "http://localhost:8080" # Exact browser origin; cookies require credentials
 
 # mpcium cluster (compose services)
 nats_url: "nats://nats:4222"
@@ -18,3 +17,18 @@ assume_peers_online: false
 
 # Chains
 horizon_url: "https://horizon-testnet.stellar.org"
+
+# Browser-facing URLs (OAuth callbacks use public_url, not internal Docker names).
+public_url: "http://localhost:8080"
+frontend_url: "http://localhost:8080"
+cookie_secure: false # Set true with HTTPS outside localhost.
+
+# Register these callbacks with Google/GitHub. Put secrets in ignored config.yaml
+# or a privately mounted config file; never commit real client secrets.
+oauth:
+  google:
+    client_id: ""
+    client_secret: ""
+  github:
+    client_id: ""
+    client_secret: ""

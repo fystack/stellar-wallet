@@ -5,8 +5,9 @@ import TxTimeline from './TxTimeline.tsx'
 import CopyAddress from './CopyAddress.tsx'
 import { TokenLogo } from '../logos.tsx'
 import { api, explorerTx } from '../api.ts'
-import { formatAmount, formatUsd } from '../format.ts'
-import { friendlyTxError } from '../txError.ts'
+import { formatAmount, formatUsd } from '../lib/format.ts'
+import { friendlyTxError } from '../lib/txError.ts'
+import { BASE_FEE_XLM, TRUSTLINE_MEMO } from '../lib/stellar.ts'
 import type { Transaction } from '../types.ts'
 
 const NETWORK: Record<string, string> = {
@@ -50,7 +51,7 @@ export default function TxDetailModal({
   onClose: () => void
 }) {
   const incoming = tx.type === 'in'
-  const isTrustline = tx.memo === 'Add trustline'
+  const isTrustline = tx.memo === TRUSTLINE_MEMO
   const isSwap = tx.type === 'swap'
   const kind = isSwap
     ? 'Swap'
@@ -155,7 +156,7 @@ export default function TxDetailModal({
         </Row>
         {!incoming && (
           <Row label="Network fee">
-            <span className="text-ink">{onChain?.fee ?? '0.00001'} XLM</span>
+            <span className="text-ink">{onChain?.fee ?? BASE_FEE_XLM} XLM</span>
           </Row>
         )}
         {onChain && (

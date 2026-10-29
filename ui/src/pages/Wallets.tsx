@@ -8,7 +8,7 @@ import {
   EyeOffIcon,
 } from '../icons.tsx'
 import { ChainLogo, TokenLogo } from '../logos.tsx'
-import { formatAmount } from '../format.ts'
+import { formatAmount } from '../lib/format.ts'
 import ClusterStatus from '../components/ClusterStatus.tsx'
 import type { Wallet } from '../types.ts'
 

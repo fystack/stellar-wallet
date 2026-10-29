@@ -19,10 +19,7 @@ import (
 	"github.com/stellar/go/xdr"
 )
 
-const (
-	DefaultHorizonURL = "https://horizon-testnet.stellar.org"
-	friendbotURL      = "https://friendbot.stellar.org"
-)
+const friendbotURL = "https://friendbot.stellar.org"
 
 type IncomingPayment struct {
 	Hash   string
@@ -34,8 +31,6 @@ type IncomingPayment struct {
 
 type Client struct {
 	httpClient *http.Client
-
-	rpcMu      sync.RWMutex
 	horizonURL string
 
 	priceMu     sync.Mutex
@@ -50,15 +45,7 @@ func NewClient(horizonURL string, httpClient *http.Client) *Client {
 	}
 }
 
-func (c *Client) SetRPC(horizonURL string) {
-	c.rpcMu.Lock()
-	defer c.rpcMu.Unlock()
-	c.horizonURL = horizonURL
-}
-
 func (c *Client) HorizonURL() string {
-	c.rpcMu.RLock()
-	defer c.rpcMu.RUnlock()
 	return c.horizonURL
 }
 
@@ -105,12 +92,16 @@ func (c *Client) Incoming(address string) ([]IncomingPayment, error) {
 	return payments, nil
 }
 
-func (c *Client) Balances(chainName, address string) []domain.AssetBalance {
+// Balances returns zero XLM for an unfunded account and an error when Horizon is unreachable.
+func (c *Client) Balances(chainName, address string) ([]domain.AssetBalance, error) {
 	switch chainName {
 	case "stellar":
 		account, err := c.horizon().AccountDetail(horizonclient.AccountRequest{AccountID: address})
+		if horizonclient.IsNotFoundError(err) {
+			return []domain.AssetBalance{{Symbol: "XLM", Balance: "0"}}, nil
+		}
 		if err != nil {
-			return []domain.AssetBalance{{Symbol: "XLM", Balance: "0"}}
+			return nil, fmt.Errorf("load account %s: %w", address, err)
 		}
 		balances := []domain.AssetBalance{}
 		for _, balance := range account.Balances {
@@ -125,9 +116,9 @@ func (c *Client) Balances(chainName, address string) []domain.AssetBalance {
 				})
 			}
 		}
-		return balances
+		return balances, nil
 	default:
-		return nil
+		return nil, fmt.Errorf("unsupported chain %q", chainName)
 	}
 }
 
@@ -140,12 +131,16 @@ func (c *Client) PingHorizon() bool {
 	return response.StatusCode < http.StatusBadRequest
 }
 
+// Balance returns the native balance: "0.00" for an unfunded account, an error when Horizon is unreachable.
 func (c *Client) Balance(chainName, address string) (string, error) {
 	switch chainName {
 	case "stellar":
 		account, err := c.horizon().AccountDetail(horizonclient.AccountRequest{AccountID: address})
-		if err != nil {
+		if horizonclient.IsNotFoundError(err) {
 			return "0.00", nil
+		}
+		if err != nil {
+			return "", fmt.Errorf("load account %s: %w", address, err)
 		}
 		for _, balance := range account.Balances {
 			if balance.Asset.Type == "native" {
@@ -154,7 +149,7 @@ func (c *Client) Balance(chainName, address string) (string, error) {
 		}
 		return "0.00", nil
 	default:
-		return "0.00", nil
+		return "", fmt.Errorf("unsupported chain %q", chainName)
 	}
 }
 

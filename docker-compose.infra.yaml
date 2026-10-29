@@ -1,0 +1,19 @@
+# MPC infra only (NATS + Consul + 3 mpcium nodes); run backend and UI on the host.
+#
+#   docker compose -f docker-compose.yaml -f docker-compose.infra.yaml up -d consul nats node0 node1 node2
+services:
+  consul:
+    ports:
+      - "127.0.0.1:8500:8500"
+  nats:
+    ports:
+      - "127.0.0.1:4222:4222"
+  node0:
+    volumes:
+      - ./infra/mpcium.local.yaml:/app/config.yaml:ro
+  node1:
+    volumes:
+      - ./infra/mpcium.local.yaml:/app/config.yaml:ro
+  node2:
+    volumes:
+      - ./infra/mpcium.local.yaml:/app/config.yaml:ro

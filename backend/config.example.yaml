@@ -5,13 +5,27 @@
 addr: ":8090"                       # HTTP listen address (UI expects :8090)
 db_path: "wallet.db"
 cors_origin: "http://localhost:5173"
-auth_secret: "dev-secret-change-me" # CHANGE in any non-dev environment
 
 # mpcium cluster
-nats_url: "nats://10.10.0.1:4222"
-consul_addr: "10.10.0.1:8500"
+nats_url: "nats://10.8.0.1:4222"
+consul_addr: "10.8.0.1:8500"
 initiator_key: "../mpcium/event_initiator.key"
 health_base_port: 8091              # node$n /health on health_base_port + n
 
 # Chains
 horizon_url: "https://horizon-testnet.stellar.org"
+
+# Browser-facing URLs (OAuth callbacks use public_url, not internal Docker names).
+public_url: "http://localhost:8090"
+frontend_url: "http://localhost:5173"
+cookie_secure: false # Set true with HTTPS outside localhost.
+
+# Register these callbacks with Google/GitHub. Put secrets in ignored config.yaml
+# or a privately mounted config file; never commit real client secrets.
+oauth:
+  google:
+    client_id: ""
+    client_secret: ""
+  github:
+    client_id: ""
+    client_secret: ""
