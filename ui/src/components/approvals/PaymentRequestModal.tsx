@@ -106,6 +106,7 @@ export default function PaymentRequestModal({
           <Row label="Transaction">
             <a
               className="btn btn-link font-mono text-[13px]"
+              aria-label={`Transaction ${request.txHash}`}
               href={explorerTx('stellar', request.txHash)}
               target="_blank"
               rel="noreferrer"

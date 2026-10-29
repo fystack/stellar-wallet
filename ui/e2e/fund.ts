@@ -24,19 +24,33 @@ async function accountExists(server: Horizon.Server, address: string): Promise<b
   }
 }
 
+function resultCode(error: unknown): string {
+  const data = (error as { response?: { data?: { extras?: { result_codes?: { transaction?: string } } } } }).response?.data
+  return data?.extras?.result_codes?.transaction ?? ''
+}
+
 // Sends XLM from the fund wallet, creating the destination account when it doesn't exist yet.
+// Parallel workers share the fund account, so a sequence clash (tx_bad_seq) is retried with a fresh sequence.
 export async function fundAccount(destination: string, amount: string) {
   const server = new Horizon.Server(HORIZON)
   const source = fundKeypair()
   const operation = (await accountExists(server, destination))
     ? Operation.payment({ destination, asset: Asset.native(), amount })
     : Operation.createAccount({ destination, startingBalance: amount })
-  const transaction = new TransactionBuilder(await server.loadAccount(source.publicKey()), { fee: BASE_FEE, networkPassphrase: Networks.TESTNET })
-    .addOperation(operation)
-    .setTimeout(60)
-    .build()
-  transaction.sign(source)
-  await server.submitTransaction(transaction)
+  for (let attempt = 1; ; attempt++) {
+    const transaction = new TransactionBuilder(await server.loadAccount(source.publicKey()), { fee: BASE_FEE, networkPassphrase: Networks.TESTNET })
+      .addOperation(operation)
+      .setTimeout(60)
+      .build()
+    transaction.sign(source)
+    try {
+      await server.submitTransaction(transaction)
+      return
+    } catch (error) {
+      if (resultCode(error) !== 'tx_bad_seq' || attempt >= 5) throw error
+      await new Promise((resolve) => setTimeout(resolve, 500 * attempt + Math.random() * 500))
+    }
+  }
 }
 
 export async function nativeBalance(address: string): Promise<{ balance: number; subentries: number }> {

@@ -159,7 +159,7 @@ test('wallet detail survives reload (hash routing)', async ({ page }) => {
   await expect(page).toHaveURL(/#\/wallet\//)
   await page.reload()
   // Still on the detail page after reload.
-  await expect(page.getByText(addr)).toBeVisible({ timeout: 40_000 })
+  await expect(page.getByRole('button', { name: `Copy address ${addr}` })).toBeVisible({ timeout: 40_000 })
   await expect(page.getByRole('button', { name: 'Receive' })).toBeVisible()
 })
 
