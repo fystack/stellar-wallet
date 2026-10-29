@@ -3,7 +3,7 @@ import { BASE_FEE_XLM } from '../../lib/stellar.ts'
 
 export default function SendSummary({ amount, asset }: { amount: string; asset: string }) {
   return (
-    <div className="flex flex-col gap-1.5 bg-card px-3.5 py-3 text-sm">
+    <div className="flex flex-col gap-2.5 bg-card px-4 py-3.5 text-sm">
       <div className="flex items-center justify-between">
         <span className="text-muted">Amount</span>
         <span className="font-semibold">
@@ -15,9 +15,9 @@ export default function SendSummary({ amount, asset }: { amount: string; asset: 
         <span className="font-semibold">{BASE_FEE_XLM} XLM</span>
       </div>
       {asset === 'XLM' && (
-        <div className="flex items-center justify-between border-t border-line pt-1.5">
-          <span className="text-muted">Total</span>
-          <span className="font-bold">
+        <div className="mt-0.5 flex items-center justify-between border-t border-line pt-3">
+          <span className="font-semibold text-ink-soft">Total</span>
+          <span className="text-base font-bold">
             {formatAmount(String((Number(amount) || 0) + Number(BASE_FEE_XLM)))} XLM
           </span>
         </div>

@@ -58,7 +58,7 @@ export default function Swap({
         </p>
       </header>
 
-      <form className="surface flex flex-col gap-[18px]" onSubmit={(e) => {
+      <form className="surface flex flex-col gap-5" onSubmit={(e) => {
           e.preventDefault()
           form.review()
         }}>
@@ -109,13 +109,6 @@ export default function Swap({
           />
         )}
 
-        <div className="flex items-center gap-2.5 text-sm text-muted">
-          <span className="shrink-0 text-brand">
-            <ShieldIcon size={16} />
-          </span>
-          <span>Signed by 2 of 3 nodes — your key is never assembled.</span>
-        </div>
-
         {form.needsTrustline ? (
           <>
             <div className="notice notice-warning flex items-start gap-2">
@@ -141,6 +134,11 @@ export default function Swap({
             {form.submitting ? 'Submitting…' : 'Review & sign swap'}
           </button>
         )}
+
+        <p className="flex items-center justify-center gap-1.5 text-xs text-muted">
+          <ShieldIcon size={14} />
+          Signed by 2 of 3 nodes. Your key is never assembled.
+        </p>
       </form>
 
       {form.confirming && quote.data && (

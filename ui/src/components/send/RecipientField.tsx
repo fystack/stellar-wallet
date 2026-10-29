@@ -1,3 +1,4 @@
+import { ChevronDownIcon } from '../../icons.tsx'
 import { formatAmount, shortAddress } from '../../lib/format.ts'
 import type { ResolvedRecipient, Wallet } from '../../types.ts'
 
@@ -41,21 +42,26 @@ export default function RecipientField({
         </button>
       </div>
       {ownWallets.length > 0 && (
-        <select
-          className="field-input text-sm"
-          value=""
-          onChange={(e) => {
-            const wallet = ownWallets.find((w) => w.id === e.target.value)
-            if (wallet) onChange(wallet.address)
-          }}
-        >
-          <option value="">Send to one of my wallets…</option>
-          {ownWallets.map((w) => (
-            <option key={w.id} value={w.id}>
-              {w.name} · {shortAddress(w.address)} · {formatAmount(w.balance)} {w.symbol}
-            </option>
-          ))}
-        </select>
+        <span className="relative inline-flex w-fit items-center gap-1 text-xs font-semibold text-brand">
+          Or pick one of my wallets
+          <ChevronDownIcon size={12} />
+          <select
+            className="absolute inset-0 cursor-pointer opacity-0"
+            aria-label="Send to one of my wallets"
+            value=""
+            onChange={(e) => {
+              const wallet = ownWallets.find((w) => w.id === e.target.value)
+              if (wallet) onChange(wallet.address)
+            }}
+          >
+            <option value="" disabled>Pick a wallet</option>
+            {ownWallets.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name} · {shortAddress(w.address)} · {formatAmount(w.balance)} {w.symbol}
+              </option>
+            ))}
+          </select>
+        </span>
       )}
       {resolving && <span className="text-xs text-muted">Resolving address…</span>}
       {error && (

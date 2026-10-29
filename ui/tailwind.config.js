@@ -7,7 +7,7 @@ export default {
         ink: '#0f2748',
         night: '#0d1422',
         'ink-soft': '#5b6b82',
-        muted: '#8a97a8',
+        muted: '#627186',
         brand: {
           DEFAULT: '#1f6bff',
           deep: '#0b53e6',

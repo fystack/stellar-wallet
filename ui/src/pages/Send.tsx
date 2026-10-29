@@ -71,12 +71,11 @@ export default function Send({
       <header className="mb-6">
         <h1 className="mb-2 text-2xl font-bold sm:text-3xl">Send</h1>
         <p className="text-base leading-relaxed text-muted">
-          Transfer assets. The transaction is signed by 2 of 3 nodes — your key is never
-          assembled.
+          Transfer assets from one of your wallets.
         </p>
       </header>
 
-      <form className="surface flex flex-col gap-[18px]" onSubmit={(e) => {
+      <form className="surface flex flex-col gap-5" onSubmit={(e) => {
           e.preventDefault()
           form.review()
         }}>
@@ -120,13 +119,6 @@ export default function Send({
 
         <SendSummary amount={form.amount} asset={form.assetSymbol} />
 
-        <div className="flex items-start gap-2.5 bg-card px-3.5 py-3 text-sm text-ink-soft sm:items-center">
-          <span className="shrink-0 text-brand">
-            <ShieldIcon size={18} />
-          </span>
-          <span>Requires approval from 2 of 3 nodes to sign.</span>
-        </div>
-
         {approvalPolicyFailed && (
           <div role="status" className="notice notice-info">
             Couldn't check this workspace's approval policy. If the payment needs approval, it is sent for approval instead of signed.
@@ -143,6 +135,11 @@ export default function Send({
         <button className="btn btn-primary btn-lg w-full" type="submit" disabled={!form.canSubmit}>
           {held ? 'Review & request approval' : approvalPolicyKnown ? 'Review & sign' : 'Review & submit'}
         </button>
+
+        <p className="flex items-center justify-center gap-1.5 text-xs text-muted">
+          <ShieldIcon size={14} />
+          Signed by 2 of 3 nodes. Your key is never assembled.
+        </p>
       </form>
 
       {showScanner && <QrScanner onResult={form.setTo} onClose={() => setShowScanner(false)} />}

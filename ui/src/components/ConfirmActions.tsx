@@ -16,7 +16,7 @@ export default function ConfirmActions({
       </button>
       <button
         type="button"
-        className="btn btn-primary flex-1 py-3 font-bold"
+        className="btn btn-primary flex-1"
         disabled={busy}
         onClick={onConfirm}
       >

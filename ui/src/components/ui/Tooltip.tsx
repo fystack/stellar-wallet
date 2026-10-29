@@ -1,8 +1,24 @@
 import { cloneElement, useId, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 
+type Align = 'center' | 'start' | 'end'
+
+const place: Record<Align, string> = {
+  center: 'left-1/2 -translate-x-1/2',
+  start: 'left-0',
+  end: 'right-0',
+}
+
 // Shows on hover and keyboard focus, unlike the native title attribute; rendered only while open.
-export default function Tooltip({ label, children }: { label: ReactNode; children: ReactElement }) {
+export default function Tooltip({
+  label,
+  align = 'center',
+  children,
+}: {
+  label: ReactNode
+  align?: Align
+  children: ReactElement
+}) {
   const id = useId()
   const [open, setOpen] = useState(false)
   return (
@@ -19,7 +35,10 @@ export default function Tooltip({ label, children }: { label: ReactNode; childre
         <span
           id={id}
           role="tooltip"
-          className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-max max-w-[260px] -translate-x-1/2 break-all bg-ink px-2.5 py-1.5 text-xs font-medium text-white"
+          className={
+            'pointer-events-none absolute bottom-full z-50 mb-2 w-max max-w-[260px] break-all bg-ink px-2.5 py-1.5 text-xs font-medium text-white ' +
+            place[align]
+          }
         >
           {label}
         </span>

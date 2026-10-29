@@ -97,7 +97,7 @@ export default function ApprovalPolicyCard({
             </label>
           </fieldset>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <button type="submit" className="btn btn-primary btn-lg" disabled={busy || !threshold.trim()}>
+            <button type="submit" className="btn btn-primary" disabled={busy || !threshold.trim()}>
               {busy ? 'Saving…' : policy ? 'Save policy' : 'Turn on approvals'}
             </button>
             {policy && (

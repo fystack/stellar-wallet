@@ -112,7 +112,7 @@ export default function Login({
             <button
               key={provider}
               type="button"
-              className="btn btn-secondary py-3"
+              className="btn btn-secondary btn-lg"
               aria-label={`${isRegister && !socialOnly ? 'Sign up' : 'Continue'} with ${providerName(provider)}`}
               disabled={!enabled || busy}
               onClick={() => window.location.assign(api.oauthStartURL(provider))}
@@ -195,7 +195,7 @@ export default function Login({
               </div>
             )}
 
-            <button className="btn btn-primary btn-lg mt-2 w-full !py-3.5" type="submit" disabled={!canSubmit || busy}>
+            <button className="btn btn-primary btn-lg mt-2 w-full" type="submit" disabled={!canSubmit || busy}>
               {busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
             </button>
           </form>

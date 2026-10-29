@@ -24,7 +24,7 @@ export default function AmountField({
   const selected = assets.find((a) => assetKey(a) === assetId)
   const asset = selected?.symbol ?? assetId
   return (
-    <div className="flex flex-col gap-2 border border-line bg-card px-4 pb-3 pt-3.5">
+    <div className="flex flex-col gap-2.5 bg-card px-4 pb-3.5 pt-3.5">
       <div className="flex items-center justify-between text-sm">
         <span className="font-semibold text-ink-soft">Amount</span>
         {selected && (
@@ -40,7 +40,7 @@ export default function AmountField({
       <div className="flex items-center gap-3">
         <input
           className={
-            'min-w-0 flex-1 border-0 bg-transparent p-0 text-3xl font-bold text-ink outline-none placeholder:text-muted ' +
+            'min-w-0 flex-1 border-0 bg-transparent p-0 text-[34px] font-bold leading-none tracking-tight text-ink outline-none placeholder:text-line-strong ' +
             (overBalance ? 'text-danger' : '')
           }
           type="number"

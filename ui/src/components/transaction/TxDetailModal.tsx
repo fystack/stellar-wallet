@@ -34,9 +34,9 @@ function Row({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex flex-col items-start gap-1 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+    <div className="flex flex-col items-start gap-1 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <span className="shrink-0 text-muted">{label}</span>
-      <span className="min-w-0 max-w-full text-left sm:text-right">{children}</span>
+      <span className="min-w-0 max-w-full text-left font-medium sm:text-right">{children}</span>
     </div>
   )
 }
@@ -88,7 +88,7 @@ export default function TxDetailModal({
   return (
     <Modal title="Transaction" onClose={onClose} maxWidth={460}>
       {/* Amount header */}
-      <div className="mb-5 flex items-start justify-between gap-3">
+      <div className="mb-4 flex items-center justify-between gap-3 bg-card px-4 py-4">
         <div className="flex min-w-0 items-center gap-3">
           <span
             className={
@@ -103,7 +103,7 @@ export default function TxDetailModal({
             {isSwap ? '⇅' : incoming ? '↓' : '↑'}
           </span>
           <div>
-            <div className="text-sm text-muted">{kind}</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted">{kind}</div>
             {isSwap ? (
               <div className="flex flex-col gap-0.5 text-lg font-extrabold leading-tight sm:text-xl">
                 <span className="flex items-center gap-1.5 text-success">
@@ -132,18 +132,14 @@ export default function TxDetailModal({
       </div>
 
       {/* Details */}
-      <div className="mb-6 divide-y divide-line bg-card px-4 text-sm">
+      <div className="mb-5 divide-y divide-line text-sm">
         {isSwap ? (
           <Row label="Venue">
             <span className="text-ink">Stellar DEX (path payment)</span>
           </Row>
         ) : (
           <Row label={incoming ? 'From' : isTrustline ? 'Issuer' : 'To'}>
-            <CopyAddress
-              address={tx.counterparty}
-              truncate
-              className="max-w-full text-ink sm:max-w-[220px]"
-            />
+            <CopyAddress address={tx.counterparty} truncate tooltipAlign="end" className="text-ink" />
           </Row>
         )}
         <Row label="Asset">
@@ -170,6 +166,21 @@ export default function TxDetailModal({
         {tx.memo && (
           <Row label="Memo">
             <span className="text-ink">{tx.memo}</span>
+          </Row>
+        )}
+        {tx.txHash && (
+          <Row label="Tx hash">
+            <span className="flex items-center gap-2">
+              <CopyAddress address={tx.txHash} truncate tooltipAlign="end" className="text-ink" />
+              <a
+                href={explorerTx(chain, tx.txHash)}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-link shrink-0 text-xs"
+              >
+                Explorer ↗
+              </a>
+            </span>
           </Row>
         )}
       </div>
@@ -203,41 +214,21 @@ export default function TxDetailModal({
           )
         })()}
 
-      {tx.txHash && (
-        <div className="mb-6">
-          <div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">
-            On-chain transaction
-          </div>
-          <div className="flex items-center justify-between gap-2 bg-card px-3 py-2.5">
-            <span className="truncate font-mono text-xs text-ink-soft">
-              {tx.txHash}
-            </span>
-            <a
-              href={explorerTx(chain, tx.txHash)}
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn-link shrink-0 text-xs"
-            >
-              Explorer ↗
-            </a>
-          </div>
-        </div>
-      )}
-
       {tx.signature && (
-        <div className="mb-6">
-          <div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">
-            MPC signature (2-of-3)
-          </div>
-          <div className="max-h-20 overflow-y-auto break-all bg-card px-3 py-2 font-mono text-xs text-ink-soft">
+        <details className="mb-5 group">
+          <summary className="cursor-pointer list-none text-xs font-semibold text-muted hover:text-ink">
+            <span className="group-open:hidden">Show MPC signature (2-of-3)</span>
+            <span className="hidden group-open:inline">Hide MPC signature (2-of-3)</span>
+          </summary>
+          <div className="mt-2 max-h-20 overflow-y-auto break-all bg-card px-3 py-2 font-mono text-xs text-ink-soft">
             {tx.signature}
           </div>
-        </div>
+        </details>
       )}
 
       {tx.type !== 'in' && tx.status !== 'failed' && (
-        <div className="border-t border-line pt-5">
-          <h3 className="mb-4 text-sm font-semibold text-ink-soft">
+        <div className="border-t border-line pt-4">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">
             Signing progress
           </h3>
           <TxTimeline status={tx.status} />

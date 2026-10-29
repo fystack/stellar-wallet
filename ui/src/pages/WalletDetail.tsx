@@ -111,21 +111,21 @@ export default function WalletDetail({
           {onSend && (
             <button
               onClick={onSend}
-              className="btn btn-primary py-3 sm:px-5"
+              className="btn btn-primary"
             >
               <SendIcon size={18} /> Send
             </button>
           )}
           <button
             onClick={() => setShowReceive(true)}
-            className="btn btn-secondary py-3 sm:px-5"
+            className="btn btn-secondary"
           >
             Receive
           </button>
           <button
             onClick={() => void detail.fund()}
             disabled={detail.funding}
-            className="btn btn-secondary col-span-2 py-3 sm:col-auto sm:px-5"
+            className="btn btn-secondary col-span-2 sm:col-auto"
           >
             {detail.funding ? 'Funding…' : 'Fund (testnet)'}
           </button>

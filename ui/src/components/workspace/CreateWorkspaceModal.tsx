@@ -47,7 +47,7 @@ export default function CreateWorkspaceModal({
             {error}
           </div>
         )}
-        <button className="btn btn-primary btn-lg w-full !py-3.5" type="submit" disabled={busy || !name.trim()}>
+        <button className="btn btn-primary btn-lg w-full" type="submit" disabled={busy || !name.trim()}>
           {busy ? 'Creating…' : 'Create workspace'}
         </button>
       </form>

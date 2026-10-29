@@ -62,7 +62,7 @@ export default function CreateWalletModal({
               <CopyAddress address={created.address} className="break-all" />
             </div>
             <button
-              className="btn btn-primary btn-lg w-full !py-3.5"
+              className="btn btn-primary btn-lg w-full"
               onClick={() => onOpen(created.id)}
             >
               Open wallet
@@ -151,11 +151,11 @@ export default function CreateWalletModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 border border-line py-3.5 font-semibold text-ink-soft transition hover:bg-hover"
+              className="btn btn-secondary btn-lg flex-1"
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary btn-lg flex-1 !py-3.5">
+            <button type="submit" className="btn btn-primary btn-lg flex-1">
               Create wallet
             </button>
           </div>

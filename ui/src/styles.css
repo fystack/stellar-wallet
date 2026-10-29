@@ -14,18 +14,32 @@ body {
     Arial, sans-serif;
 }
 
+@layer base {
+  select {
+    @apply cursor-pointer appearance-none bg-no-repeat pr-9;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23627186' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-position: right 0.75rem center;
+  }
+
+  input[type='radio'] {
+    @apply h-4 w-4 shrink-0 cursor-pointer appearance-none rounded-full border border-line-strong bg-white transition
+      checked:border-[5px] checked:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand
+      focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+}
+
 @layer components {
   /* Buttons: one .btn base, one variant, optional size (default is medium). */
   .btn {
-    @apply inline-flex cursor-pointer items-center justify-center gap-2 px-4 py-2.5 text-[15px] font-semibold
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 px-3.5 py-2 text-sm font-semibold
       transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand
       focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
   }
   .btn-sm {
-    @apply gap-1.5 px-3 py-1.5 text-sm;
+    @apply gap-1.5 px-2.5 py-1 text-[13px];
   }
   .btn-lg {
-    @apply px-8 py-4 text-lg font-bold;
+    @apply px-5 py-2.5 text-[15px];
   }
   .btn-primary {
     @apply bg-brand text-white hover:bg-brand-deep;
@@ -115,8 +129,11 @@ body {
   }
 
   .field-input {
-    @apply min-w-0 w-full border border-line bg-white px-3.5 py-3 text-base text-ink outline-none
+    @apply min-w-0 w-full border border-line bg-white px-3.5 py-2 text-[15px] text-ink outline-none
       transition focus:border-brand focus:ring-2 focus:ring-brand;
+  }
+  select.field-input {
+    @apply pr-9;
   }
 
   .surface {
@@ -134,4 +151,8 @@ body {
   0% { transform: scale(0.4); opacity: 0; }
   60% { transform: scale(1.12); opacity: 1; }
   100% { transform: scale(1); opacity: 1; }
+}
+@keyframes tlGrow {
+  from { height: 0; }
+  to { height: 100%; }
 }
