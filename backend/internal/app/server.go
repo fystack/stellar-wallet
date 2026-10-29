@@ -59,7 +59,7 @@ func NewServer(d Dependencies) *Server {
 		SwapService:           service.NewSwapService(d.Store, d.Chain, transactions),
 		TrustlineService:      service.NewTrustlineService(d.Store, d.Transactions, d.Chain, transactions),
 		SettingsService:       settings,
-		WorkspaceService:      service.NewWorkspaceService(d.Workspaces, d.AuthRepository, wallets, d.Mailer, d.FrontendURL),
+		WorkspaceService:      service.NewWorkspaceService(d.Workspaces, d.AuthRepository, d.Mailer, d.FrontendURL),
 		PaymentRequestService: approvals,
 		Cluster:               d.Cluster,
 		Hub:                   d.Hub,

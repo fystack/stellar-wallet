@@ -161,17 +161,11 @@ export default function AppShell({
     route.reset()
   }
 
-  function announceJoin(result: JoinResult, joinedMessage: string) {
-    toast.success(joinedMessage)
-    if (result.wallet) toast.success(`Creating ${result.wallet.name}…`)
-    if (result.walletError) toast.error(result.walletError)
-  }
-
   async function createWorkspace(name: string) {
     const result = await workspaces.create(name)
     setChoosingWorkspace(false)
     route.reset()
-    announceJoin(result, `${result.workspace.name} created`)
+    toast.success(`${result.workspace.name} created`)
   }
 
   async function acceptInvitation(id: string) {
@@ -180,7 +174,7 @@ export default function AppShell({
       if (id === linkInviteId) onInviteHandled()
       setChoosingWorkspace(false)
       route.reset()
-      announceJoin(result, `You joined ${result.workspace.name}`)
+      toast.success(`You joined ${result.workspace.name}`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to accept the invitation.')
       await workspaces.reload()
@@ -203,7 +197,7 @@ export default function AppShell({
     setChoosingWorkspace(false)
     await workspaces.reload()
     route.reset()
-    announceJoin(result, `You joined ${result.workspace.name}`)
+    toast.success(`You joined ${result.workspace.name}`)
   }
 
   async function signOutEverywhere() {

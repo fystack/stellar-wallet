@@ -13,16 +13,6 @@ import (
 	"stellar-wallet-backend/internal/repository/sqlite"
 )
 
-type provisionerStub struct {
-	err   error
-	calls []string
-}
-
-func (p *provisionerStub) Provision(userID, workspaceID, name, _ string) (domain.Wallet, error) {
-	p.calls = append(p.calls, userID+"@"+workspaceID)
-	return domain.Wallet{ID: "wallet-" + userID, UserID: userID, WorkspaceID: workspaceID, Name: name}, p.err
-}
-
 type mailerStub struct {
 	err  error
 	sent []string
@@ -34,14 +24,13 @@ func (m *mailerStub) Send(to, _, body string) error {
 }
 
 type workspaceFixture struct {
-	db          *sql.DB
-	service     *WorkspaceService
-	workspaces  *sqlite.WorkspaceRepository
-	accounts    *sqlite.AuthRepository
-	store       *sqlite.Store
-	provisioner *provisionerStub
-	mailer      *mailerStub
-	sessions    map[string]string
+	db         *sql.DB
+	service    *WorkspaceService
+	workspaces *sqlite.WorkspaceRepository
+	accounts   *sqlite.AuthRepository
+	store      *sqlite.Store
+	mailer     *mailerStub
+	sessions   map[string]string
 }
 
 func newWorkspaceFixture(t *testing.T) *workspaceFixture {
@@ -52,15 +41,14 @@ func newWorkspaceFixture(t *testing.T) *workspaceFixture {
 	}
 	t.Cleanup(func() { db.Close() })
 	fixture := &workspaceFixture{
-		db:          db,
-		workspaces:  sqlite.NewWorkspaceRepository(db),
-		accounts:    sqlite.NewAuthRepository(db),
-		store:       sqlite.NewStore(db),
-		provisioner: &provisionerStub{},
-		mailer:      &mailerStub{},
-		sessions:    map[string]string{},
+		db:         db,
+		workspaces: sqlite.NewWorkspaceRepository(db),
+		accounts:   sqlite.NewAuthRepository(db),
+		store:      sqlite.NewStore(db),
+		mailer:     &mailerStub{},
+		sessions:   map[string]string{},
 	}
-	fixture.service = NewWorkspaceService(fixture.workspaces, fixture.accounts, fixture.provisioner, fixture.mailer, "http://localhost:5173/")
+	fixture.service = NewWorkspaceService(fixture.workspaces, fixture.accounts, fixture.mailer, "http://localhost:5173/")
 	for _, id := range []string{"owner", "teammate", "stranger"} {
 		if err := fixture.accounts.CreateUser(domain.User{ID: id, Email: id + "@example.com", CreatedAt: "2026-10-01T00:00:00Z"}); err != nil {
 			t.Fatal(err)
@@ -154,17 +142,12 @@ func TestWorkspaceInviteAndAccept(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if joined.Workspace.ID != workspace.ID || joined.Workspace.Role != domain.RoleMember || joined.Wallet != nil {
+	if joined.Workspace.ID != workspace.ID || joined.Workspace.Role != domain.RoleMember {
 		t.Fatalf("join result = %#v", joined)
 	}
 	if f.sessionWorkspace(t, "teammate") != workspace.ID {
 		t.Fatal("session was not switched to the joined workspace")
 	}
-	wantCalls := []string{"owner@" + workspace.ID}
-	if strings.Join(f.provisioner.calls, ",") != strings.Join(wantCalls, ",") {
-		t.Fatalf("provisioned = %v, want %v", f.provisioner.calls, wantCalls)
-	}
-
 	members, err := f.service.Members("teammate", workspace.ID)
 	if err != nil || len(members.Members) != 2 || len(members.Invites) != 2 {
 		t.Fatalf("members = %#v, %v", members, err)
@@ -246,31 +229,12 @@ func TestWorkspaceAcceptRejections(t *testing.T) {
 			f := newWorkspaceFixture(t)
 			team := f.teamWorkspace(t)
 			token := tc.token(f, team)
-			provisionedBefore := len(f.provisioner.calls)
 			_, err := f.service.Accept("teammate", f.sessions["teammate"], token)
 			assertCode(t, err, tc.code)
-			if len(f.provisioner.calls) != provisionedBefore {
-				t.Fatal("rejected accept provisioned a wallet")
-			}
 			if _, err := f.service.Members("teammate", team.ID); err == nil {
 				t.Fatal("rejected accept added a member")
 			}
 		})
-	}
-}
-
-func TestWorkspaceCreateSucceedsWhenWalletProvisioningFails(t *testing.T) {
-	f := newWorkspaceFixture(t)
-	f.provisioner.err = apperror.MPCUnavailable.New()
-	created, err := f.service.Create("owner", f.sessions["owner"], "Treasury")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if created.Wallet != nil || created.WalletError != apperror.MPCUnavailable.New().Message {
-		t.Fatalf("create result = %#v", created)
-	}
-	if _, err := f.service.Members("owner", created.Workspace.ID); err != nil {
-		t.Fatalf("workspace was not created: %v", err)
 	}
 }
 
@@ -375,7 +339,7 @@ func TestInvitationsAreListedForVerifiedEmailsOnly(t *testing.T) {
 	}
 
 	joined, err := f.service.AcceptInvitation("teammate", f.sessions["teammate"], invite.ID)
-	if err != nil || joined.Workspace.ID != team.ID || joined.Wallet != nil {
+	if err != nil || joined.Workspace.ID != team.ID {
 		t.Fatalf("accept = %#v, %v", joined, err)
 	}
 	if f.sessionWorkspace(t, "teammate") != team.ID {
@@ -433,7 +397,6 @@ func TestInvitationActionRejections(t *testing.T) {
 			if err != nil || len(listed.Invites) != 1 {
 				t.Fatalf("invitations = %#v, %v", listed, err)
 			}
-			provisionedBefore := len(f.provisioner.calls)
 			err = tc.run(f, listed.Invites[0].ID)
 			if tc.code == "" {
 				if err != nil {
@@ -448,9 +411,6 @@ func TestInvitationActionRejections(t *testing.T) {
 				return
 			}
 			assertCode(t, err, tc.code)
-			if len(f.provisioner.calls) != provisionedBefore {
-				t.Fatal("rejected invitation provisioned a wallet")
-			}
 		})
 	}
 }

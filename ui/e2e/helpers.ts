@@ -100,7 +100,13 @@ export async function clusterOnline(): Promise<boolean> {
 
 export const RECIPIENT = 'GAHPYWLK6YRN7CVYZOO4H3VDRZ7PVF5UJGLZCSPAEIKJE2XSWF5LAGER'
 
-// Creating a team starts a keygen for its first wallet.
+export async function createWallet(owner: APIRequestContext, workspaceId: string, name: string) {
+  const response = await owner.post('/api/v1/wallets', { data: { workspace_id: workspaceId, name, chain: 'stellar' } })
+  expect(response.status(), await response.text()).toBe(201)
+  return (await response.json()).data as { id: string; address: string; status: string }
+}
+
+// Keygen for a new wallet takes a while on the local cluster.
 export async function walletsSettled(owner: APIRequestContext, workspaceId: string) {
   await expect
     .poll(async () => {
@@ -116,6 +122,7 @@ export async function approvalTeam({ extraOperators = 0, thresholdXlm = '10', re
   const viewer = await registerAccount(uniqueEmail('viewer'))
   const name = `Treasury ${Math.floor(Math.random() * 1e6)}`
   const workspaceId = await createWorkspace(owner.api, name)
+  await createWallet(owner.api, workspaceId, 'Treasury wallet')
   await walletsSettled(owner.api, workspaceId)
   await acceptByLink(operator.api, (await invite(owner.api, workspaceId, operator.email, 'operator')).token)
   await acceptByLink(viewer.api, (await invite(owner.api, workspaceId, viewer.email)).token)
