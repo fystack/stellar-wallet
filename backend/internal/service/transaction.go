@@ -3,7 +3,6 @@ package service
 import (
 	"encoding/hex"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	"stellar-wallet-backend/internal/repository/sqlite"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 // PaymentChain is the Stellar boundary used by payment creation and broadcast.
@@ -32,8 +32,6 @@ type PaymentSigner interface {
 
 type SigningCluster interface{ OnlineCount() int }
 
-// TransactionService owns payment creation and the shared signing/broadcast lifecycle.
-// Other transaction types still build their own envelopes, then use this lifecycle.
 type TransactionService struct {
 	wallets      repository.Store
 	transactions *sqlite.TransactionRepository
@@ -41,6 +39,7 @@ type TransactionService struct {
 	cluster      SigningCluster
 	mpc          PaymentSigner
 	hub          *realtime.Hub
+	approvals    *PaymentRequestService
 }
 
 func NewTransactionService(wallets repository.Store, transactions *sqlite.TransactionRepository, chain PaymentChain, cluster SigningCluster, hub *realtime.Hub) *TransactionService {
@@ -48,6 +47,9 @@ func NewTransactionService(wallets repository.Store, transactions *sqlite.Transa
 }
 
 func (s *TransactionService) SetMPC(client PaymentSigner) { s.mpc = client }
+
+// SetApprovals routes payments through the workspace approval policy.
+func (s *TransactionService) SetApprovals(approvals *PaymentRequestService) { s.approvals = approvals }
 
 type PaymentInput struct {
 	WalletID    string `json:"wallet_id"`
@@ -59,30 +61,68 @@ type PaymentInput struct {
 	AssetIssuer string `json:"asset_issuer"`
 }
 
-func (s *TransactionService) Create(userID string, body PaymentInput) (domain.Transaction, error) {
-	wallet, err := readyWallet(s.wallets, userID, body.WalletID)
+// PaymentResult carries the transaction when the payment was sent, or the request when it awaits approval.
+type PaymentResult struct {
+	Transaction *domain.Transaction    `json:"transaction,omitempty"`
+	Request     *domain.PaymentRequest `json:"request,omitempty"`
+}
+
+// preparedPayment is a validated payment with its recipient resolved, ready to build now or after approval.
+type preparedPayment struct {
+	Destination string
+	Amount      string
+	AssetCode   string
+	AssetIssuer string
+	Symbol      string
+	Memo        string
+	MemoType    string
+}
+
+func (p preparedPayment) native() bool {
+	return p.AssetCode == "" || (p.AssetCode == "XLM" && p.AssetIssuer == "")
+}
+
+func (s *TransactionService) Create(userID string, body PaymentInput) (PaymentResult, error) {
+	wallet, err := sendableWallet(s.wallets, userID, body.WalletID)
 	if err != nil {
-		return domain.Transaction{}, err
+		return PaymentResult{}, err
 	}
-	amount, err := parseAmount(body.Amount)
+	payment, err := s.preparePayment(wallet, body)
 	if err != nil {
-		return domain.Transaction{}, err
+		return PaymentResult{}, err
 	}
-	if strings.TrimSpace(body.To) == "" {
-		return domain.Transaction{}, apperror.RecipientRequired.New()
+	if s.approvals != nil {
+		request, err := s.approvals.hold(wallet, userID, payment)
+		if err != nil || request != nil {
+			return PaymentResult{Request: request}, err
+		}
 	}
 	if err := s.requireSigning(); err != nil {
-		return domain.Transaction{}, err
+		return PaymentResult{}, err
+	}
+	transaction, err := s.sendPayment(wallet, userID, payment, uuid.NewString())
+	if err != nil {
+		return PaymentResult{}, err
+	}
+	return PaymentResult{Transaction: &transaction}, nil
+}
+
+func (s *TransactionService) preparePayment(wallet domain.Wallet, body PaymentInput) (preparedPayment, error) {
+	amount, err := parseAmount(body.Amount)
+	if err != nil {
+		return preparedPayment{}, err
+	}
+	if strings.TrimSpace(body.To) == "" {
+		return preparedPayment{}, apperror.RecipientRequired.New()
 	}
 
-	// Resolve federation / muxed recipients to a concrete address. If the
-	// server requires a memo and the user didn't supply one, adopt it.
+	// A federation server's required memo is used when the user gave none.
 	memo, memoType := strings.TrimSpace(body.Memo), body.MemoType
 	destination := strings.TrimSpace(body.To)
 	if wallet.Chain == "stellar" {
 		resolved, resolveErr := s.chain.ResolveRecipient(destination)
 		if resolveErr != nil {
-			return domain.Transaction{}, apperror.RecipientResolutionFailed.Wrap(fmt.Errorf("resolve payment recipient: %w", resolveErr))
+			return preparedPayment{}, apperror.RecipientResolutionFailed.Wrap(fmt.Errorf("resolve payment recipient: %w", resolveErr))
 		}
 		destination = resolved.Address
 		if resolved.MemoType != "" {
@@ -97,22 +137,35 @@ func (s *TransactionService) Create(userID string, body PaymentInput) (domain.Tr
 	if symbol == "" {
 		symbol = wallet.Symbol
 	}
+	return preparedPayment{
+		Destination: destination,
+		Amount:      amount,
+		AssetCode:   body.AssetCode,
+		AssetIssuer: body.AssetIssuer,
+		Symbol:      symbol,
+		Memo:        memo,
+		MemoType:    memoType,
+	}, nil
+}
+
+// sendPayment builds the envelope now, so it must run right before signing: envelopes expire after 300 seconds.
+func (s *TransactionService) sendPayment(wallet domain.Wallet, initiatorID string, payment preparedPayment, transactionID string) (domain.Transaction, error) {
 	transaction := domain.Transaction{
-		ID:           uuid.NewString(),
+		ID:           transactionID,
 		WalletID:     wallet.ID,
-		UserID:       userID,
+		UserID:       initiatorID,
 		Type:         domain.TransactionOut,
-		Counterparty: destination,
-		Amount:       amount,
-		Symbol:       symbol,
-		Memo:         memo,
+		Counterparty: payment.Destination,
+		Amount:       payment.Amount,
+		Symbol:       payment.Symbol,
+		Memo:         payment.Memo,
 		Status:       domain.TransactionSigning,
 		CreatedAt:    time.Now().UTC().Format(time.RFC3339),
 	}
 
 	envelope, hash, buildErr := s.chain.BuildPayment(
 		wallet, transaction.Counterparty, transaction.Amount,
-		body.AssetCode, body.AssetIssuer, transaction.Memo, memoType,
+		payment.AssetCode, payment.AssetIssuer, transaction.Memo, payment.MemoType,
 	)
 	if buildErr != nil {
 		return domain.Transaction{}, apperror.PaymentBuildFailed.Wrap(fmt.Errorf("build payment: %w", buildErr))
@@ -130,11 +183,11 @@ func (s *TransactionService) dispatch(wallet domain.Wallet, transaction domain.T
 		return fmt.Errorf("persist %s transaction: %w", transaction.Type, err)
 	}
 	if err := s.mpc.Sign(wallet.ID, transaction.ID, domain.Chains[wallet.Chain].Network, hash); err != nil {
-		s.failSigning(transaction.UserID, transaction.ID, "signing could not be started")
+		s.failSigning(transaction.ID, "signing could not be started")
 		return apperror.SignDispatchFailed.Wrap(fmt.Errorf("dispatch signing: %w", err))
 	}
-	s.WatchSignTimeout(transaction.UserID, transaction.ID)
-	s.hub.PublishTransaction(transaction.UserID, transaction)
+	s.WatchSignTimeout(transaction.ID)
+	publishTransaction(s.wallets, s.hub, transaction)
 	return nil
 }
 
@@ -142,11 +195,21 @@ func (s *TransactionService) requireSigning() error {
 	return requireQuorum(s.cluster, SignQuorum, "signing")
 }
 
-func (s *TransactionService) ListForWallet(userID, walletID string) ([]domain.Transaction, error) {
-	if _, err := ownedWallet(s.wallets, userID, walletID); err != nil {
-		return nil, err
+func (s *TransactionService) ListForWallet(userID, walletID string, input PageInput) (Page[domain.Transaction], error) {
+	before, limit, err := input.resolve()
+	if err != nil {
+		return Page[domain.Transaction]{}, err
 	}
-	return s.transactions.TransactionsByWallet(userID, walletID)
+	if _, err := ownedWallet(s.wallets, userID, walletID); err != nil {
+		return Page[domain.Transaction]{}, err
+	}
+	transactions, err := s.transactions.TransactionsByWallet(walletID, before, limit+1)
+	if err != nil {
+		return Page[domain.Transaction]{}, err
+	}
+	return pageOf(transactions, limit, func(transaction domain.Transaction) repository.Cursor {
+		return repository.Cursor{CreatedAt: transaction.CreatedAt, ID: transaction.ID}
+	}), nil
 }
 
 func (s *TransactionService) Get(userID, transactionID string) (domain.Transaction, error) {
@@ -174,23 +237,19 @@ func (s *TransactionService) OnChain(hash string) (map[string]any, error) {
 	return metadata, nil
 }
 
-// OnSign broadcasts a signed transaction. Only the first result for a transaction that is
-// still signing is applied, so late or duplicate results can never broadcast twice.
-// It returns the transaction when balances should be refreshed.
+// OnSign returns the transaction when balances should be refreshed.
 func (s *TransactionService) OnSign(result mpc.SignResult) *domain.Transaction {
 	transaction, ok := s.transactions.TransactionByID(result.TransactionID)
 	if !ok {
 		return nil
 	}
-	userID := transaction.UserID
-
 	if !result.Successful {
 		reason := result.Error
 		if reason == "" {
 			reason = "MPC signing failed"
 		}
-		log.Printf("sign failed tx=%s reason=%s", transaction.ID, reason)
-		s.failSigning(userID, transaction.ID, reason)
+		zap.L().Warn("sign failed", zap.String("transaction", transaction.ID), zap.String("reason", reason))
+		s.failSigning(transaction.ID, reason)
 		return nil
 	}
 
@@ -200,51 +259,54 @@ func (s *TransactionService) OnSign(result mpc.SignResult) *domain.Transaction {
 		return nil
 	}
 	if !claimed {
-		log.Printf("ignored sign result tx=%s: transaction is no longer signing", transaction.ID)
+		zap.L().Info("ignored sign result: transaction is no longer signing", zap.String("transaction", transaction.ID))
 		return nil
 	}
-	s.publishTransactionByID(userID, transaction.ID)
+	s.publishTransactionByID(transaction.ID)
 
 	wallet, ok := s.wallets.WalletByID(transaction.WalletID)
 	if !ok {
 		logError("broadcast tx="+transaction.ID, s.transactions.FailTransaction(transaction.ID, "wallet not found"))
-		s.publishTransactionByID(userID, transaction.ID)
+		s.publishTransactionByID(transaction.ID)
 		return nil
 	}
 	hash, err := s.chain.Submit(transaction.EnvelopeXDR, wallet.Pubkey, result.Signature)
 	if err != nil {
-		log.Printf("broadcast failed tx=%s: %v", transaction.ID, err)
+		zap.L().Warn("broadcast failed", zap.String("transaction", transaction.ID), zap.Error(err))
 		logError("broadcast failed tx="+transaction.ID, s.transactions.FailTransaction(transaction.ID, "broadcast: "+err.Error()))
-		s.publishTransactionByID(userID, transaction.ID)
+		s.publishTransactionByID(transaction.ID)
 		return nil
 	}
 	logError("confirm tx="+transaction.ID, s.transactions.ConfirmTransaction(transaction.ID, hash))
-	s.publishTransactionByID(userID, transaction.ID)
+	s.publishTransactionByID(transaction.ID)
 	return &transaction
 }
 
-func (s *TransactionService) failSigning(userID, transactionID, reason string) {
+func (s *TransactionService) failSigning(transactionID, reason string) {
 	failed, err := s.transactions.FailSigning(transactionID, reason)
 	if err != nil {
 		logError("fail signing tx="+transactionID, err)
 		return
 	}
 	if failed {
-		s.publishTransactionByID(userID, transactionID)
+		s.publishTransactionByID(transactionID)
 	}
 }
 
-func (s *TransactionService) publishTransactionByID(userID, transactionID string) {
-	if transaction, ok := s.transactions.TransactionByID(transactionID); ok {
-		s.hub.PublishTransaction(userID, transaction)
+func (s *TransactionService) publishTransactionByID(transactionID string) {
+	transaction, ok := s.transactions.TransactionByID(transactionID)
+	if !ok {
+		return
+	}
+	publishTransaction(s.wallets, s.hub, transaction)
+	if s.approvals != nil {
+		s.approvals.settle(transaction)
 	}
 }
 
-// WatchSignTimeout fails a transaction still signing after the timeout,
-// covering nodes that die or never respond after dispatch.
-func (s *TransactionService) WatchSignTimeout(userID, transactionID string) {
+func (s *TransactionService) WatchSignTimeout(transactionID string) {
 	time.AfterFunc(signTimeout, func() {
-		s.failSigning(userID, transactionID, "signing timed out — MPC nodes did not respond")
+		s.failSigning(transactionID, "signing timed out — MPC nodes did not respond")
 	})
 }
 
@@ -257,10 +319,10 @@ func (s *TransactionService) ReconcilePending() {
 	signOK := s.cluster.OnlineCount() >= SignQuorum
 	for _, transaction := range pending {
 		if signOK {
-			s.WatchSignTimeout(transaction.UserID, transaction.ID)
+			s.WatchSignTimeout(transaction.ID)
 			continue
 		}
-		s.failSigning(transaction.UserID, transaction.ID, "signing aborted — MPC cluster below quorum")
-		log.Printf("reconcile: failed stuck tx=%s (cluster below quorum)", transaction.ID)
+		s.failSigning(transaction.ID, "signing aborted — MPC cluster below quorum")
+		zap.L().Warn("reconcile: failed stuck transaction, cluster below quorum", zap.String("transaction", transaction.ID))
 	}
 }

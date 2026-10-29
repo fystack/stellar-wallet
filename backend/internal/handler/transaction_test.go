@@ -49,7 +49,7 @@ func TestCreatePaymentHTTPContract(t *testing.T) {
 				tt.setup(service, c, signer)
 			}
 			manager := auth.New(service.authRepo, false)
-			router := NewRouter(Dependencies{Auth: manager, Hub: service.hub, TransactionService: service.service}, "http://localhost")
+			router := NewRouter(Dependencies{AuthRateLimit: 30, Auth: manager, Hub: service.hub, TransactionService: service.service}, "http://localhost")
 			userID := tt.userID
 			if userID == "" {
 				userID = "owner"
@@ -85,9 +85,13 @@ func TestCreatePaymentHTTPContract(t *testing.T) {
 				}
 				return
 			}
-			data, ok := body["data"].(map[string]any)
+			result, ok := body["data"].(map[string]any)
 			if !ok {
 				t.Fatalf("missing data envelope: %s", response.Body)
+			}
+			data, ok := result["transaction"].(map[string]any)
+			if !ok || result["request"] != nil {
+				t.Fatalf("missing transaction: %s", response.Body)
 			}
 			if data["status"] != "signing" || data["walletId"] != "wallet-1" || data["amount"] != "1" || data["id"] == "" || data["createdAt"] == "" {
 				t.Fatalf("response = %s", response.Body)
@@ -154,7 +158,10 @@ func newTestTransactionService(t *testing.T) (*paymentFixture, *paymentChainStub
 	}
 	t.Cleanup(func() { db.Close() })
 	wallets := sqlite.NewStore(db)
-	if err := wallets.CreateWallet(domain.Wallet{ID: "wallet-1", UserID: "owner", Chain: "stellar", Symbol: "XLM", Status: "ready"}); err != nil {
+	if err := sqlite.NewWorkspaceRepository(db).EnsurePersonalWorkspace("owner", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := wallets.CreateWallet(domain.Wallet{ID: "wallet-1", UserID: "owner", WorkspaceID: domain.PersonalWorkspaceID("owner"), Chain: "stellar", Symbol: "XLM", Status: "ready"}); err != nil {
 		t.Fatal(err)
 	}
 	payments := sqlite.NewTransactionRepository(db)
@@ -165,4 +172,50 @@ func newTestTransactionService(t *testing.T) (*paymentFixture, *paymentChainStub
 	svc := service.NewTransactionService(wallets, payments, chain, cluster, hub)
 	svc.SetMPC(signer)
 	return &paymentFixture{authRepo: sqlite.NewAuthRepository(db), wallets: wallets, payments: payments, hub: hub, cluster: cluster, service: svc}, chain, signer
+}
+
+func TestWalletTransactionsPageHTTPContract(t *testing.T) {
+	fixture, _, _ := newTestTransactionService(t)
+	manager := auth.New(fixture.authRepo, false)
+	router := NewRouter(Dependencies{AuthRateLimit: 30, Auth: manager, Hub: fixture.hub, TransactionService: fixture.service}, "http://localhost")
+	if err := fixture.authRepo.CreateUser(domain.User{ID: "owner", Email: "owner@example.com", PasswordHash: "hash"}); err != nil {
+		t.Fatal(err)
+	}
+	token, err := auth.RandomToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.authRepo.CreateSession(domain.Session{Hash: auth.HashToken(token), UserID: "owner", CreatedAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()}); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"a", "b", "c"} {
+		if err := fixture.payments.CreateTransaction(domain.Transaction{ID: id, WalletID: "wallet-1", UserID: "owner", Type: domain.TransactionOut, Status: domain.TransactionConfirmed, CreatedAt: "2026-10-01T00:00:00Z"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	get := func(query string) (int, map[string]any) {
+		request := httptest.NewRequest(http.MethodGet, "/api/v1/wallets/wallet-1/transactions"+query, nil)
+		request.AddCookie(&http.Cookie{Name: auth.SessionCookie, Value: token})
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		var body map[string]any
+		json.Unmarshal(response.Body.Bytes(), &body)
+		return response.Code, body
+	}
+	status, body := get("?limit=2")
+	meta, _ := body["meta"].(map[string]any)
+	if status != http.StatusOK || len(body["data"].([]any)) != 2 || meta["has_more"] != true || meta["next_cursor"] == nil {
+		t.Fatalf("first page = %d %#v", status, body)
+	}
+	status, body = get("?limit=2&cursor=" + meta["next_cursor"].(string))
+	meta, _ = body["meta"].(map[string]any)
+	if status != http.StatusOK || len(body["data"].([]any)) != 1 || meta["has_more"] != false || meta["next_cursor"] != nil {
+		t.Fatalf("last page = %d %#v", status, body)
+	}
+	for _, query := range []string{"?limit=101", "?limit=x", "?cursor=%25%25"} {
+		status, body = get(query)
+		if failure, _ := body["error"].(map[string]any); status != http.StatusBadRequest || failure["code"] != "invalid_request" {
+			t.Fatalf("%s = %d %#v", query, status, body)
+		}
+	}
 }

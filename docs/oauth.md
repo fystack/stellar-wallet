@@ -52,7 +52,7 @@ oauth:
     client_secret: "YOUR_GITHUB_CLIENT_SECRET"
 ```
 
-5. Start the backend against your MPC cluster, then run `npm run dev` in `ui/`.
+5. Start the backend against your MPC cluster, then run `pnpm dev` in `ui/`.
    Open `http://localhost:5173`. Keep the same hostname for frontend and backend
    (`localhost` and `127.0.0.1` are different cookie hosts).
 6. A provider with empty credentials is disabled and its button is unavailable.
@@ -125,8 +125,8 @@ GOWORK=off go test ./...
 GOWORK=off go vet ./...
 GOWORK=off go build ./...
 cd ../ui
-npm test
-npm run build
+pnpm test
+pnpm build
 ```
 
 Tests use fake OAuth providers and signed local OIDC tokens; live Google/GitHub

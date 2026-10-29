@@ -1,8 +1,28 @@
 import { useEffect, useState } from 'react'
-import { FystackLogo, GithubLogo, GoogleLogo } from '../logos.tsx'
+import { GithubLogo, GoogleLogo } from '../logos.tsx'
+import AuthLayout from '../components/AuthLayout.tsx'
 import { api, ApiError, type SocialProvider } from '../api.ts'
+import type { InvitePreview } from '../types.ts'
 
-export default function Login({ onLogin, initialError = '' }: { onLogin: (email: string) => void; initialError?: string }) {
+function providerName(provider: string) {
+  return provider === 'github' ? 'GitHub' : 'Google'
+}
+
+const inviteUnavailable: Record<Exclude<InvitePreview['status'], 'pending'>, string> = {
+  accepted: 'This invite has already been used. Sign in to continue.',
+  revoked: 'This invite was revoked. Ask the workspace owner for a new one.',
+  expired: 'This invite has expired. Ask the workspace owner for a new one.',
+}
+
+export default function Login({
+  onLogin,
+  initialError = '',
+  inviteToken = '',
+}: {
+  onLogin: (email: string) => void
+  initialError?: string
+  inviteToken?: string
+}) {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -14,6 +34,26 @@ export default function Login({ onLogin, initialError = '' }: { onLogin: (email:
     void api.providers().then(setProviders).catch(() => setProviderError('Social sign-in is unavailable. You can still sign in with email.'))
   }, [])
   const [busy, setBusy] = useState(false)
+  const [invite, setInvite] = useState<InvitePreview | null>(null)
+  useEffect(() => {
+    if (!inviteToken) return
+    api.previewInvite(inviteToken).then((preview) => {
+      setInvite(preview)
+      if (preview.status === 'pending') {
+        setEmail(preview.email)
+        setMode(preview.hasAccount ? 'login' : 'register')
+      } else {
+        setError(inviteUnavailable[preview.status])
+      }
+    }).catch(() => setError('This invite link is invalid. Ask the workspace owner for a new one.'))
+  }, [inviteToken])
+  const pendingInvite = invite?.status === 'pending' ? invite : null
+  // The invited account signs in with Google/GitHub only, so a password form would be a dead end.
+  const inviteProviders = pendingInvite?.providers ?? []
+  const socialOnly = !!pendingInvite?.hasAccount && !pendingInvite.hasPassword && inviteProviders.length > 0
+  const socialProviders = (['google', 'github'] as const).filter(
+    (provider) => !socialOnly || inviteProviders.includes(provider),
+  )
 
   const isRegister = mode === 'register'
   const passwordMismatch = isRegister && confirmPassword.length > 0 && confirmPassword !== password
@@ -37,31 +77,78 @@ export default function Login({ onLogin, initialError = '' }: { onLogin: (email:
     }
   }
 
-  return (
-    <div className="flex min-h-full items-center justify-center bg-[#f7f8fa] p-4">
-      <div className="w-full max-w-[400px]">
-        <div className="mb-6 text-center sm:mb-8">
-          <div className="mx-auto mb-4 w-fit sm:mb-5">
-            <FystackLogo height={44} />
-          </div>
-          <h1 className="text-2xl font-extrabold">
-            {isRegister ? 'Create your account' : 'Welcome back'}
-          </h1>
-          <p className="mt-1.5 text-[15px] text-muted">
-            {isRegister
-              ? 'Set up your MPC Stellar wallet in a minute.'
-              : 'Sign in to access your MPC Stellar wallet.'}
-          </p>
-        </div>
+  const switchMode = () => {
+    setMode(mode === 'login' ? 'register' : 'login')
+    setError('')
+    setConfirmPassword('')
+  }
 
-        <div className="border border-line bg-white p-5 sm:p-7">
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+  return (
+    <AuthLayout>
+      {pendingInvite ? (
+        <>
+          <h1 className="text-[34px] font-extrabold leading-tight">Join {pendingInvite.workspaceName}</h1>
+          <p className="mt-2 text-[17px] text-ink-soft">
+            {pendingInvite.invitedBy} invited you.{' '}
+            {socialOnly
+              ? `Continue with ${inviteProviders.map(providerName).join(' or ')} as`
+              : isRegister ? 'Create an account with' : 'Sign in with'}{' '}
+            <strong className="font-semibold text-ink">{pendingInvite.email}</strong> to accept.
+          </p>
+        </>
+      ) : (
+        <>
+          <h1 className="text-[34px] font-extrabold leading-tight">{isRegister ? 'Create your account' : 'Sign in'}</h1>
+          <p className="mt-2 text-[17px] text-ink-soft">
+            The self-hosted MPC wallet for Stellar. Your keys stay split across your own nodes.
+          </p>
+        </>
+      )}
+
+      <div className={`mt-7 grid gap-3 ${socialProviders.length > 1 ? 'grid-cols-2' : ''}`} aria-label="Social sign-in">
+        {socialProviders.map((provider) => {
+          const enabled = providers.some((entry) => entry.id === provider && entry.enabled)
+          return (
+            <button
+              key={provider}
+              type="button"
+              className="btn btn-secondary py-3"
+              aria-label={`${isRegister && !socialOnly ? 'Sign up' : 'Continue'} with ${providerName(provider)}`}
+              disabled={!enabled || busy}
+              onClick={() => window.location.assign(api.oauthStartURL(provider))}
+            >
+              {provider === 'google' ? <GoogleLogo /> : <GithubLogo />}
+              {providerName(provider)}
+            </button>
+          )
+        })}
+      </div>
+      {providerError && <p role="status" className="mt-3 text-sm text-muted">{providerError}</p>}
+      {!providerError && providers.length > 0 && providers.every((provider) => !provider.enabled) && (
+        <p className="mt-3 text-sm text-muted">Social sign-in is not configured on this deployment.</p>
+      )}
+
+      {socialOnly && error && (
+        <div role="alert" className="mt-5 bg-danger-soft px-3 py-2 text-sm text-danger">
+          {error}
+        </div>
+      )}
+
+      {!socialOnly && (
+        <>
+          <div className="my-6 flex items-center gap-3 text-sm text-muted">
+            <span className="h-px flex-1 bg-line" />
+            or with email
+            <span className="h-px flex-1 bg-line" />
+          </div>
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             <label className="flex flex-col gap-2">
-              <span className="text-sm font-semibold text-ink-soft">Email</span>
+              <span className="text-[15px] font-semibold text-ink">Email</span>
               <input
                 className="field-input"
                 type="email"
-                placeholder="you@example.com"
+                placeholder="you@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
@@ -69,23 +156,26 @@ export default function Login({ onLogin, initialError = '' }: { onLogin: (email:
               />
             </label>
 
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-semibold text-ink-soft">Password</span>
+            <div className="flex flex-col gap-2">
+              <label htmlFor="login-password" className="text-[15px] font-semibold text-ink">Password</label>
               <input
+                id="login-password"
                 className="field-input"
                 type="password"
                 placeholder={isRegister ? 'Create a password' : 'Your password'}
                 autoComplete={isRegister ? 'new-password' : 'current-password'}
+                aria-describedby={isRegister ? 'login-password-hint' : undefined}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
-              {isRegister && <span className="text-xs text-muted">At least 6 characters.</span>}
-            </label>
+              {isRegister && <span id="login-password-hint" className="text-xs text-muted">At least 6 characters.</span>}
+            </div>
 
             {isRegister && (
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-semibold text-ink-soft">Confirm password</span>
+              <div className="flex flex-col gap-2">
+                <label htmlFor="login-confirm-password" className="text-[15px] font-semibold text-ink">Confirm password</label>
                 <input
+                  id="login-confirm-password"
                   className="field-input"
                   type="password"
                   placeholder="Repeat your password"
@@ -93,59 +183,31 @@ export default function Login({ onLogin, initialError = '' }: { onLogin: (email:
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   aria-invalid={passwordMismatch}
+                  aria-describedby={passwordMismatch ? 'login-confirm-password-error' : undefined}
                 />
-                {passwordMismatch && <span className="text-xs text-[#d33a3a]">Passwords don't match.</span>}
-              </label>
+                {passwordMismatch && <span id="login-confirm-password-error" className="text-xs text-danger">Passwords don't match.</span>}
+              </div>
             )}
 
             {error && (
-              <div role="alert" className="bg-[#fdecec] px-3 py-2 text-sm text-[#d33a3a]">
+              <div role="alert" className="bg-danger-soft px-3 py-2 text-sm text-danger">
                 {error}
               </div>
             )}
 
-            <button
-              className="cta w-full !py-3.5"
-              type="submit"
-              disabled={!canSubmit || busy}
-            >
+            <button className="btn btn-primary btn-lg mt-2 w-full !py-3.5" type="submit" disabled={!canSubmit || busy}>
               {busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
             </button>
           </form>
 
-          <div className="my-5 flex items-center gap-3 text-xs text-muted">
-            <span className="h-px flex-1 bg-line" />
-            or
-            <span className="h-px flex-1 bg-line" />
-          </div>
-
-          <div className="flex flex-col gap-3" aria-label="Social sign-in">
-            {(['google', 'github'] as const).map((provider) => {
-              const enabled = providers.some((entry) => entry.id === provider && entry.enabled)
-              return <button key={provider} type="button" className="flex items-center justify-center gap-2.5 border border-line bg-white px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50" disabled={!enabled || busy} onClick={() => window.location.assign(api.oauthStartURL(provider))}>
-                {provider === 'google' ? <GoogleLogo /> : <GithubLogo />}
-                {isRegister ? 'Sign up' : 'Continue'} with {provider === 'google' ? 'Google' : 'GitHub'}
-              </button>
-            })}
-            {providerError && <p role="status" className="text-sm text-muted">{providerError}</p>}
-            {!providerError && providers.length > 0 && providers.every((provider) => !provider.enabled) && <p className="text-sm text-muted">Social sign-in is not configured on this deployment.</p>}
-          </div>
-        </div>
-
-        <p className="mt-5 text-center text-sm text-muted">
-          {mode === 'login' ? "No account? " : 'Already have an account? '}
-          <button
-            onClick={() => {
-              setMode(mode === 'login' ? 'register' : 'login')
-              setError('')
-              setConfirmPassword('')
-            }}
-            className="font-semibold text-brand hover:underline"
-          >
-            {mode === 'login' ? 'Create one' : 'Sign in'}
-          </button>
-        </p>
-      </div>
-    </div>
+          <p className="mt-6 text-center text-[15px] text-ink-soft">
+            {mode === 'login' ? 'New here? ' : 'Already have an account? '}
+            <button onClick={switchMode} className="btn btn-link font-bold">
+              {mode === 'login' ? 'Create an account' : 'Sign in'}
+            </button>
+          </p>
+        </>
+      )}
+    </AuthLayout>
   )
 }

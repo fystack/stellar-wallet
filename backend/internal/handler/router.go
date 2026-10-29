@@ -15,17 +15,20 @@ import (
 )
 
 type Dependencies struct {
-	Auth               *auth.Manager
-	AuthService        *service.AuthService
-	WalletService      *service.WalletService
-	TransactionService *service.TransactionService
-	SwapService        *service.SwapService
-	TrustlineService   *service.TrustlineService
-	SettingsService    *service.SettingsService
-	Cluster            *cluster.Client
-	Hub                *realtime.Hub
-	FrontendURL        string
-	PublicURL          string
+	Auth                  *auth.Manager
+	AuthService           *service.AuthService
+	WalletService         *service.WalletService
+	TransactionService    *service.TransactionService
+	SwapService           *service.SwapService
+	TrustlineService      *service.TrustlineService
+	SettingsService       *service.SettingsService
+	WorkspaceService      *service.WorkspaceService
+	PaymentRequestService *service.PaymentRequestService
+	Cluster               *cluster.Client
+	Hub                   *realtime.Hub
+	FrontendURL           string
+	PublicURL             string
+	AuthRateLimit         int
 }
 
 func NewRouter(d Dependencies, corsOrigin string) *gin.Engine {
@@ -40,6 +43,8 @@ func NewRouter(d Dependencies, corsOrigin string) *gin.Engine {
 	swaps := &SwapHandler{swaps: d.SwapService}
 	settings := &SettingsHandler{settings: d.SettingsService, cluster: d.Cluster}
 	events := &EventsHandler{sessions: d.Auth, hub: d.Hub}
+	workspaces := &WorkspaceHandler{workspaces: d.WorkspaceService}
+	paymentRequests := &PaymentRequestHandler{requests: d.PaymentRequestService}
 
 	router := gin.New()
 	router.HandleMethodNotAllowed = true
@@ -49,7 +54,7 @@ func NewRouter(d Dependencies, corsOrigin string) *gin.Engine {
 		requestLogger(),
 		recoverPanics(),
 		corsMiddleware(corsOrigin),
-		authRateLimit(),
+		authRateLimit(d.AuthRateLimit),
 		csrfProtection(d.FrontendURL, d.PublicURL),
 	)
 
@@ -66,11 +71,13 @@ func NewRouter(d Dependencies, corsOrigin string) *gin.Engine {
 	v1.GET("/auth/:provider/callback", authHandler.oauthCallback)
 	v1.POST("/auth/logout", authHandler.logout)
 	v1.GET("/prices", settings.getPrices)
+	v1.GET("/invites/:token", workspaces.previewInvite)
 
 	protected := v1.Group("")
 	protected.Use(d.Auth.Middleware())
 	protected.GET("/auth/me", authHandler.me)
 	protected.POST("/auth/reauthenticate", authHandler.reauthenticate)
+	protected.POST("/auth/logout-all", authHandler.logoutEverywhere)
 	protected.POST("/auth/:provider/link", authHandler.oauthLink)
 	protected.GET("/events", events.stream)
 
@@ -91,10 +98,33 @@ func NewRouter(d Dependencies, corsOrigin string) *gin.Engine {
 	protected.GET("/tx/:hash/chain", transactions.onChain)
 	protected.GET("/resolve", transactions.resolveRecipient)
 
+	protected.GET("/workspaces", workspaces.list)
+	protected.POST("/workspaces", workspaces.create)
+	protected.POST("/workspaces/:id/switch", workspaces.switchActive)
+	protected.GET("/workspaces/:id/members", workspaces.members)
+	protected.PATCH("/workspaces/:id/members/:userId", workspaces.changeRole)
+	protected.DELETE("/workspaces/:id/members/:userId", workspaces.removeMember)
+	protected.GET("/workspaces/:id/approval-policy", workspaces.approvalPolicy)
+	protected.PUT("/workspaces/:id/approval-policy", workspaces.setApprovalPolicy)
+	protected.DELETE("/workspaces/:id/approval-policy", workspaces.disableApprovalPolicy)
+	protected.POST("/workspaces/:id/invites", workspaces.invite)
+	protected.DELETE("/workspaces/:id/invites/:inviteId", workspaces.revokeInvite)
+	protected.GET("/workspaces/:id/assets", workspaces.assets)
+	protected.POST("/workspaces/:id/assets", workspaces.addAsset)
+	protected.DELETE("/workspaces/:id/assets", workspaces.removeAsset)
+	protected.POST("/invites/:token/accept", workspaces.acceptInvite)
+	protected.GET("/invitations", workspaces.invitations)
+	protected.POST("/invitations/:id/accept", workspaces.acceptInvitation)
+	protected.POST("/invitations/:id/decline", workspaces.declineInvitation)
+
+	protected.GET("/workspaces/:id/payment-requests", paymentRequests.list)
+	protected.GET("/payment-requests/:id", paymentRequests.get)
+	protected.POST("/payment-requests/:id/approve", paymentRequests.approve)
+	protected.POST("/payment-requests/:id/reject", paymentRequests.reject)
+	protected.POST("/payment-requests/:id/cancel", paymentRequests.cancel)
+
 	protected.GET("/chains", settings.getChains)
 	protected.GET("/config", settings.getConfig)
-	protected.POST("/assets", settings.addAsset)
-	protected.DELETE("/assets", settings.removeAsset)
 
 	return router
 }

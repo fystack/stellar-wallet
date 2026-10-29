@@ -1,4 +1,4 @@
-import TxStatusBadge from '../TxStatusBadge.tsx'
+import TxStatusBadge from '../transaction/TxStatusBadge.tsx'
 import { TokenLogo } from '../../logos.tsx'
 import { formatAmount, shortAddress } from '../../lib/format.ts'
 import { TRUSTLINE_MEMO } from '../../lib/stellar.ts'
@@ -35,14 +35,14 @@ export default function TransactionRow({
   return (
     <button
       onClick={onOpen}
-      className="flex min-h-[76px] items-center gap-2.5 border-b border-line py-3 text-left transition-colors last:border-none hover:bg-[#fafbfc] sm:gap-3"
+      className="flex min-h-[76px] items-center gap-2.5 border-b border-line py-3 text-left transition-colors last:border-none hover:bg-hover sm:gap-3"
     >
       <div className="relative shrink-0">
         <TokenLogo symbol={transaction.symbol} size={36} />
         <span
           className={
             'absolute -bottom-1 -right-1 grid h-[18px] w-[18px] place-items-center rounded-full border-2 border-white text-[9px] font-bold text-white ' +
-            (swap ? 'bg-brand' : incoming ? 'bg-green-600' : 'bg-[#334]')
+            (swap ? 'bg-brand' : incoming ? 'bg-success' : 'bg-ink')
           }
         >
           {swap ? '⇅' : incoming ? '↓' : '↑'}

@@ -2,7 +2,6 @@ package handler
 
 import (
 	"errors"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"stellar-wallet-backend/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 type AuthHandler struct {
@@ -32,12 +32,13 @@ func (h *AuthHandler) register(c *gin.Context) {
 		httpapi.Error(c, apperror.InvalidRequest.New())
 		return
 	}
-	user, token, err := h.accounts.Register(body.Email, body.Password, auth.CookieToken(c.Request))
+	account, token, err := h.accounts.Register(body.Email, body.Password, auth.CookieToken(c.Request))
 	if err != nil {
 		httpapi.Error(c, err)
 		return
 	}
-	h.loginResponse(c, http.StatusCreated, user.ID, token)
+	h.sessions.SetSession(c, token)
+	httpapi.Success(c, http.StatusCreated, account)
 }
 func (h *AuthHandler) login(c *gin.Context) {
 	var body credentials
@@ -45,22 +46,13 @@ func (h *AuthHandler) login(c *gin.Context) {
 		httpapi.Error(c, apperror.InvalidRequest.New())
 		return
 	}
-	user, token, err := h.accounts.Login(body.Email, body.Password, auth.CookieToken(c.Request))
+	account, token, err := h.accounts.Login(body.Email, body.Password, auth.CookieToken(c.Request))
 	if err != nil {
-		httpapi.Error(c, err)
-		return
-	}
-	h.loginResponse(c, http.StatusOK, user.ID, token)
-}
-func (h *AuthHandler) loginResponse(c *gin.Context, status int, userID, token string) {
-	account, err := h.accounts.Account(userID)
-	if err != nil {
-		h.accounts.Logout(token)
 		httpapi.Error(c, err)
 		return
 	}
 	h.sessions.SetSession(c, token)
-	httpapi.Success(c, status, account)
+	httpapi.Success(c, http.StatusOK, account)
 }
 func (h *AuthHandler) me(c *gin.Context) {
 	account, err := h.accounts.Account(c.GetString("userID"))
@@ -72,6 +64,14 @@ func (h *AuthHandler) me(c *gin.Context) {
 }
 func (h *AuthHandler) logout(c *gin.Context) {
 	if err := h.accounts.Logout(auth.CookieToken(c.Request)); err != nil {
+		httpapi.Error(c, err)
+		return
+	}
+	h.sessions.ClearSession(c)
+	httpapi.Success(c, http.StatusNoContent, nil)
+}
+func (h *AuthHandler) logoutEverywhere(c *gin.Context) {
+	if err := h.accounts.LogoutEverywhere(c.GetString("userID")); err != nil {
 		httpapi.Error(c, err)
 		return
 	}
@@ -129,7 +129,7 @@ func (h *AuthHandler) oauthCallback(c *gin.Context) {
 			code = failure.Code
 		}
 		// Never log authorization codes, state, cookies, tokens or raw provider bodies.
-		log.Printf("OAuth callback failed provider=%s code=%s", c.Param("provider"), code)
+		zap.L().Warn("OAuth callback failed", zap.String("provider", c.Param("provider")), zap.String("code", code))
 		destination += "?auth_error=" + url.QueryEscape(code)
 	} else if result.Token != "" {
 		h.sessions.SetSession(c, result.Token)

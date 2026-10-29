@@ -1,4 +1,21 @@
-import type { ResolvedRecipient, SwapQuote, Transaction, Wallet } from './types.ts'
+import type {
+  ApprovalPolicy,
+  ApprovalPolicySettings,
+  CustomAsset,
+  InvitePreview,
+  JoinResult,
+  Page,
+  PaymentRequest,
+  PaymentResult,
+  ResolvedRecipient,
+  SwapQuote,
+  Transaction,
+  Wallet,
+  Workspace,
+  WorkspaceInvite,
+  WorkspaceMember,
+  WorkspaceRole,
+} from './types.ts'
 
 export const BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8090'
 export type Account = {
@@ -10,8 +27,12 @@ export type Account = {
 export type SocialProvider = { id: 'google' | 'github'; enabled: boolean }
 
 export function clearLegacySession() {
-  localStorage.removeItem('wallet_token')
-  localStorage.removeItem('wallet_email')
+  try {
+    localStorage.removeItem('wallet_token')
+    localStorage.removeItem('wallet_email')
+  } catch {
+    // Nothing to clear when storage is blocked.
+  }
 }
 
 export type ApiResponse<T> = { data: T; meta?: Record<string, unknown> }
@@ -28,6 +49,16 @@ export class ApiError extends Error {
 }
 
 async function req<T>(path: string, opts: RequestInit & { json?: unknown } = {}): Promise<T> {
+  return (await send<T>(path, opts)).data
+}
+
+async function reqPage<T>(path: string): Promise<Page<T>> {
+  const body = await send<T[]>(path)
+  const next = body.meta?.next_cursor
+  return { items: body.data, nextCursor: typeof next === 'string' ? next : null }
+}
+
+async function send<T>(path: string, opts: RequestInit & { json?: unknown } = {}): Promise<ApiResponse<T>> {
   const { json, ...rest } = opts
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -54,7 +85,7 @@ async function req<T>(path: string, opts: RequestInit & { json?: unknown } = {})
     }
     throw new ApiError(res.status, message, code)
   }
-  if (res.status === 204) return undefined as T
+  if (res.status === 204) return { data: undefined as T }
   let body: unknown
   try {
     body = await res.json()
@@ -64,7 +95,7 @@ async function req<T>(path: string, opts: RequestInit & { json?: unknown } = {})
   if (typeof body !== 'object' || body === null || !('data' in body)) {
     throw new ApiError(res.status, 'Invalid API response.', 'invalid_response')
   }
-  return (body as ApiResponse<T>).data
+  return body as ApiResponse<T>
 }
 
 async function auth(kind: 'login' | 'register', email: string, password: string) {
@@ -77,6 +108,7 @@ async function auth(kind: 'login' | 'register', email: string, password: string)
 export const api = {
   me: () => req<Account>('/api/v1/auth/me'),
   logout: () => req<void>('/api/v1/auth/logout', { method: 'POST' }),
+  logoutEverywhere: () => req<void>('/api/v1/auth/logout-all', { method: 'POST' }),
   providers: () => req<SocialProvider[]>('/api/v1/auth/providers'),
   oauthStartURL: (provider: SocialProvider['id']) => `${BASE}/api/v1/auth/${provider}/start`,
   linkProvider: (provider: SocialProvider['id']) => req<{ url: string }>(`/api/v1/auth/${provider}/link`, { method: 'POST' }),
@@ -84,11 +116,54 @@ export const api = {
   login: (email: string, password: string) => auth('login', email, password),
   register: (email: string, password: string) => auth('register', email, password),
 
-  listWallets: () => req<Wallet[]>('/api/v1/wallets'),
-  createWallet: (name: string, chain: string) =>
-    req<Wallet>('/api/v1/wallets', { method: 'POST', json: { name, chain } }),
-  walletTxns: (id: string) =>
-    req<Transaction[]>(`/api/v1/wallets/${id}/transactions`),
+  workspaces: () => req<{ workspaces: Workspace[]; activeId: string; selected: boolean }>('/api/v1/workspaces'),
+  createWorkspace: (name: string) =>
+    req<JoinResult>('/api/v1/workspaces', { method: 'POST', json: { name } }),
+  switchWorkspace: (id: string) =>
+    req<Workspace>(`/api/v1/workspaces/${id}/switch`, { method: 'POST' }),
+  members: (id: string) =>
+    req<{ members: WorkspaceMember[]; invites: WorkspaceInvite[] }>(`/api/v1/workspaces/${id}/members`),
+  removeMember: (id: string, userId: string) =>
+    req<void>(`/api/v1/workspaces/${id}/members/${userId}`, { method: 'DELETE' }),
+  invite: (id: string, email: string, role: WorkspaceRole) =>
+    req<{ invite: WorkspaceInvite; link: string; emailSent: boolean }>(`/api/v1/workspaces/${id}/invites`, {
+      method: 'POST',
+      json: { email, role },
+    }),
+  changeRole: (id: string, userId: string, role: WorkspaceRole) =>
+    req<void>(`/api/v1/workspaces/${id}/members/${userId}`, { method: 'PATCH', json: { role } }),
+  approvalPolicy: (id: string) =>
+    req<ApprovalPolicySettings>(`/api/v1/workspaces/${id}/approval-policy`),
+  setApprovalPolicy: (id: string, policy: Pick<ApprovalPolicy, 'thresholdXlm' | 'requiredApprovals' | 'belowThreshold'>) =>
+    req<ApprovalPolicySettings>(`/api/v1/workspaces/${id}/approval-policy`, { method: 'PUT', json: policy }),
+  disableApprovalPolicy: (id: string) =>
+    req<void>(`/api/v1/workspaces/${id}/approval-policy`, { method: 'DELETE' }),
+  paymentRequests: (workspaceId: string, status: 'pending' | 'history', cursor?: string | null) =>
+    reqPage<PaymentRequest>(
+      `/api/v1/workspaces/${workspaceId}/payment-requests?status=${status}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+    ),
+  paymentRequest: (id: string) => req<PaymentRequest>(`/api/v1/payment-requests/${id}`),
+  approvePayment: (id: string) => req<PaymentRequest>(`/api/v1/payment-requests/${id}/approve`, { method: 'POST' }),
+  rejectPayment: (id: string) => req<PaymentRequest>(`/api/v1/payment-requests/${id}/reject`, { method: 'POST' }),
+  cancelPayment: (id: string) => req<PaymentRequest>(`/api/v1/payment-requests/${id}/cancel`, { method: 'POST' }),
+  revokeInvite: (id: string, inviteId: string) =>
+    req<void>(`/api/v1/workspaces/${id}/invites/${inviteId}`, { method: 'DELETE' }),
+  invitations: () => req<{ invites: WorkspaceInvite[]; verified: boolean }>('/api/v1/invitations'),
+  acceptInvitation: (id: string) =>
+    req<JoinResult>(`/api/v1/invitations/${id}/accept`, { method: 'POST' }),
+  declineInvitation: (id: string) =>
+    req<void>(`/api/v1/invitations/${id}/decline`, { method: 'POST' }),
+  previewInvite: (token: string) =>
+    req<InvitePreview>(`/api/v1/invites/${encodeURIComponent(token)}`),
+  acceptInvite: (token: string) =>
+    req<JoinResult>(`/api/v1/invites/${encodeURIComponent(token)}/accept`, { method: 'POST' }),
+
+  listWallets: (workspaceId: string) =>
+    req<Wallet[]>(`/api/v1/wallets?workspace_id=${encodeURIComponent(workspaceId)}`),
+  createWallet: (workspaceId: string, name: string, chain: string) =>
+    req<Wallet>('/api/v1/wallets', { method: 'POST', json: { workspace_id: workspaceId, name, chain } }),
+  walletTxns: (id: string, cursor?: string | null) =>
+    reqPage<Transaction>(`/api/v1/wallets/${id}/transactions${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`),
   createTxn: (
     walletId: string,
     to: string,
@@ -97,7 +172,7 @@ export const api = {
     asset?: { code: string; issuer: string },
     memoType?: string,
   ) =>
-    req<Transaction>('/api/v1/transactions', {
+    req<PaymentResult>('/api/v1/transactions', {
       method: 'POST',
       json: {
         wallet_id: walletId,
@@ -167,19 +242,17 @@ export const api = {
         online: boolean
       }[]
     >(`/api/v1/chains`),
-  getConfig: () =>
-    req<{
-      horizonUrl: string
-      assets: { code: string; issuer: string }[]
-    }>(`/api/v1/config`),
-  addAsset: (code: string, issuer: string) =>
-    req<{ assets: { code: string; issuer: string }[] }>(`/api/v1/assets`, {
+  getConfig: () => req<{ horizonUrl: string }>(`/api/v1/config`),
+  listAssets: (workspaceId: string) =>
+    req<{ assets: CustomAsset[] }>(`/api/v1/workspaces/${workspaceId}/assets`),
+  addAsset: (workspaceId: string, code: string, issuer: string) =>
+    req<{ assets: CustomAsset[] }>(`/api/v1/workspaces/${workspaceId}/assets`, {
       method: 'POST',
       json: { code, issuer },
     }),
-  removeAsset: (code: string, issuer: string) =>
-    req<{ assets: { code: string; issuer: string }[] }>(
-      `/api/v1/assets?code=${encodeURIComponent(code)}&issuer=${encodeURIComponent(issuer)}`,
+  removeAsset: (workspaceId: string, code: string, issuer: string) =>
+    req<{ assets: CustomAsset[] }>(
+      `/api/v1/workspaces/${workspaceId}/assets?code=${encodeURIComponent(code)}&issuer=${encodeURIComponent(issuer)}`,
       { method: 'DELETE' },
     ),
   addTrustline: (id: string, code: string, issuer: string) =>

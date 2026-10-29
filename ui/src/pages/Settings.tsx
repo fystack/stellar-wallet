@@ -1,9 +1,13 @@
+import { readPreference, writePreference } from '../lib/preferences.ts'
 import { useEffect, useState } from 'react'
 import { CheckShieldIcon } from '../icons.tsx'
 import { TokenLogo, ChainLogo } from '../logos.tsx'
 import { api } from '../api.ts'
 import { toast } from '../toast.tsx'
 import LinkedAccounts from '../components/LinkedAccounts.tsx'
+import WorkspaceMembers from '../components/workspace/WorkspaceMembers.tsx'
+import ApprovalPolicyCard from '../components/approvals/ApprovalPolicyCard.tsx'
+import type { ApprovalPolicySettings, CustomAsset, Workspace } from '../types.ts'
 
 type ChainStat = { chain: string; online: boolean }
 
@@ -29,11 +33,11 @@ function ChainBadge({
     >
       <span
         className={
-          'h-2 w-2 rounded-full ' +
+          'dot ' +
           (online === undefined
-            ? 'bg-[#d5dbe4]'
+            ? 'bg-line-strong'
             : online
-              ? 'bg-green-600'
+              ? 'bg-success'
               : 'bg-danger')
         }
       />
@@ -49,10 +53,12 @@ type NodeStatus = {
 }
 
 function Toggle({
+  label,
   checked,
   onChange,
   disabled = false,
 }: {
+  label: string
   checked: boolean
   onChange: (v: boolean) => void
   disabled?: boolean
@@ -61,13 +67,14 @@ function Toggle({
     <button
       type="button"
       role="switch"
+      aria-label={label}
       aria-checked={checked}
       disabled={disabled}
       onClick={() => !disabled && onChange(!checked)}
       className={
         'inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors ' +
         (disabled ? 'cursor-not-allowed opacity-60 ' : '') +
-        (checked ? 'bg-brand' : 'bg-[#d5dbe4]')
+        (checked ? 'bg-brand' : 'bg-line-strong')
       }
     >
       <span
@@ -99,33 +106,54 @@ function Pref({
         <div className="font-semibold">{name}</div>
         <div className="mt-0.5 text-sm text-muted">{desc}</div>
       </div>
-      <Toggle checked={checked} onChange={onChange} disabled={disabled} />
+      <Toggle label={name} checked={checked} onChange={onChange} disabled={disabled} />
     </div>
   )
 }
 
-export default function Settings() {
+export default function Settings({
+  workspace,
+  userEmail,
+  onCreateWorkspace,
+  isOwner,
+  approvalPolicy,
+  approvalPolicyFailed,
+  onApprovalPolicyChange,
+  onMembersChange,
+  onSignOutEverywhere,
+}: {
+  workspace: Workspace | null
+  userEmail: string
+  onCreateWorkspace: (name: string) => Promise<void>
+  isOwner: boolean
+  approvalPolicy: ApprovalPolicySettings | null
+  approvalPolicyFailed: boolean
+  onApprovalPolicyChange: (settings: ApprovalPolicySettings) => void
+  onMembersChange: () => void
+  onSignOutEverywhere: () => Promise<void>
+}) {
+  const [signingOutEverywhere, setSigningOutEverywhere] = useState(false)
   const [hideBalances, setHideBalances] = useState(
-    () => localStorage.getItem('pref_hide') === '1',
+    () => readPreference('pref_hide') === '1',
   )
   const [testnet, setTestnet] = useState(true)
   const [notifications, setNotifications] = useState(
-    () => localStorage.getItem('pref_notif') !== '0',
+    () => readPreference('pref_notif') !== '0',
   )
   const toggleHide = (v: boolean) => {
     setHideBalances(v)
-    localStorage.setItem('pref_hide', v ? '1' : '0')
+    writePreference('pref_hide', v ? '1' : '0')
   }
   const toggleNotif = (v: boolean) => {
     setNotifications(v)
-    localStorage.setItem('pref_notif', v ? '1' : '0')
+    writePreference('pref_notif', v ? '1' : '0')
   }
   const [nodes, setNodes] = useState<NodeStatus[]>([])
   const [threshold, setThreshold] = useState('2-of-3')
 
-  // Chain / RPC config + custom asset registry.
   const [horizonUrl, setHorizonUrl] = useState('')
-  const [assets, setAssets] = useState<{ code: string; issuer: string }[]>([])
+  const [registry, setRegistry] = useState<{ workspaceId: string; assets: CustomAsset[] | null }>({ workspaceId: '', assets: null })
+  const [assetsReload, setAssetsReload] = useState(0)
   const [newCode, setNewCode] = useState('')
   const [newIssuer, setNewIssuer] = useState('')
   const [chains, setChains] = useState<ChainStat[]>([])
@@ -158,19 +186,31 @@ export default function Settings() {
   useEffect(() => {
     api
       .getConfig()
-      .then((r) => {
-        setHorizonUrl(r.horizonUrl)
-        setAssets(r.assets)
-      })
+      .then((r) => setHorizonUrl(r.horizonUrl))
       .catch(() => {})
   }, [])
+
+  const workspaceId = workspace?.id ?? ''
+  useEffect(() => {
+    if (!workspaceId) return
+    let current = true
+    api
+      .listAssets(workspaceId)
+      .then((r) => current && setRegistry({ workspaceId, assets: r.assets }))
+      .catch(() => current && setRegistry({ workspaceId, assets: null }))
+    return () => {
+      current = false
+    }
+  }, [workspaceId, assetsReload])
+  const assetsLoaded = registry.workspaceId === workspaceId
+  const assets = assetsLoaded ? registry.assets : null
 
 
   async function addAsset() {
     if (!newCode.trim() || !newIssuer.trim()) return
     try {
-      const r = await api.addAsset(newCode.trim(), newIssuer.trim())
-      setAssets(r.assets)
+      const r = await api.addAsset(workspaceId, newCode.trim(), newIssuer.trim())
+      setRegistry({ workspaceId, assets: r.assets })
       setNewCode('')
       setNewIssuer('')
       toast.success('Asset added')
@@ -180,8 +220,12 @@ export default function Settings() {
   }
 
   async function removeAsset(code: string, issuer: string) {
-    const r = await api.removeAsset(code, issuer)
-    setAssets(r.assets)
+    try {
+      const r = await api.removeAsset(workspaceId, code, issuer)
+      setRegistry({ workspaceId, assets: r.assets })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not remove asset')
+    }
   }
 
   return (
@@ -192,6 +236,23 @@ export default function Settings() {
           Manage your MPC cluster, security, and preferences.
         </p>
       </header>
+      <WorkspaceMembers workspace={workspace} userEmail={userEmail} onCreateWorkspace={onCreateWorkspace} onChange={onMembersChange} />
+      {workspace && !workspace.personal && approvalPolicyFailed && (
+        <section role="alert" className="surface mb-5">
+          <h3 className="mb-1 text-[17px] font-bold">Payment approvals</h3>
+          <p className="mb-4 text-sm text-muted">Unable to load the approval policy.</p>
+          <button className="btn btn-primary btn-lg" onClick={onMembersChange}>Try again</button>
+        </section>
+      )}
+      {workspace && !workspace.personal && approvalPolicy && (
+        <ApprovalPolicyCard
+          key={workspace.id}
+          workspaceId={workspace.id}
+          isOwner={isOwner}
+          settings={approvalPolicy}
+          onChange={onApprovalPolicyChange}
+        />
+      )}
       <LinkedAccounts />
 
       <section className="surface mb-5">
@@ -204,8 +265,8 @@ export default function Settings() {
             >
               <span
                 className={
-                  'h-2.5 w-2.5 rounded-full ' +
-                  (n.online ? 'bg-green-600' : 'bg-[#cbd3de]')
+                  'dot ' +
+                  (n.online ? 'bg-success' : 'bg-line-strong')
                 }
               />
               <div className="min-w-0 flex-1">
@@ -259,10 +320,15 @@ export default function Settings() {
 
       <section className="surface mb-5">
         <h3 className="mb-[18px] text-[17px] font-bold">Custom assets</h3>
-        {assets.length === 0 ? (
+        {!assetsLoaded ? null : !assets ? (
+          <div role="alert" className="mb-4">
+            <p className="mb-3 text-sm text-muted">Unable to load this workspace's assets.</p>
+            <button className="btn btn-secondary" onClick={() => setAssetsReload((count) => count + 1)}>Try again</button>
+          </div>
+        ) : assets.length === 0 ? (
           <div className="mb-4 text-sm text-muted">
             No custom assets. Add a Stellar asset (code + issuer) to make it
-            available to your wallets.
+            available to this workspace's wallets.
           </div>
         ) : (
           <div className="mb-4 flex flex-col">
@@ -278,37 +344,45 @@ export default function Settings() {
                     {a.issuer}
                   </div>
                 </div>
-                <button
-                  onClick={() => removeAsset(a.code, a.issuer)}
-                  className="shrink-0 text-sm font-semibold text-muted hover:text-danger"
-                >
-                  Remove
-                </button>
+                {isOwner && (
+                  <button
+                    onClick={() => removeAsset(a.code, a.issuer)}
+                    aria-label={`Remove ${a.code}`}
+                    className="btn btn-ghost-danger shrink-0 text-sm"
+                  >
+                    Remove
+                  </button>
+                )}
               </div>
             ))}
           </div>
         )}
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <input
-            className="field-input w-full sm:w-28"
-            placeholder="Code (USDC)"
-            value={newCode}
-            onChange={(e) => setNewCode(e.target.value.toUpperCase())}
-          />
-          <input
-            className="field-input min-w-0 flex-1 font-mono text-sm"
-            placeholder="Issuer address (G…)"
-            value={newIssuer}
-            onChange={(e) => setNewIssuer(e.target.value)}
-            spellCheck={false}
-          />
-          <button
-            onClick={addAsset}
-            className="bg-brand px-4 py-2.5 font-semibold text-white transition-colors hover:bg-brand-deep"
-          >
-            Add
-          </button>
-        </div>
+        {!isOwner && <p className="text-sm text-muted">Only workspace owners can add or remove assets.</p>}
+        {isOwner && (
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              className="field-input w-full sm:w-28"
+              aria-label="Asset code"
+              placeholder="Code (USDC)"
+              value={newCode}
+              onChange={(e) => setNewCode(e.target.value.toUpperCase())}
+            />
+            <input
+              className="field-input min-w-0 flex-1 font-mono text-sm"
+              aria-label="Asset issuer"
+              placeholder="Issuer address (G…)"
+              value={newIssuer}
+              onChange={(e) => setNewIssuer(e.target.value)}
+              spellCheck={false}
+            />
+            <button
+              onClick={addAsset}
+              className="btn btn-primary"
+            >
+              Add
+            </button>
+          </div>
+        )}
       </section>
 
       <section className="surface mb-5">
@@ -334,7 +408,7 @@ export default function Settings() {
         />
       </section>
 
-      <section className="surface mb-5 bg-[#fff7f7]">
+      <section className="surface mb-5 bg-danger-soft">
         <h3 className="mb-[18px] text-[17px] font-bold">Danger zone</h3>
         <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
@@ -343,8 +417,15 @@ export default function Settings() {
               End every active session immediately.
             </div>
           </div>
-          <button className="w-full shrink-0 bg-[#ffe5e5] px-4 py-2.5 font-semibold text-danger hover:bg-[#fdd6d6] sm:w-auto">
-            Sign out all
+          <button
+            className="btn btn-danger-soft w-full shrink-0 sm:w-auto"
+            disabled={signingOutEverywhere}
+            onClick={() => {
+              setSigningOutEverywhere(true)
+              void onSignOutEverywhere().finally(() => setSigningOutEverywhere(false))
+            }}
+          >
+            {signingOutEverywhere ? 'Signing out…' : 'Sign out all'}
           </button>
         </div>
       </section>

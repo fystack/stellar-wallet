@@ -9,14 +9,28 @@ import AmountField from '../components/send/AmountField.tsx'
 import MemoField from '../components/send/MemoField.tsx'
 import SendSummary from '../components/send/SendSummary.tsx'
 import ConfirmSendModal from '../components/send/ConfirmSendModal.tsx'
-import type { SendInput, Wallet } from '../types.ts'
+import type { ApprovalPolicy, SendInput, Wallet } from '../types.ts'
+
+function needsApproval(policy: ApprovalPolicy | null, amount: string, asset: string) {
+  if (!policy) return false
+  if (asset !== 'XLM') return true
+  return policy.belowThreshold === 'approve' || Number(amount) > Number(policy.thresholdXlm)
+}
 
 export default function Send({
   wallets: allWallets,
   preselectId,
   onGoCreate,
   onSubmit,
+  readOnly = false,
+  approvalPolicy,
+  approvalPolicyKnown,
+  approvalPolicyFailed,
 }: {
+  readOnly?: boolean
+  approvalPolicy: ApprovalPolicy | null
+  approvalPolicyKnown: boolean
+  approvalPolicyFailed: boolean
   wallets: Wallet[]
   preselectId?: string
   onGoCreate: () => void
@@ -26,6 +40,16 @@ export default function Send({
   const wallets = allWallets.filter((w) => w.status === 'ready')
   const form = useSendForm(wallets, preselectId, onSubmit)
   const [showScanner, setShowScanner] = useState(false)
+
+  if (readOnly) {
+    return (
+      <EmptyState
+        icon={<SendIcon size={32} />}
+        title="View-only access"
+        body="Only workspace owners and operators can send payments. Ask an owner to make you an operator."
+      />
+    )
+  }
 
   if (wallets.length === 0) {
     return (
@@ -40,6 +64,7 @@ export default function Send({
   }
 
   const { resolved } = form.recipient
+  const held = needsApproval(approvalPolicy, form.amount, form.assetSymbol)
 
   return (
     <div className="mx-auto mt-2.5 max-w-[760px]">
@@ -102,8 +127,21 @@ export default function Send({
           <span>Requires approval from 2 of 3 nodes to sign.</span>
         </div>
 
-        <button className="cta w-full" type="submit" disabled={!form.canSubmit}>
-          Review &amp; sign
+        {approvalPolicyFailed && (
+          <div role="status" className="notice notice-info">
+            Couldn't check this workspace's approval policy. If the payment needs approval, it is sent for approval instead of signed.
+          </div>
+        )}
+
+        {held && approvalPolicy && (
+          <div role="status" className="notice notice-warning">
+            This payment needs {approvalPolicy.requiredApprovals} approval{approvalPolicy.requiredApprovals === 1 ? '' : 's'} from
+            another owner or operator before it is signed.
+          </div>
+        )}
+
+        <button className="btn btn-primary btn-lg w-full" type="submit" disabled={!form.canSubmit}>
+          {held ? 'Review & request approval' : approvalPolicyKnown ? 'Review & sign' : 'Review & submit'}
         </button>
       </form>
 

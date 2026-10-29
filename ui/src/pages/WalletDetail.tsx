@@ -6,7 +6,7 @@ import { assetKey } from '../hooks/useBalances.ts'
 import { useWalletDetail } from '../hooks/useWalletDetail.ts'
 import CopyAddress from '../components/CopyAddress.tsx'
 import ReceiveModal from '../components/ReceiveModal.tsx'
-import TxDetailModal from '../components/TxDetailModal.tsx'
+import TxDetailModal from '../components/transaction/TxDetailModal.tsx'
 import DeleteWalletBar from '../components/wallet/DeleteWalletBar.tsx'
 import BalanceList from '../components/wallet/BalanceList.tsx'
 import AddAssetChips from '../components/wallet/AddAssetChips.tsx'
@@ -21,14 +21,17 @@ export default function WalletDetail({
   onBack,
   onSend,
   onDelete,
+  readOnly = false,
 }: {
   wallet: Wallet
   liveTxns: Record<string, Transaction>
   focusTxId?: string | null
   onFocusHandled?: () => void
   onBack: () => void
-  onSend: () => void
-  onDelete: (id: string) => Promise<void>
+  onSend?: () => void
+  // Undefined for members: only workspace owners delete wallets.
+  onDelete?: (id: string) => Promise<void>
+  readOnly?: boolean
 }) {
   const [showReceive, setShowReceive] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -51,17 +54,20 @@ export default function WalletDetail({
         <button onClick={onBack} className="text-sm font-semibold text-ink-soft hover:text-ink">
           ← Back to wallets
         </button>
-        <button
-          onClick={() => setConfirmDelete(true)}
-          className="flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-danger"
-        >
-          <TrashIcon size={16} /> Delete
-        </button>
+        {onDelete && (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="btn btn-ghost-danger text-sm"
+          >
+            <TrashIcon size={16} /> Delete
+          </button>
+        )}
       </div>
 
-      {confirmDelete && (
+      {confirmDelete && onDelete && (
         <DeleteWalletBar
           walletName={wallet.name}
+          assets={detail.assets}
           onCancel={() => setConfirmDelete(false)}
           onDelete={() => onDelete(wallet.id)}
         />
@@ -89,7 +95,7 @@ export default function WalletDetail({
         <div className="mb-1 text-sm text-muted">Balances</div>
         <BalanceList assets={detail.assets} fallbackSymbol={wallet.symbol} usd={detail.usd} />
 
-        {wallet.chain === 'stellar' && (
+        {wallet.chain === 'stellar' && !readOnly && (
           <AddAssetChips
             registry={detail.registry}
             heldKeys={new Set((detail.assets ?? []).map(assetKey))}
@@ -98,23 +104,28 @@ export default function WalletDetail({
           />
         )}
 
+        {!onSend && (
+          <p className="notice notice-info mb-3">Only workspace owners and operators can send. Ask an owner to make you an operator.</p>
+        )}
         <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3">
-          <button
-            onClick={onSend}
-            className="flex items-center justify-center gap-2 bg-brand px-4 py-3 font-semibold text-white transition-colors hover:bg-brand-deep sm:px-5"
-          >
-            <SendIcon size={18} /> Send
-          </button>
+          {onSend && (
+            <button
+              onClick={onSend}
+              className="btn btn-primary py-3 sm:px-5"
+            >
+              <SendIcon size={18} /> Send
+            </button>
+          )}
           <button
             onClick={() => setShowReceive(true)}
-            className="border border-line px-4 py-3 font-semibold text-ink-soft transition-colors hover:bg-hover sm:px-5"
+            className="btn btn-secondary py-3 sm:px-5"
           >
             Receive
           </button>
           <button
             onClick={() => void detail.fund()}
             disabled={detail.funding}
-            className="col-span-2 border border-line px-4 py-3 font-semibold text-ink-soft transition-colors hover:bg-hover disabled:opacity-50 sm:col-auto sm:px-5"
+            className="btn btn-secondary col-span-2 py-3 sm:col-auto sm:px-5"
           >
             {detail.funding ? 'Funding…' : 'Fund (testnet)'}
           </button>
@@ -131,6 +142,9 @@ export default function WalletDetail({
       <TransactionList
         key={wallet.id}
         transactions={detail.transactions}
+        hasMore={detail.hasMoreHistory}
+        loadingMore={detail.loadingMoreHistory}
+        onLoadMore={detail.loadMoreHistory}
         refreshing={detail.refreshing}
         onRefresh={() => void detail.refresh()}
         onOpen={setOpenTxId}

@@ -46,8 +46,8 @@ export function Toaster() {
           className={
             'flex items-start gap-2.5 border px-4 py-3 text-sm shadow-lg ' +
             (t.kind === 'success'
-              ? 'border-green-200 bg-green-50 text-green-800'
-              : 'border-[#f0c2c2] bg-[#fff5f5] text-[#b32424]')
+              ? 'border-success bg-success-soft text-success'
+              : 'border-danger-line bg-danger-soft text-danger-deep')
           }
         >
           <span className="mt-0.5 shrink-0 font-bold">

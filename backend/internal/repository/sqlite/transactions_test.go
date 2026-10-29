@@ -25,9 +25,6 @@ func TestTransactionRepositoryOwnershipAndSigningLifecycle(t *testing.T) {
 	if _, ok := repo.TransactionForUser(transaction.ID, "other-user"); ok {
 		t.Fatal("other user can read transaction")
 	}
-	if list, err := repo.TransactionsByWallet("other-user", transaction.WalletID); err != nil || len(list) != 0 {
-		t.Fatalf("other user's transactions: %#v, %v", list, err)
-	}
 	if list, err := repo.PendingTransactions(); err != nil || len(list) != 1 || list[0].EnvelopeXDR != "envelope" {
 		t.Fatalf("pending = %#v, %v", list, err)
 	}

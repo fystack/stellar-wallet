@@ -26,7 +26,7 @@ func (oauthProviderStub) Identity(context.Context, string, string, string) (doma
 func TestOAuthRedirectBindsBrowserAndReturnsOnlySessionCookie(t *testing.T) {
 	manager, _, repo, _ := newAuthFixture(t)
 	svc := service.NewAuthService(repo, map[string]auth.OAuthProvider{"google": oauthProviderStub{}})
-	r := NewRouter(Dependencies{Auth: manager, AuthService: svc, FrontendURL: "https://wallet.test"}, "https://wallet.test")
+	r := NewRouter(Dependencies{AuthRateLimit: 30, Auth: manager, AuthService: svc, FrontendURL: "https://wallet.test"}, "https://wallet.test")
 	start := httptest.NewRecorder()
 	r.ServeHTTP(start, httptest.NewRequest("GET", "/api/v1/auth/google/start", nil))
 	if start.Code != 302 {
@@ -85,7 +85,7 @@ func TestOAuthRedirectBindsBrowserAndReturnsOnlySessionCookie(t *testing.T) {
 
 func TestAuthLimiterUsesCodedError(t *testing.T) {
 	manager, svc, _, _ := newAuthFixture(t)
-	r := NewRouter(Dependencies{Auth: manager, AuthService: svc}, "http://localhost")
+	r := NewRouter(Dependencies{AuthRateLimit: 30, Auth: manager, AuthService: svc}, "http://localhost")
 	for i := 0; i < 31; i++ {
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/auth/google/start", nil))

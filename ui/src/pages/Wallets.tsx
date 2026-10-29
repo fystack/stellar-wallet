@@ -1,3 +1,5 @@
+import { readPreference, writePreference } from '../lib/preferences.ts'
+import Tooltip from '../components/ui/Tooltip.tsx'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -37,8 +39,13 @@ const features: Feature[] = [
 ]
 
 type Props = {
+  loading: boolean
+  failed: boolean
+  onRetry: () => void
   wallets: Wallet[]
-  onCreate: () => void
+  workspaceName: string
+  // Undefined for members: only workspace owners create wallets.
+  onCreate?: () => void
   onOpen: (id: string) => void
 }
 
@@ -63,7 +70,7 @@ function WalletGrid({
         >
           <div className="mb-4 flex items-center justify-between">
             <ChainLogo chain={w.chain} size={40} />
-            <span className="bg-brand-soft px-2.5 py-1 text-xs font-semibold uppercase text-brand">
+            <span className="badge badge-brand uppercase">
               {w.chain} · 2-of-3
             </span>
           </div>
@@ -95,40 +102,65 @@ function WalletGrid({
   )
 }
 
-export default function Wallets({ wallets, onCreate, onOpen }: Props) {
+export default function Wallets({ loading, failed, onRetry, wallets, workspaceName, onCreate, onOpen }: Props) {
   const hasWallets = wallets.length > 0
   // Shared with the Settings "Hide balances" pref, and persisted.
   const [hidden, setHidden] = useState(
-    () => localStorage.getItem('pref_hide') === '1',
+    () => readPreference('pref_hide') === '1',
   )
   const toggleHidden = () =>
     setHidden((h) => {
       const next = !h
-      localStorage.setItem('pref_hide', next ? '1' : '0')
+      writePreference('pref_hide', next ? '1' : '0')
       return next
     })
+
+  if (failed) {
+    return (
+      <div role="alert" className="mx-auto mt-10 max-w-[1040px] text-center">
+        <p className="text-ink-soft">Unable to load wallets for {workspaceName || 'this workspace'}.</p>
+        <button className="btn btn-primary btn-lg mt-4" onClick={onRetry}>
+          Try again
+        </button>
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <p role="status" className="mx-auto mt-10 max-w-[1040px] text-center text-muted">
+        Loading wallets…
+      </p>
+    )
+  }
 
   // With at least one wallet, skip the onboarding hero — just show the list.
   if (hasWallets) {
     return (
       <section className="mx-auto max-w-[1040px]">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-2xl font-bold">My Wallets</h2>
+          <div className="min-w-0">
+            <h2 className="text-2xl font-bold">Wallets</h2>
+            {workspaceName && <p className="truncate text-sm text-muted">{workspaceName}</p>}
+          </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={toggleHidden}
-              className="border border-line p-2 text-muted hover:bg-hover"
-              aria-label={hidden ? 'Show balances' : 'Hide balances'}
-              title={hidden ? 'Show balances' : 'Hide balances'}
-            >
-              {hidden ? <EyeOffIcon /> : <EyeIcon />}
-            </button>
-            <button
-              onClick={onCreate}
-              className="bg-brand px-4 py-2.5 font-semibold text-white transition-colors hover:bg-brand-deep"
-            >
-              + New wallet
-            </button>
+            <Tooltip label={hidden ? 'Show balances' : 'Hide balances'}>
+              <button
+                onClick={toggleHidden}
+                className="btn btn-secondary p-2 text-muted"
+                aria-label={hidden ? 'Show balances' : 'Hide balances'}
+              >
+                {hidden ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </Tooltip>
+            {onCreate && (
+              <button
+                onClick={onCreate}
+                className="btn btn-primary"
+              >
+                + New wallet
+              </button>
+            )}
           </div>
         </div>
         <WalletGrid wallets={wallets} onOpen={onOpen} hidden={hidden} />
@@ -164,9 +196,15 @@ export default function Wallets({ wallets, onCreate, onOpen }: Props) {
           ))}
         </div>
 
-        <button className="cta mt-8 w-full !px-6 sm:mt-11 sm:w-auto" onClick={onCreate}>
-          Create your first wallet
-        </button>
+        {onCreate ? (
+          <button className="btn btn-primary btn-lg mt-8 w-full !px-6 sm:mt-11 sm:w-auto" onClick={onCreate}>
+            Create your first wallet
+          </button>
+        ) : (
+          <p className="mt-8 text-base text-ink-soft sm:mt-11">
+            No wallets in {workspaceName || 'this workspace'} yet. Ask a workspace owner to create one.
+          </p>
+        )}
 
         <p className="mt-6 text-sm leading-relaxed text-muted sm:mt-7 sm:text-[15px]">
           Secured by{' '}

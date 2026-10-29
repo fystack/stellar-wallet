@@ -27,7 +27,7 @@ func NewTrustlineService(wallets repository.Store, transactions *sqlite.Transact
 }
 
 func (s *TrustlineService) Add(userID, walletID, code, issuer string) (domain.Transaction, error) {
-	wallet, err := readyWallet(s.wallets, userID, walletID)
+	wallet, err := ownerWallet(s.wallets, userID, walletID)
 	if err != nil {
 		return domain.Transaction{}, err
 	}

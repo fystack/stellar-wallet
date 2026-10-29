@@ -16,16 +16,14 @@ const (
 	TooManyRequests
 )
 
-// Spec is the single source of truth for a public API failure.
-// Keep codes and user-facing messages in catalog.go, not at call sites.
+// Spec values live only in catalog.go, never at call sites.
 type Spec struct {
 	kind    Kind
 	code    string
 	message string
 }
 
-// Error separates a safe public message from the underlying technical cause.
-// Callers can add context with fmt.Errorf("operation: %w", err).
+// Error keeps the safe public message apart from the technical cause.
 type Error struct {
 	Kind    Kind
 	Code    string

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"stellar-wallet-backend/internal/domain"
+	storecontract "stellar-wallet-backend/internal/repository"
 )
 
 // TransactionRepository persists sends, swaps, trustlines and incoming payments.
@@ -65,16 +66,24 @@ func (s *TransactionRepository) exists(query string, args ...any) (bool, error) 
 	return count > 0, nil
 }
 
-func (s *TransactionRepository) TransactionsByWallet(userID, walletID string) ([]domain.Transaction, error) {
-	return s.transactions(
-		`SELECT `+transactionColumns+` FROM transactions
-		 WHERE wallet_id = ? AND user_id = ? ORDER BY created_at DESC`, walletID, userID,
-	)
+func (s *TransactionRepository) TransactionsByWallet(walletID string, before storecontract.Cursor, limit int) ([]domain.Transaction, error) {
+	if before.ID == "" {
+		return s.transactions(`SELECT `+transactionColumns+` FROM transactions
+			WHERE wallet_id = ? ORDER BY created_at DESC, id DESC LIMIT ?`, walletID, limit)
+	}
+	return s.transactions(`SELECT `+transactionColumns+` FROM transactions
+		WHERE wallet_id = ? AND (created_at, id) < (?, ?) ORDER BY created_at DESC, id DESC LIMIT ?`,
+		walletID, before.CreatedAt, before.ID, limit)
 }
 
+// TransactionForUser returns the transaction only when userID is a member of its wallet's workspace.
 func (s *TransactionRepository) TransactionForUser(transactionID, userID string) (domain.Transaction, bool) {
 	transaction, err := scanTransaction(s.db.QueryRow(
-		`SELECT `+transactionColumns+` FROM transactions WHERE id = ? AND user_id = ?`,
+		`SELECT `+transactionColumns+` FROM transactions
+		 WHERE id = ? AND wallet_id IN (
+		   SELECT wallets.id FROM wallets
+		   JOIN workspace_members ON workspace_members.workspace_id = wallets.workspace_id
+		   WHERE workspace_members.user_id = ?)`,
 		transactionID, userID,
 	))
 	return transaction, err == nil
@@ -114,10 +123,9 @@ func (s *TransactionRepository) transactions(query string, args ...any) ([]domai
 	return transactions, nil
 }
 
-// ClaimSignature stores the signature and moves a signing transaction to broadcast.
-// It returns false when the transaction already left signing (timed out, failed or a duplicate result).
+// ClaimSignature returns false when the transaction already left signing (timed out, failed or a duplicate result).
 func (s *TransactionRepository) ClaimSignature(transactionID, signature string) (bool, error) {
-	return s.transition("claim signature",
+	return transition(s.db, "claim signature",
 		`UPDATE transactions SET signature = ?, status = ? WHERE id = ? AND status = ?`,
 		signature, domain.TransactionBroadcast, transactionID, domain.TransactionSigning,
 	)
@@ -125,7 +133,7 @@ func (s *TransactionRepository) ClaimSignature(transactionID, signature string) 
 
 // FailSigning fails a transaction only if it is still waiting for its signature.
 func (s *TransactionRepository) FailSigning(transactionID, reason string) (bool, error) {
-	return s.transition("fail signing",
+	return transition(s.db, "fail signing",
 		`UPDATE transactions SET status = ?, error = ? WHERE id = ? AND status = ?`,
 		domain.TransactionFailed, reason, transactionID, domain.TransactionSigning,
 	)
@@ -141,16 +149,4 @@ func (s *TransactionRepository) FailTransaction(transactionID, reason string) er
 	return exec(s.db, "fail transaction",
 		`UPDATE transactions SET status = ?, error = ? WHERE id = ?`, domain.TransactionFailed, reason, transactionID,
 	)
-}
-
-func (s *TransactionRepository) transition(action, query string, args ...any) (bool, error) {
-	result, err := s.db.Exec(query, args...)
-	if err != nil {
-		return false, fmt.Errorf("%s: %w", action, err)
-	}
-	changed, err := result.RowsAffected()
-	if err != nil {
-		return false, fmt.Errorf("%s: %w", action, err)
-	}
-	return changed == 1, nil
 }

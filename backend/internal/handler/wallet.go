@@ -16,7 +16,7 @@ type WalletHandler struct {
 }
 
 func (h *WalletHandler) list(c *gin.Context) {
-	wallets, err := h.wallets.List(c.GetString("userID"))
+	wallets, err := h.wallets.List(c.GetString("userID"), c.GetString("workspaceID"), c.Query("workspace_id"))
 	if err != nil {
 		httpapi.Error(c, err)
 		return
@@ -25,8 +25,9 @@ func (h *WalletHandler) list(c *gin.Context) {
 }
 
 type createWalletBody struct {
-	Name  string `json:"name"`
-	Chain string `json:"chain"`
+	Name        string `json:"name"`
+	Chain       string `json:"chain"`
+	WorkspaceID string `json:"workspace_id"`
 }
 
 func (h *WalletHandler) create(c *gin.Context) {
@@ -35,7 +36,7 @@ func (h *WalletHandler) create(c *gin.Context) {
 		httpapi.Error(c, apperror.InvalidRequest.New())
 		return
 	}
-	wallet, err := h.wallets.Create(c.GetString("userID"), body.Name, body.Chain)
+	wallet, err := h.wallets.Create(c.GetString("userID"), c.GetString("workspaceID"), body.WorkspaceID, body.Name, body.Chain)
 	if err != nil {
 		httpapi.Error(c, err)
 		return

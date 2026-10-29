@@ -40,64 +40,81 @@ func (s *AuthService) Providers() []SocialProvider {
 	return []SocialProvider{{ID: "google", Enabled: s.providers["google"] != nil}, {ID: "github", Enabled: s.providers["github"] != nil}}
 }
 
-func (s *AuthService) Register(email, password, oldToken string) (domain.User, string, error) {
+func (s *AuthService) Register(email, password, oldToken string) (domain.Account, string, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	parsed, err := mail.ParseAddress(email)
 	if err != nil || parsed.Address != email || utf8.RuneCountInString(password) < 6 || len([]byte(password)) > 72 {
-		return domain.User{}, "", apperror.InvalidRegistration.New()
+		return domain.Account{}, "", apperror.InvalidRegistration.New()
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return domain.User{}, "", fmt.Errorf("hash password: %w", err)
+		return domain.Account{}, "", fmt.Errorf("hash password: %w", err)
 	}
 	user := domain.User{ID: uuid.NewString(), Email: email, PasswordHash: string(hash), CreatedAt: time.Now().UTC().Format(time.RFC3339)}
 	if err := s.repo.CreateUser(user); err != nil {
 		if errors.Is(err, repository.ErrConflict) {
-			return user, "", apperror.EmailAlreadyRegistered.New()
+			return domain.Account{}, "", apperror.EmailAlreadyRegistered.New()
 		}
-		return user, "", fmt.Errorf("register user: %w", err)
+		return domain.Account{}, "", fmt.Errorf("register user: %w", err)
 	}
-	token, err := s.newSession(user.ID, oldToken)
-	return user, token, err
+	return s.signIn(user.ID, oldToken)
 }
-func (s *AuthService) Login(email, password, oldToken string) (domain.User, string, error) {
+func (s *AuthService) Login(email, password, oldToken string) (domain.Account, string, error) {
 	id, hash, err := s.repo.UserCredentials(strings.ToLower(strings.TrimSpace(email)))
 	if err != nil && !errors.Is(err, repository.ErrNotFound) {
-		return domain.User{}, "", fmt.Errorf("read login credentials: %w", err)
+		return domain.Account{}, "", fmt.Errorf("read login credentials: %w", err)
 	}
 	if hash == "" {
 		// Compare against a dummy hash so unknown emails take as long as wrong passwords.
 		_ = bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(password))
-		return domain.User{}, "", apperror.InvalidLoginCredentials.New()
+		return domain.Account{}, "", apperror.InvalidLoginCredentials.New()
 	}
 	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
-		return domain.User{}, "", apperror.InvalidLoginCredentials.New()
+		return domain.Account{}, "", apperror.InvalidLoginCredentials.New()
 	}
-	user, err := s.repo.UserByID(id)
-	if err != nil {
-		return user, "", err
-	}
-	token, err := s.newSession(user.ID, oldToken)
-	return user, token, err
+	return s.signIn(id, oldToken)
 }
+func (s *AuthService) signIn(userID, oldToken string) (domain.Account, string, error) {
+	token, err := s.newSession(userID, oldToken)
+	if err != nil {
+		return domain.Account{}, "", err
+	}
+	account, err := s.repo.Account(userID)
+	if err != nil {
+		return domain.Account{}, "", errors.Join(err, s.Logout(token))
+	}
+	return account, token, nil
+}
+
+// newSession replaces oldToken and keeps its active workspace when it belongs to the same user.
 func (s *AuthService) newSession(userID, oldToken string) (string, error) {
 	token, err := auth.RandomToken()
 	if err != nil {
 		return "", fmt.Errorf("generate session token: %w", err)
 	}
 	now := time.Now()
-	if err := s.repo.CreateSession(domain.Session{Hash: auth.HashToken(token), UserID: userID, CreatedAt: now.Unix(), ExpiresAt: now.Add(auth.SessionTTL).Unix()}); err != nil {
+	session := domain.Session{Hash: auth.HashToken(token), UserID: userID, CreatedAt: now.Unix(), ExpiresAt: now.Add(auth.SessionTTL).Unix()}
+	if oldToken != "" {
+		previous, err := s.repo.Session(auth.HashToken(oldToken))
+		if err != nil && !errors.Is(err, repository.ErrNotFound) {
+			return "", err
+		}
+		if previous.UserID == userID {
+			session.WorkspaceID = previous.WorkspaceID
+		}
+	}
+	if err := s.repo.CreateSession(session); err != nil {
 		return "", err
 	}
 	if oldToken != "" {
 		if err := s.Logout(oldToken); err != nil {
-			s.repo.RevokeSession(auth.HashToken(token))
-			return "", err
+			return "", errors.Join(err, s.Logout(token))
 		}
 	}
 	return token, nil
 }
 func (s *AuthService) Logout(token string) error                     { return s.repo.RevokeSession(auth.HashToken(token)) }
+func (s *AuthService) LogoutEverywhere(userID string) error          { return s.repo.RevokeUserSessions(userID) }
 func (s *AuthService) Account(userID string) (domain.Account, error) { return s.repo.Account(userID) }
 func (s *AuthService) Reauthenticate(userID, password, oldToken string) (string, error) {
 	session, err := s.repo.Session(auth.HashToken(oldToken))

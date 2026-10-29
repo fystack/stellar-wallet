@@ -10,8 +10,8 @@ export default function EmptyState({
   icon: ReactNode
   title: string
   body: string
-  action: string
-  onAction: () => void
+  action?: string
+  onAction?: () => void
 }) {
   return (
     <div className="mx-auto mt-10 max-w-[460px] text-center sm:mt-16">
@@ -20,9 +20,11 @@ export default function EmptyState({
       </div>
       <h2 className="mb-2.5 text-2xl font-bold">{title}</h2>
       <p className="mb-7 text-base leading-relaxed text-muted">{body}</p>
-      <button className="cta w-full !px-6 sm:w-auto" onClick={onAction}>
-        {action}
-      </button>
+      {action && onAction && (
+        <button className="btn btn-primary btn-lg w-full !px-6 sm:w-auto" onClick={onAction}>
+          {action}
+        </button>
+      )}
     </div>
   )
 }

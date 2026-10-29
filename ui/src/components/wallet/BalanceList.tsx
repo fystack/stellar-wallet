@@ -58,6 +58,7 @@ export default function BalanceList({
                 {tokens.length} tokens
               </span>
               <select
+                aria-label="Sort tokens"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortKey)}
                 className="border border-line bg-white px-2 py-1 text-xs font-semibold text-ink-soft"

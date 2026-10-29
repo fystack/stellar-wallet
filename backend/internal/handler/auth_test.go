@@ -27,7 +27,7 @@ func testAuthManager(t *testing.T) *auth.Manager { m, _, _, _ := newAuthFixture(
 
 func TestAuthCookieContractLogoutAndDatabaseFailures(t *testing.T) {
 	manager, svc, _, db := newAuthFixture(t)
-	r := NewRouter(Dependencies{Auth: manager, AuthService: svc}, "http://localhost")
+	r := NewRouter(Dependencies{AuthRateLimit: 30, Auth: manager, AuthService: svc}, "http://localhost")
 	request := func(method, path, body string, cookie *http.Cookie) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, "/api/v1/auth/"+path, bytes.NewBufferString(body))
 		req.Header.Set("Content-Type", "application/json")
@@ -63,6 +63,19 @@ func TestAuthCookieContractLogoutAndDatabaseFailures(t *testing.T) {
 	if w := request("GET", "me", "", cookie); w.Code != 401 {
 		t.Fatal("revoked cookie still works")
 	}
+	first := request("POST", "login", credentials, nil).Result().Cookies()[0]
+	second := request("POST", "login", credentials, nil).Result().Cookies()[0]
+	if w := request("POST", "logout-all", "", first); w.Code != 204 || w.Body.Len() != 0 {
+		t.Fatalf("logout-all=%d %s", w.Code, w.Body)
+	}
+	for _, device := range []*http.Cookie{first, second} {
+		if w := request("GET", "me", "", device); w.Code != 401 {
+			t.Fatal("logout-all left a session active")
+		}
+	}
+	if w := request("POST", "logout-all", "", nil); w.Code != 401 {
+		t.Fatalf("anonymous logout-all=%d", w.Code)
+	}
 	for _, tt := range []struct {
 		path, body string
 		status     int
@@ -90,7 +103,7 @@ func TestAuthCookieContractLogoutAndDatabaseFailures(t *testing.T) {
 
 func TestUnsafeRequestsRequireCSRFHeaderAndAllowedOrigin(t *testing.T) {
 	manager, svc, _, _ := newAuthFixture(t)
-	r := NewRouter(Dependencies{Auth: manager, AuthService: svc}, "http://localhost:5173")
+	r := NewRouter(Dependencies{AuthRateLimit: 30, Auth: manager, AuthService: svc}, "http://localhost:5173")
 	for _, tt := range []struct {
 		origin, header string
 		status         int

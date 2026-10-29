@@ -39,7 +39,7 @@ export default function QuoteDetails({
         <span className="flex flex-wrap items-center justify-end gap-1.5">
           {route.map((code, index) => (
             <span key={index} className="flex items-center gap-1.5">
-              <span className="bg-card px-2 py-0.5 text-xs font-semibold text-ink-soft">
+              <span className="badge badge-neutral">
                 {code}
               </span>
               {index < route.length - 1 && <span className="text-muted">→</span>}

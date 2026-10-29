@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"sync"
 	"testing"
 
 	"stellar-wallet-backend/internal/apperror"
@@ -36,12 +37,17 @@ func (c *paymentChainStub) Submit(envelope, _ string, _ []byte) (string, error) 
 }
 
 type paymentSignerStub struct {
+	mu                               sync.Mutex
 	err                              error
+	calls                            int
 	walletID, transactionID, network string
 	payload                          []byte
 }
 
 func (m *paymentSignerStub) Sign(walletID, transactionID, network string, payload []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.calls++
 	m.walletID, m.transactionID, m.network, m.payload = walletID, transactionID, network, payload
 	return m.err
 }
@@ -58,7 +64,10 @@ func newTestTransactionService(t *testing.T) (*TransactionService, *paymentChain
 	}
 	t.Cleanup(func() { db.Close() })
 	wallets := sqlite.NewStore(db)
-	if err := wallets.CreateWallet(domain.Wallet{ID: "wallet-1", UserID: "owner", Chain: "stellar", Symbol: "XLM", Pubkey: "public-key", Status: "ready"}); err != nil {
+	if err := sqlite.NewWorkspaceRepository(db).EnsurePersonalWorkspace("owner", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := wallets.CreateWallet(domain.Wallet{ID: "wallet-1", UserID: "owner", WorkspaceID: domain.PersonalWorkspaceID("owner"), Chain: "stellar", Symbol: "XLM", Pubkey: "public-key", Status: "ready"}); err != nil {
 		t.Fatal(err)
 	}
 	c := &paymentChainStub{resolved: chain.Resolved{Address: "resolved-address", Memo: "42", MemoType: "id"}}
@@ -67,11 +76,19 @@ func newTestTransactionService(t *testing.T) (*TransactionService, *paymentChain
 	return service, c, signer
 }
 
+func (s *TransactionService) createPayment(userID string, body PaymentInput) (domain.Transaction, error) {
+	result, err := s.Create(userID, body)
+	if err != nil {
+		return domain.Transaction{}, err
+	}
+	return *result.Transaction, nil
+}
+
 func TestPaymentCreatePersistsResolvedPaymentAndDispatchesHash(t *testing.T) {
 	s, c, signer := newTestTransactionService(t)
 	events := s.hub.Subscribe("owner")
 	defer s.hub.Unsubscribe("owner", events)
-	tx, err := s.Create("owner", PaymentInput{WalletID: "wallet-1", To: "name*example.com", Amount: "12.345"})
+	tx, err := s.createPayment("owner", PaymentInput{WalletID: "wallet-1", To: "name*example.com", Amount: "12.345"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +113,7 @@ func TestPaymentCreatePersistsResolvedPaymentAndDispatchesHash(t *testing.T) {
 func TestPaymentCreateDispatchFailurePersistsFailedStatus(t *testing.T) {
 	s, _, signer := newTestTransactionService(t)
 	signer.err = errors.New("NATS unavailable")
-	_, err := s.Create("owner", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
+	_, err := s.createPayment("owner", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
 	var failure *apperror.Error
 	if !errors.As(err, &failure) || failure.Kind != apperror.Upstream || failure.Code != "sign_dispatch_failed" || !errors.Is(err, signer.err) {
 		t.Fatalf("error = %v", err)
@@ -109,7 +126,7 @@ func TestPaymentCreateDispatchFailurePersistsFailedStatus(t *testing.T) {
 
 func TestPaymentCreateRejectsOtherUsersWalletBeforeSigning(t *testing.T) {
 	s, _, signer := newTestTransactionService(t)
-	_, err := s.Create("other-user", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
+	_, err := s.createPayment("other-user", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
 	var failure *apperror.Error
 	if !errors.As(err, &failure) || failure.Kind != apperror.NotFound || failure.Code != "wallet_not_found" {
 		t.Fatalf("error = %v", err)
@@ -121,7 +138,7 @@ func TestPaymentCreateRejectsOtherUsersWalletBeforeSigning(t *testing.T) {
 
 func TestPaymentSignResultBroadcastsPersistedEnvelope(t *testing.T) {
 	s, c, _ := newTestTransactionService(t)
-	tx, err := s.Create("owner", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
+	tx, err := s.createPayment("owner", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +153,7 @@ func TestPaymentSignResultFailuresPersistReason(t *testing.T) {
 	for _, stage := range []string{"signing", "broadcast"} {
 		t.Run(stage, func(t *testing.T) {
 			s, c, _ := newTestTransactionService(t)
-			tx, err := s.Create("owner", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
+			tx, err := s.createPayment("owner", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -159,7 +176,7 @@ func TestPaymentSignResultFailuresPersistReason(t *testing.T) {
 
 func TestPaymentReconcileFailsPendingPaymentsBelowQuorum(t *testing.T) {
 	s, _, _ := newTestTransactionService(t)
-	tx, err := s.Create("owner", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
+	tx, err := s.createPayment("owner", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +214,7 @@ func TestPaymentSignResultAlsoBroadcastsSwapAndTrustline(t *testing.T) {
 func TestSignResultIsAppliedOnlyWhileSigning(t *testing.T) {
 	t.Run("duplicate result broadcasts once", func(t *testing.T) {
 		s, c, _ := newTestTransactionService(t)
-		transaction, err := s.Create("owner", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
+		transaction, err := s.createPayment("owner", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -215,11 +232,11 @@ func TestSignResultIsAppliedOnlyWhileSigning(t *testing.T) {
 	})
 	t.Run("late result after timeout is ignored", func(t *testing.T) {
 		s, c, _ := newTestTransactionService(t)
-		transaction, err := s.Create("owner", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
+		transaction, err := s.createPayment("owner", PaymentInput{WalletID: "wallet-1", To: "destination", Amount: "1"})
 		if err != nil {
 			t.Fatal(err)
 		}
-		s.failSigning(transaction.UserID, transaction.ID, "signing timed out")
+		s.failSigning(transaction.ID, "signing timed out")
 		if s.OnSign(mpc.SignResult{TransactionID: transaction.ID, Successful: true, Signature: []byte{1}}) != nil {
 			t.Fatal("late result was broadcast")
 		}
@@ -228,4 +245,39 @@ func TestSignResultIsAppliedOnlyWhileSigning(t *testing.T) {
 			t.Fatalf("submits = %d, stored = %#v", c.submitCount, stored)
 		}
 	})
+}
+
+func TestListForWalletPages(t *testing.T) {
+	s, _, _ := newTestTransactionService(t)
+	for _, created := range []struct{ id, at string }{
+		{"a", "2026-10-01T00:00:00Z"}, {"b", "2026-10-02T00:00:00Z"}, {"c", "2026-10-02T00:00:00Z"}, {"d", "2026-10-03T00:00:00Z"},
+	} {
+		if err := s.transactions.CreateTransaction(domain.Transaction{ID: created.id, WalletID: "wallet-1", UserID: "owner", Type: domain.TransactionOut, Status: domain.TransactionConfirmed, CreatedAt: created.at}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first, err := s.ListForWallet("owner", "wallet-1", PageInput{Limit: 2})
+	if err != nil || len(first.Items) != 2 || first.Items[0].ID != "d" || first.Items[1].ID != "c" || first.Next == "" {
+		t.Fatalf("first page = %#v, %v", first, err)
+	}
+	second, err := s.ListForWallet("owner", "wallet-1", PageInput{Limit: 2, Cursor: first.Next})
+	if err != nil || len(second.Items) != 2 || second.Items[0].ID != "b" || second.Items[1].ID != "a" || second.Next != "" {
+		t.Fatalf("second page = %#v, %v", second, err)
+	}
+	rejections := []struct {
+		name   string
+		userID string
+		page   PageInput
+		code   string
+	}{
+		{"another user's wallet", "stranger", PageInput{}, "wallet_not_found"},
+		{"page too large", "owner", PageInput{Limit: maxPageSize + 1}, "invalid_request"},
+		{"malformed cursor", "owner", PageInput{Cursor: "%%%"}, "invalid_request"},
+	}
+	for _, tc := range rejections {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := s.ListForWallet(tc.userID, "wallet-1", tc.page)
+			assertCode(t, err, tc.code)
+		})
+	}
 }

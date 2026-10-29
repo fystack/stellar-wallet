@@ -33,6 +33,10 @@ export function useSendForm(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preselectId])
 
+  useEffect(() => {
+    if (wallets.length > 0 && !wallets.some((wallet) => wallet.id === from)) setFrom(wallets[0].id)
+  }, [wallets, from])
+
   const { assets } = useBalances(from)
   useEffect(() => {
     if (assets) setAssetId(assets[0] ? assetKey(assets[0]) : 'XLM')
@@ -46,7 +50,13 @@ export function useSendForm(
     'Could not resolve address',
   )
   const resolved = lookup.data
-  const recipient = { resolved, error: lookup.error, resolving: lookup.loading }
+  // Partial G…/M… addresses and federation names are still being typed; anything else can't become valid.
+  const malformed = recipientQuery !== '' && !looksResolvable(recipientQuery) && !/^[GM]|\*/.test(recipientQuery)
+  const recipient = {
+    resolved,
+    error: malformed ? 'Enter a valid Stellar address (G… or M…) or a federation address (name*domain.com).' : lookup.error,
+    resolving: lookup.loading,
+  }
   useEffect(() => {
     if (resolved?.memo && !memoTouched) setMemo(resolved.memo)
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -44,6 +44,7 @@ export default function AmountField({
             (overBalance ? 'text-danger' : '')
           }
           type="number"
+          aria-label="Amount"
           min="0"
           step="any"
           placeholder="0"

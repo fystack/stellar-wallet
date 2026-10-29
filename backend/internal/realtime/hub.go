@@ -41,6 +41,17 @@ func (h *Hub) Unsubscribe(userID string, channel chan string) {
 	close(channel)
 }
 
+// ConnectedUserIDs lists users with at least one open event stream.
+func (h *Hub) ConnectedUserIDs() []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	userIDs := make([]string, 0, len(h.subscribers))
+	for userID := range h.subscribers {
+		userIDs = append(userIDs, userID)
+	}
+	return userIDs
+}
+
 func (h *Hub) Publish(userID, kind string, payload any) {
 	envelope, err := json.Marshal(map[string]any{"type": kind, "data": payload})
 	if err != nil {

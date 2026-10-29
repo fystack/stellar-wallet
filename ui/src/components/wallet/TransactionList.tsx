@@ -7,16 +7,27 @@ const PAGE_SIZE = 8
 
 export default function TransactionList({
   transactions,
+  hasMore,
+  loadingMore,
+  onLoadMore,
   refreshing,
   onRefresh,
   onOpen,
 }: {
   transactions: Transaction[]
+  hasMore: boolean
+  loadingMore: boolean
+  onLoadMore: () => Promise<void>
   refreshing: boolean
   onRefresh: () => void
   onOpen: (id: string) => void
 }) {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+
+  async function showMore() {
+    if (visibleCount >= transactions.length && hasMore) await onLoadMore()
+    setVisibleCount((count) => count + PAGE_SIZE)
+  }
 
   return (
     <section className="surface">
@@ -26,8 +37,7 @@ export default function TransactionList({
           type="button"
           onClick={onRefresh}
           disabled={refreshing}
-          title="Refresh transactions"
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-ink-soft hover:bg-card disabled:opacity-60"
+          className="btn btn-sm text-ink-soft hover:bg-card"
         >
           {refreshing ? <SpinnerIcon size={14} /> : <RefreshIcon size={14} />}
           {refreshing ? 'Refreshing…' : 'Refresh'}
@@ -44,10 +54,11 @@ export default function TransactionList({
               onOpen={() => onOpen(transaction.id)}
             />
           ))}
-          {transactions.length > PAGE_SIZE && (
+          {(transactions.length > PAGE_SIZE || hasMore) && (
             <div className="flex items-center justify-between gap-3 pt-4 text-sm">
               <span className="text-muted">
-                Showing {Math.min(visibleCount, transactions.length)} of {transactions.length}
+                Showing {Math.min(visibleCount, transactions.length)}
+                {hasMore ? '' : ` of ${transactions.length}`}
               </span>
               <div className="flex gap-2">
                 {visibleCount > PAGE_SIZE && (
@@ -59,15 +70,14 @@ export default function TransactionList({
                     Show less
                   </button>
                 )}
-                {visibleCount < transactions.length && (
+                {(visibleCount < transactions.length || hasMore) && (
                   <button
                     type="button"
-                    onClick={() =>
-                      setVisibleCount((count) => Math.min(count + PAGE_SIZE, transactions.length))
-                    }
+                    onClick={() => void showMore()}
+                    disabled={loadingMore}
                     className="border border-line px-3 py-1.5 font-semibold text-brand transition-colors hover:bg-brand-soft"
                   >
-                    Show more
+                    {loadingMore ? 'Loading…' : 'Show more'}
                   </button>
                 )}
               </div>

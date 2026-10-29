@@ -7,7 +7,7 @@ import { MailIcon } from '../icons.tsx'
 function StatusDot({ on, label }: { on: boolean; label: string }) {
   return (
     <span className={'flex shrink-0 items-center gap-1.5 text-[13px] font-semibold ' + (on ? 'text-success' : 'text-muted')}>
-      <span className={'h-2 w-2 rounded-full ' + (on ? 'bg-green-600' : 'bg-[#cbd3de]')} />
+      <span aria-hidden className={'dot ' + (on ? 'bg-success' : 'bg-line-strong')} />
       {label}
     </span>
   )
@@ -96,7 +96,7 @@ export default function LinkedAccounts() {
                 <StatusDot on label="Connected" />
               ) : provider.enabled ? (
                 <button
-                  className="shrink-0 border border-line bg-white px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-50"
+                  className="btn btn-secondary btn-sm shrink-0"
                   disabled={busy}
                   onClick={() => void link(provider.id)}
                 >
@@ -110,9 +110,9 @@ export default function LinkedAccounts() {
         })}
       </div>
 
-      {error && <div role="alert" className="mt-4 bg-[#fdecec] px-3 py-2 text-sm text-[#d33a3a]">{error}</div>}
+      {error && <div role="alert" className="mt-4 bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
       {!account && error && (
-        <button className="mt-3 text-sm font-semibold text-brand hover:underline" onClick={() => void load()}>Try again</button>
+        <button className="btn btn-link mt-3 text-sm" onClick={() => void load()}>Try again</button>
       )}
 
       {reauthProvider && account?.has_password && (
@@ -121,7 +121,7 @@ export default function LinkedAccounts() {
             <span className="text-sm font-semibold text-ink-soft">Confirm your password to continue</span>
             <div className="flex flex-col gap-2 sm:flex-row">
               <input className="field-input min-w-0 flex-1" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-              <button className="bg-brand px-4 py-2.5 font-semibold text-white transition-colors hover:bg-brand-deep disabled:cursor-not-allowed disabled:opacity-50" type="submit" disabled={busy || !password}>
+              <button className="btn btn-primary" type="submit" disabled={busy || !password}>
                 Confirm and connect
               </button>
             </div>

@@ -59,3 +59,43 @@ var (
 	SyncFailed                = define(Upstream, "sync_failed", "Unable to check for incoming payments. Please try again later.")
 	BalanceUnavailable        = define(Upstream, "balance_unavailable", "Unable to load balances. Please try again later.")
 )
+
+// Workspace, membership and invite failures.
+var (
+	WorkspaceNotFound      = define(NotFound, "workspace_not_found", "Workspace not found.")
+	WorkspaceOwnerRequired = define(Forbidden, "workspace_owner_required", "Only workspace owners can do this.")
+	OwnerOnlySigning       = define(Forbidden, "workspace_owner_required", "Only workspace owners can swap or add assets.")
+	SendRoleRequired       = define(Forbidden, "send_role_required", "Only workspace owners and operators can send payments.")
+	InvalidMemberRole      = define(Invalid, "invalid_role", "Role must be owner, operator or member.")
+	InvalidWorkspaceName   = define(Invalid, "invalid_request", "Workspace name is required (up to 60 characters).")
+	PersonalWorkspace      = define(Invalid, "personal_workspace", "Create a team workspace to invite teammates.")
+	InvalidInviteEmail     = define(Invalid, "invalid_request", "Enter a valid email address.")
+	AlreadyWorkspaceMember = define(Conflict, "already_member", "This person is already a member of the workspace.")
+	InviteNotFound         = define(NotFound, "invite_not_found", "This invite link is invalid.")
+	InviteUnavailable      = define(Conflict, "invite_unavailable", "This invite has expired, was revoked or was already used.")
+	InviteEmailMismatch    = define(Forbidden, "invite_email_mismatch", "This invite was sent to a different email. Sign in with that email to accept it.")
+	MemberNotFound         = define(NotFound, "member_not_found", "Member not found.")
+	LastWorkspaceOwner     = define(Conflict, "last_owner", "A workspace needs at least one owner.")
+)
+
+// Approval policy failures.
+var (
+	PersonalWorkspacePolicy   = define(Invalid, "personal_workspace", "Approval policies are only available in team workspaces.")
+	InvalidApprovalThreshold  = define(Invalid, "approval_policy_invalid", "Threshold must be a positive XLM amount with at most 7 decimals.")
+	InvalidBelowThreshold     = define(Invalid, "approval_policy_invalid", "Choose whether payments below the threshold send immediately or need approval.")
+	InvalidRequiredApprovals  = define(Invalid, "approval_policy_invalid", "Required approvals must be at least 1 and at most the number of other owners and operators.")
+	ApprovalPolicyNeedsMember = define(Conflict, "approval_policy_conflict", "This would leave too few owners and operators to approve payments. Lower the required approvals in Payment approvals first.")
+)
+
+// Payment request and approval failures.
+var (
+	PaymentRequestNotFound        = define(NotFound, "payment_request_not_found", "Payment request not found.")
+	PaymentRequestClosed          = define(Conflict, "payment_request_closed", "This payment request was already decided, cancelled or has expired.")
+	PaymentRequestCancelForbidden = define(Forbidden, "payment_request_cancel_forbidden", "Only the person who started this payment or a workspace owner can cancel it.")
+	InvalidPaymentRequestFilter   = define(Invalid, "invalid_request", "Status must be pending or history.")
+	InvalidPage                   = define(Invalid, "invalid_request", "Page size must be 1 to 100, with a cursor from a previous page.")
+	ApprovalRoleRequired          = define(Forbidden, "approval_role_required", "Only workspace owners and operators can approve payments.")
+	ApprovalSelfNotAllowed        = define(Forbidden, "approval_self_not_allowed", "You can't approve or reject a payment you started.")
+	ApprovalAlreadyVoted          = define(Conflict, "approval_already_voted", "You already responded to this payment request.")
+	ApprovalQuorumUnavailable     = define(Conflict, "approval_quorum_unavailable", "This payment needs more approvers than the workspace has. Add an operator or lower the required approvals.")
+)

@@ -10,41 +10,64 @@ import (
 )
 
 func TestRouterPreservesPublicRouteContract(t *testing.T) {
-	router := NewRouter(Dependencies{Auth: testAuthManager(t)}, "http://localhost:5173")
+	router := NewRouter(Dependencies{AuthRateLimit: 30, Auth: testAuthManager(t)}, "http://localhost:5173")
 
 	want := map[string]bool{
-		"GET /api/v1/auth/providers":           true,
-		"GET /api/v1/auth/:provider/start":     true,
-		"GET /api/v1/auth/:provider/callback":  true,
-		"POST /api/v1/auth/logout":             true,
-		"GET /api/v1/auth/me":                  true,
-		"POST /api/v1/auth/reauthenticate":     true,
-		"POST /api/v1/auth/:provider/link":     true,
-		"GET /health":                          true,
-		"GET /api/v1/cluster":                  true,
-		"POST /api/v1/auth/register":           true,
-		"POST /api/v1/auth/login":              true,
-		"GET /api/v1/events":                   true,
-		"GET /api/v1/prices":                   true,
-		"GET /api/v1/wallets":                  true,
-		"POST /api/v1/wallets":                 true,
-		"GET /api/v1/wallets/:id":              true,
-		"DELETE /api/v1/wallets/:id":           true,
-		"GET /api/v1/wallets/:id/balance":      true,
-		"POST /api/v1/wallets/:id/fund":        true,
-		"POST /api/v1/wallets/:id/trustline":   true,
-		"GET /api/v1/wallets/:id/sync":         true,
-		"GET /api/v1/chains":                   true,
-		"GET /api/v1/config":                   true,
-		"POST /api/v1/assets":                  true,
-		"DELETE /api/v1/assets":                true,
-		"GET /api/v1/wallets/:id/transactions": true,
-		"POST /api/v1/transactions":            true,
-		"GET /api/v1/transactions/:id":         true,
-		"GET /api/v1/tx/:hash/chain":           true,
-		"GET /api/v1/resolve":                  true,
-		"GET /api/v1/wallets/:id/swap/quote":   true,
-		"POST /api/v1/wallets/:id/swap":        true,
+		"GET /api/v1/auth/providers":                      true,
+		"GET /api/v1/auth/:provider/start":                true,
+		"GET /api/v1/auth/:provider/callback":             true,
+		"POST /api/v1/auth/logout":                        true,
+		"GET /api/v1/auth/me":                             true,
+		"POST /api/v1/auth/reauthenticate":                true,
+		"POST /api/v1/auth/logout-all":                    true,
+		"POST /api/v1/auth/:provider/link":                true,
+		"GET /health":                                     true,
+		"GET /api/v1/cluster":                             true,
+		"POST /api/v1/auth/register":                      true,
+		"POST /api/v1/auth/login":                         true,
+		"GET /api/v1/events":                              true,
+		"GET /api/v1/prices":                              true,
+		"GET /api/v1/wallets":                             true,
+		"POST /api/v1/wallets":                            true,
+		"GET /api/v1/wallets/:id":                         true,
+		"DELETE /api/v1/wallets/:id":                      true,
+		"GET /api/v1/wallets/:id/balance":                 true,
+		"POST /api/v1/wallets/:id/fund":                   true,
+		"POST /api/v1/wallets/:id/trustline":              true,
+		"GET /api/v1/wallets/:id/sync":                    true,
+		"GET /api/v1/chains":                              true,
+		"GET /api/v1/config":                              true,
+		"GET /api/v1/workspaces/:id/assets":               true,
+		"POST /api/v1/workspaces/:id/assets":              true,
+		"DELETE /api/v1/workspaces/:id/assets":            true,
+		"GET /api/v1/wallets/:id/transactions":            true,
+		"POST /api/v1/transactions":                       true,
+		"GET /api/v1/transactions/:id":                    true,
+		"GET /api/v1/tx/:hash/chain":                      true,
+		"GET /api/v1/resolve":                             true,
+		"GET /api/v1/wallets/:id/swap/quote":              true,
+		"POST /api/v1/wallets/:id/swap":                   true,
+		"GET /api/v1/workspaces":                          true,
+		"POST /api/v1/workspaces":                         true,
+		"POST /api/v1/workspaces/:id/switch":              true,
+		"GET /api/v1/workspaces/:id/members":              true,
+		"PATCH /api/v1/workspaces/:id/members/:userId":    true,
+		"DELETE /api/v1/workspaces/:id/members/:userId":   true,
+		"GET /api/v1/workspaces/:id/approval-policy":      true,
+		"PUT /api/v1/workspaces/:id/approval-policy":      true,
+		"DELETE /api/v1/workspaces/:id/approval-policy":   true,
+		"POST /api/v1/workspaces/:id/invites":             true,
+		"DELETE /api/v1/workspaces/:id/invites/:inviteId": true,
+		"GET /api/v1/invites/:token":                      true,
+		"POST /api/v1/invites/:token/accept":              true,
+		"GET /api/v1/invitations":                         true,
+		"GET /api/v1/workspaces/:id/payment-requests":     true,
+		"GET /api/v1/payment-requests/:id":                true,
+		"POST /api/v1/payment-requests/:id/approve":       true,
+		"POST /api/v1/payment-requests/:id/reject":        true,
+		"POST /api/v1/payment-requests/:id/cancel":        true,
+		"POST /api/v1/invitations/:id/accept":             true,
+		"POST /api/v1/invitations/:id/decline":            true,
 	}
 
 	got := map[string]bool{}
@@ -62,7 +85,7 @@ func TestRouterPreservesPublicRouteContract(t *testing.T) {
 }
 
 func TestHealthAndCORSContract(t *testing.T) {
-	router := NewRouter(Dependencies{Auth: testAuthManager(t)}, "http://localhost:5173")
+	router := NewRouter(Dependencies{AuthRateLimit: 30, Auth: testAuthManager(t)}, "http://localhost:5173")
 	request := httptest.NewRequest(http.MethodGet, "/health", nil)
 	response := httptest.NewRecorder()
 
@@ -80,10 +103,16 @@ func TestHealthAndCORSContract(t *testing.T) {
 	if preflight.Code != http.StatusNoContent || preflight.Body.Len() != 0 {
 		t.Fatalf("preflight = %d %s", preflight.Code, preflight.Body)
 	}
+	methods := preflight.Header().Get("Access-Control-Allow-Methods")
+	for _, method := range []string{"GET", "POST", "PUT", "PATCH", "DELETE"} {
+		if !strings.Contains(methods, method) {
+			t.Fatalf("preflight allows %q, missing %s", methods, method)
+		}
+	}
 }
 
 func TestRouterFormatsUnknownRoutesMethodsAndPanics(t *testing.T) {
-	r := NewRouter(Dependencies{Auth: testAuthManager(t)}, "http://localhost")
+	r := NewRouter(Dependencies{AuthRateLimit: 30, Auth: testAuthManager(t)}, "http://localhost")
 	r.GET("/panic", func(c *gin.Context) { panic("private panic details") })
 	for _, tt := range []struct {
 		method, path string

@@ -20,7 +20,12 @@ type AuthRepository struct{ db *sql.DB }
 func NewAuthRepository(db *sql.DB) *AuthRepository { return &AuthRepository{db: db} }
 
 func (s *AuthRepository) CreateUser(user domain.User) error {
-	_, err := s.db.Exec(
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("create user: %w", err)
+	}
+	defer tx.Rollback()
+	_, err = tx.Exec(
 		`INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)`,
 		user.ID, user.Email, user.PasswordHash, user.CreatedAt,
 	)
@@ -29,6 +34,12 @@ func (s *AuthRepository) CreateUser(user domain.User) error {
 		if errors.As(err, &sqliteErr) && sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE {
 			return fmt.Errorf("create user: %w: %w", storecontract.ErrConflict, err)
 		}
+		return fmt.Errorf("create user: %w", err)
+	}
+	if err := insertPersonalWorkspace(tx, user.ID, user.CreatedAt); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("create user: %w", err)
 	}
 	return nil
@@ -81,8 +92,7 @@ func (s *AuthRepository) Account(userID string) (domain.Account, error) {
 	return account, rows.Err()
 }
 
-// SocialUser resolves an identity, or links it atomically to an authenticated user.
-// A matching email alone never authorizes account linking.
+// SocialUser never links an account by matching email alone.
 func (s *AuthRepository) SocialUser(identity domain.Identity, linkUserID string) (domain.User, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -108,8 +118,12 @@ func (s *AuthRepository) SocialUser(identity domain.Identity, linkUserID string)
 				return domain.User{}, storecontract.ErrConflict
 			}
 			userID = uuid.NewString()
-			if _, err := tx.Exec(`INSERT INTO users(id,email,password_hash,created_at) VALUES(?,?,?,?)`, userID, identity.Email, "", time.Now().UTC().Format(time.RFC3339)); err != nil {
+			createdAt := time.Now().UTC().Format(time.RFC3339)
+			if _, err := tx.Exec(`INSERT INTO users(id,email,password_hash,created_at) VALUES(?,?,?,?)`, userID, identity.Email, "", createdAt); err != nil {
 				return domain.User{}, fmt.Errorf("create social user: %w", err)
+			}
+			if err := insertPersonalWorkspace(tx, userID, createdAt); err != nil {
+				return domain.User{}, err
 			}
 		}
 		var exists int
@@ -137,7 +151,7 @@ func (s *AuthRepository) CreateSession(session domain.Session) error {
 	if _, err := s.db.Exec(`DELETE FROM auth_sessions WHERE expires_at<=?`, time.Now().Unix()); err != nil {
 		return fmt.Errorf("clean expired sessions: %w", err)
 	}
-	_, err := s.db.Exec(`INSERT INTO auth_sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)`, session.Hash, session.UserID, session.CreatedAt, session.ExpiresAt)
+	_, err := s.db.Exec(`INSERT INTO auth_sessions(token_hash,user_id,workspace_id,created_at,expires_at) VALUES(?,?,?,?,?)`, session.Hash, session.UserID, session.WorkspaceID, session.CreatedAt, session.ExpiresAt)
 	if err != nil {
 		return fmt.Errorf("create session: %w", err)
 	}
@@ -145,7 +159,7 @@ func (s *AuthRepository) CreateSession(session domain.Session) error {
 }
 func (s *AuthRepository) Session(hash string) (domain.Session, error) {
 	var session domain.Session
-	err := s.db.QueryRow(`SELECT token_hash,user_id,created_at,expires_at FROM auth_sessions WHERE token_hash=? AND expires_at>?`, hash, time.Now().Unix()).Scan(&session.Hash, &session.UserID, &session.CreatedAt, &session.ExpiresAt)
+	err := s.db.QueryRow(`SELECT token_hash,user_id,workspace_id,created_at,expires_at FROM auth_sessions WHERE token_hash=? AND expires_at>?`, hash, time.Now().Unix()).Scan(&session.Hash, &session.UserID, &session.WorkspaceID, &session.CreatedAt, &session.ExpiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return session, storecontract.ErrNotFound
 	}
@@ -154,10 +168,22 @@ func (s *AuthRepository) Session(hash string) (domain.Session, error) {
 	}
 	return session, nil
 }
+func (s *AuthRepository) SetSessionWorkspace(hash, workspaceID string) error {
+	if _, err := s.db.Exec(`UPDATE auth_sessions SET workspace_id=? WHERE token_hash=?`, workspaceID, hash); err != nil {
+		return fmt.Errorf("set session workspace: %w", err)
+	}
+	return nil
+}
 func (s *AuthRepository) RevokeSession(hash string) error {
 	_, err := s.db.Exec(`DELETE FROM auth_sessions WHERE token_hash=?`, hash)
 	if err != nil {
 		return fmt.Errorf("revoke session: %w", err)
+	}
+	return nil
+}
+func (s *AuthRepository) RevokeUserSessions(userID string) error {
+	if _, err := s.db.Exec(`DELETE FROM auth_sessions WHERE user_id=?`, userID); err != nil {
+		return fmt.Errorf("revoke user sessions: %w", err)
 	}
 	return nil
 }

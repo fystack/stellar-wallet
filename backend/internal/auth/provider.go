@@ -77,8 +77,7 @@ func (p *provider) Identity(ctx context.Context, code, verifier, nonce string) (
 		return domain.Identity{}, fmt.Errorf("exchange %s authorization code: %w", p.name, err)
 	}
 	if p.name == "google" {
-		// Validate ID tokens as documented by Google and go-oidc; nonce binds this login.
-		// https://developers.google.com/identity/openid-connect/openid-connect#validatinganidtoken
+		// The nonce binds the ID token to this login.
 		raw, ok := token.Extra("id_token").(string)
 		if !ok {
 			return domain.Identity{}, fmt.Errorf("Google response missing ID token")

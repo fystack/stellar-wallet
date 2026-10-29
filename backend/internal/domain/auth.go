@@ -15,10 +15,11 @@ type Account struct {
 }
 
 type Session struct {
-	Hash      string
-	UserID    string
-	CreatedAt int64
-	ExpiresAt int64
+	Hash        string
+	UserID      string
+	WorkspaceID string
+	CreatedAt   int64
+	ExpiresAt   int64
 }
 
 type OAuthFlow struct {

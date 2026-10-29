@@ -62,9 +62,8 @@ func TestSocialLoginAndExplicitLinkKeepExistingWallet(t *testing.T) {
 	if err != nil || result.User.ID != user.ID || !result.Linked {
 		t.Fatalf("link result = %#v %v", result, err)
 	}
-	list, err := wallets.ListWallets(result.User.ID)
-	if err != nil || len(list) != 1 || list[0].ID != "wallet" {
-		t.Fatalf("wallet ownership changed: %#v %v", list, err)
+	if wallet, ok := wallets.WalletByID("wallet"); !ok || wallet.UserID != user.ID {
+		t.Fatalf("wallet ownership changed: %#v %v", wallet, ok)
 	}
 	if _, err := s.CompleteOAuth(context.Background(), "google", u.Query().Get("state"), start.BrowserToken, "code", token, false); err == nil {
 		t.Fatal("callback replay accepted")
@@ -128,5 +127,90 @@ func TestRegisterRejectsPasswordOverBcryptByteLimit(t *testing.T) {
 	var failure *apperror.Error
 	if !errors.As(err, &failure) || failure.Code != "invalid_request" {
 		t.Fatalf("expected validation error, got %v", err)
+	}
+}
+
+func TestLogoutEverywhereEndsOnlyThatUsersSessions(t *testing.T) {
+	db, err := sqlite.Open(t.TempDir() + "/auth.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	repo := sqlite.NewAuthRepository(db)
+	s := NewAuthService(repo, nil)
+	owner, firstToken, err := s.Register("owner@example.com", "password123", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, secondToken, err := s.Login("owner@example.com", "password123", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, otherToken, err := s.Register("other@example.com", "password123", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LogoutEverywhere(owner.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, token := range []string{firstToken, secondToken} {
+		if _, err := repo.Session(auth.HashToken(token)); !errors.Is(err, repository.ErrNotFound) {
+			t.Fatalf("owner session still active: %v", err)
+		}
+	}
+	if _, err := repo.Session(auth.HashToken(otherToken)); err != nil {
+		t.Fatalf("another user's session was ended: %v", err)
+	}
+}
+
+func TestNewSessionKeepsActiveWorkspaceOnlyForSameUser(t *testing.T) {
+	db, err := sqlite.Open(t.TempDir() + "/auth.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	repo := sqlite.NewAuthRepository(db)
+	s := NewAuthService(repo, nil)
+	owner, _, err := s.Register("owner@example.com", "password123", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.Register("other@example.com", "password123", ""); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name          string
+		signIn        func(oldToken string) (string, error)
+		wantWorkspace string
+	}{
+		{"reauthenticate keeps workspace", func(oldToken string) (string, error) {
+			return s.Reauthenticate(owner.ID, "password123", oldToken)
+		}, "team"},
+		{"login as another user starts fresh", func(oldToken string) (string, error) {
+			_, token, err := s.Login("other@example.com", "password123", oldToken)
+			return token, err
+		}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, oldToken, err := s.Login("owner@example.com", "password123", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := repo.SetSessionWorkspace(auth.HashToken(oldToken), "team"); err != nil {
+				t.Fatal(err)
+			}
+			token, err := tc.signIn(oldToken)
+			if err != nil {
+				t.Fatal(err)
+			}
+			session, err := repo.Session(auth.HashToken(token))
+			if err != nil || session.WorkspaceID != tc.wantWorkspace {
+				t.Fatalf("session = %#v, %v", session, err)
+			}
+			if _, err := repo.Session(auth.HashToken(oldToken)); !errors.Is(err, repository.ErrNotFound) {
+				t.Fatalf("old session still active: %v", err)
+			}
+		})
 	}
 }

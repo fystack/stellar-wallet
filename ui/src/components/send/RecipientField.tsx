@@ -35,7 +35,7 @@ export default function RecipientField({
         <button
           type="button"
           onClick={onScan}
-          className="absolute right-2 text-xs font-semibold text-brand hover:underline"
+          className="btn btn-link absolute right-2 text-xs"
         >
           Scan QR
         </button>

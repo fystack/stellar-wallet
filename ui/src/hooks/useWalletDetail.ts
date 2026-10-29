@@ -16,6 +16,8 @@ export function useWalletDetail(wallet: Wallet, liveTxns: Record<string, Transac
   const [registry, setRegistry] = useState<CustomAsset[]>([])
   const [history, setHistory] = useState<Transaction[]>([])
   const [historyLoaded, setHistoryLoaded] = useState(false)
+  const [historyNext, setHistoryNext] = useState<string | null>(null)
+  const [loadingMoreHistory, setLoadingMoreHistory] = useState(false)
 
   useEffect(() => {
     api.prices().then(setPrices).catch(() => {})
@@ -24,20 +26,37 @@ export function useWalletDetail(wallet: Wallet, liveTxns: Record<string, Transac
   useEffect(() => {
     if (wallet.chain !== 'stellar') return
     api
-      .getConfig()
-      .then((config) => setRegistry(config.assets))
+      .listAssets(wallet.workspaceId)
+      .then((result) => setRegistry(result.assets))
       .catch(() => {})
-  }, [wallet.chain])
+  }, [wallet.chain, wallet.workspaceId])
 
   const reloadHistory = useCallback(
     () =>
       api
         .walletTxns(wallet.id)
-        .then(setHistory)
+        .then((page) => {
+          setHistory(page.items)
+          setHistoryNext(page.nextCursor)
+        })
         .catch(() => {})
         .finally(() => setHistoryLoaded(true)),
     [wallet.id],
   )
+
+  async function loadMoreHistory() {
+    if (!historyNext || loadingMoreHistory) return
+    setLoadingMoreHistory(true)
+    try {
+      const page = await api.walletTxns(wallet.id, historyNext)
+      setHistory((current) => [...current, ...page.items])
+      setHistoryNext(page.nextCursor)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not load older transactions')
+    } finally {
+      setLoadingMoreHistory(false)
+    }
+  }
   useEffect(() => {
     void reloadHistory()
   }, [reloadHistory])
@@ -106,6 +125,9 @@ export function useWalletDetail(wallet: Wallet, liveTxns: Record<string, Transac
     registry,
     assets: balances.assets,
     transactions,
+    hasMoreHistory: !!historyNext,
+    loadingMoreHistory,
+    loadMoreHistory,
     pendingTrustlines: trustline.pending,
     addTrustline: trustline.add,
     refreshing,

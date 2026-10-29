@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
-import Modal from './Modal.tsx'
+import Modal from '../Modal.tsx'
 import TxStatusBadge from './TxStatusBadge.tsx'
 import TxTimeline from './TxTimeline.tsx'
-import CopyAddress from './CopyAddress.tsx'
-import { TokenLogo } from '../logos.tsx'
-import { api, explorerTx } from '../api.ts'
-import { formatAmount, formatUsd } from '../lib/format.ts'
-import { friendlyTxError } from '../lib/txError.ts'
-import { BASE_FEE_XLM, TRUSTLINE_MEMO } from '../lib/stellar.ts'
-import type { Transaction } from '../types.ts'
+import CopyAddress from '../CopyAddress.tsx'
+import { TokenLogo } from '../../logos.tsx'
+import { api, explorerTx } from '../../api.ts'
+import { formatAmount, formatUsd } from '../../lib/format.ts'
+import { friendlyTxError } from '../../lib/txError.ts'
+import { BASE_FEE_XLM, TRUSTLINE_MEMO } from '../../lib/stellar.ts'
+import type { Transaction } from '../../types.ts'
 
 const NETWORK: Record<string, string> = {
   stellar: 'Stellar · testnet',
@@ -178,7 +178,7 @@ export default function TxDetailModal({
         (() => {
           const friendly = friendlyTxError(tx.error)
           return (
-            <div className="mb-6 border border-danger-line bg-[#fff5f5] px-3.5 py-3">
+            <div className="mb-6 border border-danger-line bg-danger-soft px-3.5 py-3">
               <div className="mb-1 text-sm font-semibold text-danger">
                 Transaction failed
               </div>
@@ -216,7 +216,7 @@ export default function TxDetailModal({
               href={explorerTx(chain, tx.txHash)}
               target="_blank"
               rel="noreferrer"
-              className="shrink-0 text-xs font-semibold text-brand hover:underline"
+              className="btn btn-link shrink-0 text-xs"
             >
               Explorer ↗
             </a>

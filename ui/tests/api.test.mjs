@@ -82,3 +82,13 @@ test('logout accepts an empty 204 response', async (t) => {
   respond(t, null, 204)
   assert.equal(await api.logout(), undefined)
 })
+
+test('returns either the sent transaction or the held payment request', async (t) => {
+  respond(t, JSON.stringify({ data: { transaction: { id: 'tx-1', status: 'signing' } } }), 201)
+  assert.deepEqual(await api.createTxn('wallet-1', 'G…', '5', ''), { transaction: { id: 'tx-1', status: 'signing' } })
+  t.mock.restoreAll()
+  respond(t, JSON.stringify({ data: { request: { id: 'request-1', status: 'pending', requiredApprovals: 1 } } }), 202)
+  assert.deepEqual(await api.createTxn('wallet-1', 'G…', '50', ''), {
+    request: { id: 'request-1', status: 'pending', requiredApprovals: 1 },
+  })
+})
