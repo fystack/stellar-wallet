@@ -1,11 +1,14 @@
 package app
 
 import (
+	"time"
+
 	"stellar-wallet-backend/internal/auth"
 	"stellar-wallet-backend/internal/chain"
 	"stellar-wallet-backend/internal/cluster"
 	"stellar-wallet-backend/internal/handler"
 	"stellar-wallet-backend/internal/mpc"
+	"stellar-wallet-backend/internal/price"
 	"stellar-wallet-backend/internal/realtime"
 	"stellar-wallet-backend/internal/repository"
 	"stellar-wallet-backend/internal/repository/sqlite"
@@ -27,6 +30,7 @@ type Dependencies struct {
 	OAuthProviders  map[string]auth.OAuthProvider
 	Auth            *auth.Manager
 	Chain           *chain.Client
+	Prices          *price.Feed
 	Cluster         *cluster.Client
 	Hub             *realtime.Hub
 }
@@ -43,13 +47,16 @@ type Server struct {
 	approvals    *service.PaymentRequestService
 	wallets      *service.WalletService
 	settings     *service.SettingsService
+	workspaces   *service.WorkspaceService
+	prices       *price.Feed
 }
 
 func NewServer(d Dependencies) *Server {
 	transactions := service.NewTransactionService(d.Store, d.Transactions, d.Chain, d.Cluster, d.Hub)
 	wallets := service.NewWalletService(d.Store, d.Transactions, d.Workspaces, d.Chain, d.Cluster, d.Hub)
-	settings := service.NewSettingsService(d.Chain)
-	approvals := service.NewPaymentRequestService(d.Store, d.Workspaces, d.PaymentRequests, transactions, d.Hub, d.Mailer, d.FrontendURL)
+	settings := service.NewSettingsService(d.Chain, d.Prices)
+	approvals := service.NewPaymentRequestService(d.Store, d.Workspaces, d.PaymentRequests, transactions, d.Hub, d.Mailer, d.Prices, d.FrontendURL)
+	workspaces := service.NewWorkspaceService(d.Workspaces, d.AuthRepository, d.Mailer, d.FrontendURL)
 	transactions.SetApprovals(approvals)
 	routes := handler.Dependencies{
 		Auth:                  d.Auth,
@@ -59,7 +66,7 @@ func NewServer(d Dependencies) *Server {
 		SwapService:           service.NewSwapService(d.Store, d.Chain, transactions),
 		TrustlineService:      service.NewTrustlineService(d.Store, d.Transactions, d.Chain, transactions),
 		SettingsService:       settings,
-		WorkspaceService:      service.NewWorkspaceService(d.Workspaces, d.AuthRepository, d.Mailer, d.FrontendURL),
+		WorkspaceService:      workspaces,
 		PaymentRequestService: approvals,
 		Cluster:               d.Cluster,
 		Hub:                   d.Hub,
@@ -67,7 +74,7 @@ func NewServer(d Dependencies) *Server {
 		PublicURL:             d.PublicURL,
 		AuthRateLimit:         d.AuthRateLimit,
 	}
-	return &Server{routes: routes, transactions: transactions, approvals: approvals, wallets: wallets, settings: settings}
+	return &Server{routes: routes, transactions: transactions, approvals: approvals, wallets: wallets, settings: settings, workspaces: workspaces, prices: d.Prices}
 }
 
 func (s *Server) Router(corsOrigin string) *gin.Engine {
@@ -91,5 +98,13 @@ func (s *Server) Start() {
 	s.wallets.StartBalanceRefresher()
 	s.transactions.ReconcilePending()
 	s.approvals.ReconcileExecuting()
+	go s.convertLegacyThresholds()
 	s.wallets.ReconcilePending()
+}
+
+// convertLegacyThresholds retries until every XLM-denominated policy is in USD; those policies hold all payments meanwhile.
+func (s *Server) convertLegacyThresholds() {
+	for s.workspaces.ConvertLegacyThresholds(s.prices) != 0 {
+		time.Sleep(time.Minute)
+	}
 }

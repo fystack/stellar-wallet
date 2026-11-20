@@ -2,18 +2,22 @@ package domain
 
 // PaymentRequest stores payment inputs, not an envelope: envelopes expire 300 seconds after they are built.
 type PaymentRequest struct {
-	ID                string               `json:"id"`
-	WorkspaceID       string               `json:"workspaceId"`
-	WalletID          string               `json:"walletId"`
-	WalletName        string               `json:"walletName"`
-	InitiatorID       string               `json:"initiatorId"`
-	InitiatorEmail    string               `json:"initiatorEmail"`
-	Destination       string               `json:"destination"`
-	Amount            string               `json:"amount"`
-	AssetCode         string               `json:"assetCode,omitempty"`
-	AssetIssuer       string               `json:"assetIssuer,omitempty"`
-	Symbol            string               `json:"symbol"`
-	Memo              string               `json:"memo,omitempty"`
+	ID             string `json:"id"`
+	WorkspaceID    string `json:"workspaceId"`
+	WalletID       string `json:"walletId"`
+	WalletName     string `json:"walletName"`
+	InitiatorID    string `json:"initiatorId"`
+	InitiatorEmail string `json:"initiatorEmail"`
+	Destination    string `json:"destination"`
+	Amount         string `json:"amount"`
+	AssetCode      string `json:"assetCode,omitempty"`
+	AssetIssuer    string `json:"assetIssuer,omitempty"`
+	Symbol         string `json:"symbol"`
+	Memo           string `json:"memo,omitempty"`
+	// USD valuation used for the approval decision; empty when the asset had no fresh price.
+	USDValue          string               `json:"usdValue,omitempty"`
+	USDPrice          string               `json:"usdPrice,omitempty"`
+	PricedAt          string               `json:"pricedAt,omitempty"`
 	MemoType          string               `json:"memoType,omitempty"`
 	RequiredApprovals int                  `json:"requiredApprovals"`
 	Status            PaymentRequestStatus `json:"status"`

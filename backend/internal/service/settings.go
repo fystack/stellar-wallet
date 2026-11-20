@@ -1,14 +1,23 @@
 package service
 
-import "stellar-wallet-backend/internal/chain"
+import (
+	"stellar-wallet-backend/internal/apperror"
+	"stellar-wallet-backend/internal/chain"
+)
+
+// DisplayPrices gives USD prices keyed by asset code, for showing balances.
+type DisplayPrices interface {
+	Prices() (map[string]float64, error)
+}
 
 // SettingsService exposes chain status. The Horizon URL comes from config.yaml only.
 type SettingsService struct {
-	chain *chain.Client
+	chain  *chain.Client
+	prices DisplayPrices
 }
 
-func NewSettingsService(chain *chain.Client) *SettingsService {
-	return &SettingsService{chain: chain}
+func NewSettingsService(chain *chain.Client, prices DisplayPrices) *SettingsService {
+	return &SettingsService{chain: chain, prices: prices}
 }
 
 type Settings struct {
@@ -34,6 +43,10 @@ func (s *SettingsService) Chains() []ChainStatus {
 	}
 }
 
-func (s *SettingsService) Prices() map[string]float64 {
-	return s.chain.Prices()
+func (s *SettingsService) Prices() (map[string]float64, error) {
+	prices, err := s.prices.Prices()
+	if err != nil {
+		return nil, apperror.PriceUnavailable.Wrap(err)
+	}
+	return prices, nil
 }

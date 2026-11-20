@@ -7,13 +7,21 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"stellar-wallet-backend/internal/chain"
 	"stellar-wallet-backend/internal/domain"
+	"stellar-wallet-backend/internal/price"
 	"stellar-wallet-backend/internal/realtime"
 	"stellar-wallet-backend/internal/repository/sqlite"
 	"stellar-wallet-backend/internal/service"
 )
+
+type xlmAtOneDollar struct{}
+
+func (xlmAtOneDollar) Quote(string, string) (price.Quote, error) {
+	return price.Quote{Symbol: "XLMUSDT", Price: "1", FetchedAt: time.Unix(1_700_000_000, 0)}, nil
+}
 
 func TestPaymentApprovalHTTPContract(t *testing.T) {
 	manager, accounts, repo, db := newAuthFixture(t)
@@ -24,7 +32,7 @@ func TestPaymentApprovalHTTPContract(t *testing.T) {
 	transactions := service.NewTransactionService(store, sqlite.NewTransactionRepository(db), &paymentChainStub{resolved: chain.Resolved{Address: "resolved-address"}}, &paymentClusterStub{online: 3}, hub)
 	signer := &paymentSignerStub{}
 	transactions.SetMPC(signer)
-	approvals := service.NewPaymentRequestService(store, workspaceRepo, sqlite.NewPaymentRequestRepository(db), transactions, hub, nil, "http://localhost")
+	approvals := service.NewPaymentRequestService(store, workspaceRepo, sqlite.NewPaymentRequestRepository(db), transactions, hub, nil, xlmAtOneDollar{}, "http://localhost")
 	transactions.SetApprovals(approvals)
 	router := NewRouter(Dependencies{AuthRateLimit: 30, Auth: manager, AuthService: accounts, WorkspaceService: workspaces, TransactionService: transactions, PaymentRequestService: approvals, Hub: hub}, "http://localhost")
 
@@ -64,7 +72,7 @@ func TestPaymentApprovalHTTPContract(t *testing.T) {
 	if status, body := request("POST", "/invites/"+token+"/accept", "", operator); status != http.StatusOK {
 		t.Fatalf("accept = %d %#v", status, body)
 	}
-	if status, body := request("PUT", "/workspaces/"+workspaceID+"/approval-policy", `{"thresholdXlm":"10","requiredApprovals":1,"belowThreshold":"send"}`, owner); status != http.StatusOK {
+	if status, body := request("PUT", "/workspaces/"+workspaceID+"/approval-policy", `{"thresholdUsd":"10","requiredApprovals":1,"belowThreshold":"send"}`, owner); status != http.StatusOK {
 		t.Fatalf("set policy = %d %#v", status, body)
 	}
 	if err := store.CreateWallet(domain.Wallet{ID: "team-wallet", UserID: "owner", WorkspaceID: workspaceID, Name: "Treasury", Chain: "stellar", Symbol: "XLM", Status: domain.WalletReady}); err != nil {
@@ -77,7 +85,8 @@ func TestPaymentApprovalHTTPContract(t *testing.T) {
 	}
 	held := data(body)["request"].(map[string]any)
 	requestID := held["id"].(string)
-	if held["status"] != "pending" || held["requiredApprovals"] != float64(1) || held["initiatorEmail"] != "operator@example.com" {
+	if held["status"] != "pending" || held["requiredApprovals"] != float64(1) || held["initiatorEmail"] != "operator@example.com" ||
+		held["usdValue"] != "20.00" || held["usdPrice"] != "1" || held["pricedAt"] != "2023-11-14T22:13:20Z" {
 		t.Fatalf("held request = %#v", held)
 	}
 

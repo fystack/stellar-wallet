@@ -24,7 +24,12 @@ func (h *SettingsHandler) getConfig(c *gin.Context) {
 }
 
 func (h *SettingsHandler) getPrices(c *gin.Context) {
-	httpapi.Success(c, http.StatusOK, h.settings.Prices())
+	prices, err := h.settings.Prices()
+	if err != nil {
+		httpapi.Error(c, err)
+		return
+	}
+	httpapi.Success(c, http.StatusOK, prices)
 }
 
 func (h *SettingsHandler) clusterStatus(c *gin.Context) {

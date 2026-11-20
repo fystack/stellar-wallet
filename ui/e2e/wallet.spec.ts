@@ -22,7 +22,7 @@ async function register(page: Page): Promise<string> {
   await page.getByLabel('Password', { exact: true }).fill('secret123')
   await page.getByLabel('Confirm password').fill('secret123')
   await page.getByRole('button', { name: 'Create account' }).click()
-  await expect(page.getByText('Your keys, split — never whole')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'No wallets yet' })).toBeVisible()
   return email
 }
 
@@ -171,5 +171,5 @@ test('logout then login again', async ({ page }) => {
   await page.getByLabel('Email').fill(email)
   await page.getByLabel('Password', { exact: true }).fill('secret123')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await expect(page.getByText('Your keys, split — never whole')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'No wallets yet' })).toBeVisible()
 })

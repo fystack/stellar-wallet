@@ -2,7 +2,7 @@ import { approvalCount, hasVoted, isInitiator } from '../lib/paymentRequest.ts'
 import { useEffect, useState } from 'react'
 import { api } from '../api.ts'
 import { CheckShieldIcon } from '../icons.tsx'
-import { formatAmount, shortAddress } from '../lib/format.ts'
+import { formatAmount, formatUsd, shortAddress } from '../lib/format.ts'
 import { TokenLogo } from '../logos.tsx'
 import { toast } from '../toast.tsx'
 import EmptyState from '../components/EmptyState.tsx'
@@ -64,6 +64,9 @@ function RequestList({
                   <span className="font-semibold">
                     {formatAmount(request.amount)} {request.symbol}
                   </span>
+                  {request.usdValue && (
+                    <span className="text-[13px] tabular-nums text-ink-soft">≈ {formatUsd(Number(request.usdValue))}</span>
+                  )}
                   <span className="whitespace-nowrap text-[13px] text-muted">
                     to <span className="font-mono">{shortAddress(request.destination)}</span>
                   </span>

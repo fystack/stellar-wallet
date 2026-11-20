@@ -109,7 +109,7 @@ func TestWorkspaceInviteHTTPContract(t *testing.T) {
 	if status != http.StatusOK || data(body)["policy"] != nil || data(body)["maxApprovals"] != float64(0) {
 		t.Fatalf("empty policy = %d %#v", status, body)
 	}
-	policy := `{"thresholdXlm":"10","requiredApprovals":1,"belowThreshold":"send"}`
+	policy := `{"thresholdUsd":"10","requiredApprovals":1,"belowThreshold":"send"}`
 	if status, body = request("PUT", policyPath, policy, owner); status != http.StatusBadRequest || errorCode(body) != "approval_policy_invalid" {
 		t.Fatalf("policy without approvers = %d %#v", status, body)
 	}
@@ -134,7 +134,7 @@ func TestWorkspaceInviteHTTPContract(t *testing.T) {
 		t.Fatalf("demote last owner = %d %#v", status, body)
 	}
 	status, body = request("PUT", policyPath, policy, owner)
-	if status != http.StatusOK || data(body)["policy"].(map[string]any)["thresholdXlm"] != "10" || data(body)["maxApprovals"] != float64(1) {
+	if status != http.StatusOK || data(body)["policy"].(map[string]any)["thresholdUsd"] != "10" || data(body)["maxApprovals"] != float64(1) {
 		t.Fatalf("set policy = %d %#v", status, body)
 	}
 	if status, body = request("PUT", policyPath, policy, teammate); status != http.StatusForbidden || errorCode(body) != "workspace_owner_required" {

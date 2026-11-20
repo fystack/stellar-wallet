@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { api } from '../../api.ts'
 import { toast } from '../../toast.tsx'
+import { formatAmount, formatUsd } from '../../lib/format.ts'
+import { usePrices } from '../../hooks/usePrices.ts'
 import type { ApprovalPolicy, ApprovalPolicySettings } from '../../types.ts'
 
 function describe(policy: ApprovalPolicy) {
   const approvals = `${policy.requiredApprovals} approval${policy.requiredApprovals === 1 ? '' : 's'}`
+  if (!policy.thresholdUsd) return `Moving your threshold from XLM to USD. Until then, every payment needs ${approvals}.`
   if (policy.belowThreshold === 'approve') return `Every payment needs ${approvals} from another owner or operator.`
-  return `Payments over ${policy.thresholdXlm} XLM, and all non-XLM payments, need ${approvals} from another owner or operator. Smaller XLM payments send immediately.`
+  return `Payments worth more than ${formatUsd(Number(policy.thresholdUsd))} need ${approvals} from another owner or operator. Smaller payments send immediately.`
 }
 
 export default function ApprovalPolicyCard({
@@ -21,7 +24,9 @@ export default function ApprovalPolicyCard({
   onChange: (settings: ApprovalPolicySettings) => void
 }) {
   const { policy, maxApprovals } = settings
-  const [threshold, setThreshold] = useState(policy?.thresholdXlm ?? '100')
+  const [threshold, setThreshold] = useState(policy ? policy.thresholdUsd : '1000')
+  const { prices } = usePrices()
+  const thresholdInXlm = prices.XLM && Number(threshold) > 0 ? Number(threshold) / prices.XLM : null
   const [required, setRequired] = useState(Math.min(policy?.requiredApprovals ?? 1, Math.max(maxApprovals, 1)))
   const [belowThreshold, setBelowThreshold] = useState<ApprovalPolicy['belowThreshold']>(policy?.belowThreshold ?? 'send')
   const [busy, setBusy] = useState(false)
@@ -40,7 +45,7 @@ export default function ApprovalPolicyCard({
   function save(event: React.FormEvent) {
     event.preventDefault()
     void run(async () => {
-      onChange(await api.setApprovalPolicy(workspaceId, { thresholdXlm: threshold.trim(), requiredApprovals: required, belowThreshold }))
+      onChange(await api.setApprovalPolicy(workspaceId, { thresholdUsd: threshold.trim(), requiredApprovals: required, belowThreshold }))
       toast.success('Approval policy saved')
     })
   }
@@ -67,15 +72,25 @@ export default function ApprovalPolicyCard({
       {isOwner && maxApprovals > 0 && (
         <form onSubmit={save} className="flex flex-col gap-4">
           <div className="flex flex-col gap-4 sm:flex-row">
-            <label className="flex min-w-0 flex-1 flex-col gap-2">
-              <span className="text-sm font-semibold text-ink-soft">Threshold (XLM)</span>
-              <input
-                className="field-input"
-                inputMode="decimal"
-                value={threshold}
-                onChange={(event) => setThreshold(event.target.value)}
-              />
-            </label>
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <label htmlFor="approval-threshold" className="text-sm font-semibold text-ink-soft">Threshold (USD)</label>
+              <div className="relative">
+                <span aria-hidden className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[15px] text-muted">$</span>
+                <input
+                  id="approval-threshold"
+                  className="field-input pl-7 tabular-nums"
+                  inputMode="decimal"
+                  aria-describedby="approval-threshold-hint"
+                  value={threshold}
+                  onChange={(event) => setThreshold(event.target.value)}
+                />
+              </div>
+              <p id="approval-threshold-hint" className="text-xs text-muted">
+                {thresholdInXlm !== null
+                  ? `About ${formatAmount(String(thresholdInXlm))} XLM at ${formatUsd(prices.XLM)} per XLM.`
+                  : 'Valued with live Binance prices.'}
+              </p>
+            </div>
             <label className="flex min-w-0 flex-1 flex-col gap-2">
               <span className="text-sm font-semibold text-ink-soft">Approvals required</span>
               <select className="field-input" value={required} onChange={(event) => setRequired(Number(event.target.value))}>
@@ -86,7 +101,7 @@ export default function ApprovalPolicyCard({
             </label>
           </div>
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-2 text-sm font-semibold text-ink-soft">XLM payments at or below the threshold</legend>
+            <legend className="mb-2 text-sm font-semibold text-ink-soft">Payments at or below the threshold</legend>
             <label className="flex items-center gap-2 text-sm">
               <input type="radio" name="below-threshold" checked={belowThreshold === 'send'} onChange={() => setBelowThreshold('send')} />
               Send immediately
@@ -96,6 +111,9 @@ export default function ApprovalPolicyCard({
               Require approval too
             </label>
           </fieldset>
+          <p className="notice notice-info">
+            Assets without a live price, and any payment made while prices are unavailable, always need approval.
+          </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <button type="submit" className="btn btn-primary" disabled={busy || !threshold.trim()}>
               {busy ? 'Saving…' : policy ? 'Save policy' : 'Turn on approvals'}

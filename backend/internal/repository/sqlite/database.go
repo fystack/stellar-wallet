@@ -95,6 +95,7 @@ func Open(path string) (*sql.DB, error) {
 	CREATE TABLE IF NOT EXISTS workspace_approval_policies (
 		workspace_id       TEXT PRIMARY KEY REFERENCES workspaces(id),
 		threshold_xlm      TEXT NOT NULL,
+		threshold_usd      TEXT NOT NULL DEFAULT '',
 		required_approvals INTEGER NOT NULL,
 		below_threshold    TEXT NOT NULL,
 		updated_by         TEXT NOT NULL,
@@ -112,6 +113,9 @@ func Open(path string) (*sql.DB, error) {
 		symbol             TEXT NOT NULL,
 		memo               TEXT NOT NULL DEFAULT '',
 		memo_type          TEXT NOT NULL DEFAULT '',
+		usd_value          TEXT NOT NULL DEFAULT '',
+		usd_price          TEXT NOT NULL DEFAULT '',
+		priced_at          TEXT NOT NULL DEFAULT '',
 		required_approvals INTEGER NOT NULL,
 		status             TEXT NOT NULL,
 		transaction_id     TEXT NOT NULL DEFAULT '',
@@ -171,6 +175,10 @@ func Open(path string) (*sql.DB, error) {
 		`ALTER TABLE wallets ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE auth_sessions ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE workspace_invites ADD COLUMN role TEXT NOT NULL DEFAULT 'member'`,
+		`ALTER TABLE workspace_approval_policies ADD COLUMN threshold_usd TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE payment_requests ADD COLUMN usd_value TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE payment_requests ADD COLUMN usd_price TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE payment_requests ADD COLUMN priced_at TEXT NOT NULL DEFAULT ''`,
 	} {
 		_, _ = db.Exec(migration)
 	}

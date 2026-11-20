@@ -19,11 +19,11 @@ func NewPaymentRequestRepository(db *sql.DB) *PaymentRequestRepository {
 func (s *PaymentRequestRepository) CreatePaymentRequest(request domain.PaymentRequest) error {
 	_, err := s.db.Exec(
 		`INSERT INTO payment_requests (id, workspace_id, wallet_id, initiator_id, destination, amount, asset_code, asset_issuer,
-		 symbol, memo, memo_type, required_approvals, status, created_at, expires_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 symbol, memo, memo_type, usd_value, usd_price, priced_at, required_approvals, status, created_at, expires_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		request.ID, request.WorkspaceID, request.WalletID, request.InitiatorID, request.Destination, request.Amount,
-		request.AssetCode, request.AssetIssuer, request.Symbol, request.Memo, request.MemoType, request.RequiredApprovals,
-		request.Status, request.CreatedAt, request.ExpiresAt,
+		request.AssetCode, request.AssetIssuer, request.Symbol, request.Memo, request.MemoType, request.USDValue,
+		request.USDPrice, request.PricedAt, request.RequiredApprovals, request.Status, request.CreatedAt, request.ExpiresAt,
 	)
 	if err != nil {
 		return fmt.Errorf("create payment request: %w", err)
@@ -34,7 +34,8 @@ func (s *PaymentRequestRepository) CreatePaymentRequest(request domain.PaymentRe
 const paymentRequestColumns = `payment_requests.id, payment_requests.workspace_id, payment_requests.wallet_id, COALESCE(wallets.name, ''),
 	payment_requests.initiator_id, COALESCE(users.email, ''), payment_requests.destination, payment_requests.amount,
 	payment_requests.asset_code, payment_requests.asset_issuer, payment_requests.symbol, payment_requests.memo,
-	payment_requests.memo_type, payment_requests.required_approvals, payment_requests.status, payment_requests.transaction_id,
+	payment_requests.memo_type, payment_requests.usd_value, payment_requests.usd_price, payment_requests.priced_at,
+	payment_requests.required_approvals, payment_requests.status, payment_requests.transaction_id,
 	COALESCE(transactions.status, ''), COALESCE(transactions.tx_hash, ''), payment_requests.reason, payment_requests.created_at,
 	payment_requests.expires_at, payment_requests.decided_at`
 
@@ -47,7 +48,7 @@ func scanPaymentRequest(scanner interface{ Scan(...any) error }) (domain.Payment
 	var request domain.PaymentRequest
 	err := scanner.Scan(&request.ID, &request.WorkspaceID, &request.WalletID, &request.WalletName, &request.InitiatorID,
 		&request.InitiatorEmail, &request.Destination, &request.Amount, &request.AssetCode, &request.AssetIssuer, &request.Symbol,
-		&request.Memo, &request.MemoType, &request.RequiredApprovals, &request.Status, &request.TransactionID,
+		&request.Memo, &request.MemoType, &request.USDValue, &request.USDPrice, &request.PricedAt, &request.RequiredApprovals, &request.Status, &request.TransactionID,
 		&request.TransactionStatus, &request.TxHash, &request.Reason, &request.CreatedAt, &request.ExpiresAt, &request.DecidedAt)
 	return request, err
 }

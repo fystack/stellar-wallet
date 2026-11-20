@@ -2,15 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../api.ts'
 import { CopyIcon } from '../../icons.tsx'
 import { toast } from '../../toast.tsx'
-import { roleLabels, roles } from '../../lib/roles.ts'
+import { roleHints, roleLabels, roles } from '../../lib/roles.ts'
+import RoleSelect from '../ui/RoleSelect.tsx'
 import type { Workspace, WorkspaceInvite, WorkspaceMember, WorkspaceRole } from '../../types.ts'
 
-
-const roleHints: Record<WorkspaceRole, string> = {
-  owner: 'manages members, wallets and the approval policy',
-  operator: 'sends payments and approves others',
-  member: 'views wallets and history only',
-}
 
 function RoleBadge({ role }: { role: WorkspaceRole }) {
   return (
@@ -164,7 +159,7 @@ export default function WorkspaceMembers({
       <ul className="mb-[18px] text-sm text-muted">
         {roles.map((role) => (
           <li key={role}>
-            <span className="font-semibold text-ink-soft">{roleLabels[role]}</span>: {roleHints[role]}
+            <span className="font-semibold text-ink-soft">{roleLabels[role]}</span>: {roleHints[role].toLowerCase()}
           </li>
         ))}
       </ul>
@@ -185,12 +180,12 @@ export default function WorkspaceMembers({
               <div className="text-[13px] text-muted">Joined {new Date(member.joinedAt).toLocaleDateString()}</div>
             </div>
             {isOwner && member.email !== userEmail ? (
-              <select
-                aria-label={`Role for ${member.email}`}
+              <RoleSelect
+                compact
+                label={`Role for ${member.email}`}
                 disabled={busy}
                 value={member.role}
-                onChange={(event) => {
-                  const role = event.target.value as WorkspaceRole
+                onChange={(role) => {
                   void run(async () => {
                     await api.changeRole(workspaceId, member.userId, role)
                     toast.success(`${member.email} is now ${roleLabels[role].toLowerCase()}`)
@@ -198,12 +193,7 @@ export default function WorkspaceMembers({
                     onChange()
                   })
                 }}
-                className="field-input !w-auto shrink-0 !py-1.5 text-sm"
-              >
-                {roles.map((role) => (
-                  <option key={role} value={role}>{roleLabels[role]}</option>
-                ))}
-              </select>
+              />
             ) : (
               <RoleBadge role={member.role} />
             )}
@@ -270,16 +260,7 @@ export default function WorkspaceMembers({
               value={email}
               onChange={(event) => setEmail(event.target.value)}
             />
-            <select
-              aria-label="Role for the invited teammate"
-              value={inviteRole}
-              onChange={(event) => setInviteRole(event.target.value as WorkspaceRole)}
-              className="field-input sm:!w-auto"
-            >
-              {roles.map((role) => (
-                <option key={role} value={role}>{roleLabels[role]}</option>
-              ))}
-            </select>
+            <RoleSelect label="Role for the invited teammate" value={inviteRole} onChange={setInviteRole} />
             <button
               type="submit"
               disabled={busy || !/\S+@\S+\.\S+/.test(email)}

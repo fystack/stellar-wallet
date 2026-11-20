@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
 import { Horizon } from '@stellar/stellar-sdk'
-import { RECIPIENT, approvalTeam, clusterOnline, openRequest, openWorkspace, paymentRequest, requestPayment } from './helpers.ts'
+import { RECIPIENT, approvalTeam, clusterOnline, openRequest, openWorkspace, paymentRequest, requestPayment, setApprovalPolicy, usdForXlm } from './helpers.ts'
 import { HORIZON, fundAccount } from './fund.ts'
 
 // Real MPC signing and testnet broadcast; skipped when the cluster is offline.
@@ -16,6 +16,8 @@ test.beforeAll(async () => {
   test.setTimeout(300_000)
   if (!(await clusterOnline())) return
   team = await approvalTeam({ extraOperators: 1 })
+  // 11 XLM at today's price: 10 XLM sends immediately, 12.35 and 20 XLM are held.
+  await setApprovalPolicy(team.owner.api, team.workspaceId, await usdForXlm(team.owner.api, 11))
   const wallets: { id: string; address: string; status: string }[] = (await (await team.owner.api.get(`/api/v1/wallets?workspace_id=${team.workspaceId}`)).json()).data
   const wallet = wallets.find((entry) => entry.status === 'ready')!
   walletId = wallet.id

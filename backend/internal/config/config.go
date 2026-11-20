@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -32,6 +33,20 @@ type SMTPConfig struct {
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
 	From     string `yaml:"from"`
+}
+
+// PricedAsset maps one Stellar asset (code + issuer) to the Binance symbol that prices it in USD.
+// Matching on the code alone is unsafe: anyone can issue an asset named USDC.
+type PricedAsset struct {
+	Code   string `yaml:"code"`
+	Issuer string `yaml:"issuer"` // empty for native XLM
+	Symbol string `yaml:"symbol"`
+}
+
+type BinanceConfig struct {
+	Endpoint string        `yaml:"endpoint"`
+	MaxAge   time.Duration `yaml:"max_age"` // an older price counts as missing, so the payment needs approval
+	Assets   []PricedAsset `yaml:"assets"`
 }
 
 type LogConfig struct {
@@ -64,8 +79,9 @@ type Config struct {
 	// hitting a /health endpoint. The official fystacklabs/mpcium image ships
 	// no health server, so set this true there; the timeout watchdog still
 	// catches a node that dies mid-keygen/sign.
-	AssumePeersOnline bool   `yaml:"assume_peers_online"`
-	HorizonURL        string `yaml:"horizon_url"`
+	AssumePeersOnline bool          `yaml:"assume_peers_online"`
+	HorizonURL        string        `yaml:"horizon_url"`
+	Binance           BinanceConfig `yaml:"binance"`
 }
 
 func defaults() Config {
@@ -82,6 +98,14 @@ func defaults() Config {
 		InitiatorKey:   "../mpcium/event_initiator.key",
 		HealthBasePort: 8091,
 		HorizonURL:     "https://horizon-testnet.stellar.org",
+		Binance: BinanceConfig{
+			Endpoint: "https://api.binance.com/api/v3/ticker/price",
+			MaxAge:   time.Minute,
+			Assets: []PricedAsset{
+				{Code: "XLM", Symbol: "XLMUSDT"},
+				{Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Symbol: "USDCUSDT"},
+			},
+		},
 	}
 }
 
@@ -130,6 +154,9 @@ func (c Config) Validate() error {
 	if c.Log.Format != "console" && c.Log.Format != "json" {
 		return fmt.Errorf("log.format must be console or json")
 	}
+	if err := c.Binance.validate(); err != nil {
+		return err
+	}
 	if c.SMTP.Host != "" && (c.SMTP.Port == 0 || c.SMTP.From == "") {
 		return fmt.Errorf("smtp requires port and from when host is set")
 	}
@@ -137,6 +164,31 @@ func (c Config) Validate() error {
 		if _, err := mail.ParseAddress(c.SMTP.From); err != nil {
 			return fmt.Errorf("smtp.from must be an email address, optionally with a name: %w", err)
 		}
+	}
+	return nil
+}
+
+func (b BinanceConfig) validate() error {
+	u, err := url.Parse(b.Endpoint)
+	if err != nil || u.Scheme != "https" || u.Host == "" {
+		return fmt.Errorf("binance.endpoint must be an https URL")
+	}
+	if b.MaxAge <= 0 {
+		return fmt.Errorf("binance.max_age must be positive")
+	}
+	seen := map[string]bool{}
+	for _, asset := range b.Assets {
+		if asset.Code == "" || asset.Symbol == "" {
+			return fmt.Errorf("binance.assets entries need a code and a symbol")
+		}
+		if (asset.Code == "XLM") != (asset.Issuer == "") {
+			return fmt.Errorf("binance.assets: only XLM may omit the issuer (%s)", asset.Code)
+		}
+		key := asset.Code + ":" + asset.Issuer
+		if seen[key] {
+			return fmt.Errorf("binance.assets lists %s more than once", asset.Code)
+		}
+		seen[key] = true
 	}
 	return nil
 }

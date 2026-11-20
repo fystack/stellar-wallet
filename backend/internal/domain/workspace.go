@@ -67,7 +67,7 @@ const (
 // ApprovalPolicy also holds every non-XLM payment, since the threshold is in XLM.
 type ApprovalPolicy struct {
 	WorkspaceID       string             `json:"workspaceId"`
-	ThresholdXLM      string             `json:"thresholdXlm"`
+	ThresholdUSD      string             `json:"thresholdUsd"` // empty until a legacy XLM threshold is converted
 	RequiredApprovals int                `json:"requiredApprovals"`
 	BelowThreshold    BelowThresholdMode `json:"belowThreshold"`
 	UpdatedAt         string             `json:"updatedAt"`

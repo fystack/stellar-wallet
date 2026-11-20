@@ -22,6 +22,8 @@ import { fundKeypair } from './fund.ts'
 test.describe.configure({ mode: 'serial', timeout: 300_000 })
 
 const USDC = { asset_code: 'USDC', asset_issuer: 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5' }
+// Same code as Circle's USDC but another issuer, so it has no price mapping.
+const LOOKALIKE_USDC = { asset_code: 'USDC', asset_issuer: RECIPIENT }
 
 function heldWallet(team: Awaited<ReturnType<typeof approvalTeam>>) {
   const walletId = insertReadyWallet(team.workspaceId, team.owner.id, 'Held wallet', fundKeypair().publicKey())
@@ -58,7 +60,7 @@ test('the last owner cannot step down until ownership is handed over', async () 
   expect((await team.owner.api.patch(`${members}/${team.owner.id}`, { data: { role: 'member' } })).status()).toBe(204)
 
   const policy = await team.owner.api.put(`/api/v1/workspaces/${team.workspaceId}/approval-policy`, {
-    data: { thresholdXlm: '5', requiredApprovals: 1, belowThreshold: 'send' },
+    data: { thresholdUsd: '5', requiredApprovals: 1, belowThreshold: 'send' },
   })
   expect(await errorCode(policy)).toBe('workspace_owner_required')
 })
@@ -66,10 +68,10 @@ test('the last owner cannot step down until ownership is handed over', async () 
 test('invalid approval policies are rejected', async () => {
   const team = await approvalTeam()
   const put = (data: object) => team.owner.api.put(`/api/v1/workspaces/${team.workspaceId}/approval-policy`, { data })
-  const valid = { thresholdXlm: '10', requiredApprovals: 1, belowThreshold: 'send' }
+  const valid = { thresholdUsd: '10', requiredApprovals: 1, belowThreshold: 'send' }
 
-  for (const thresholdXlm of ['-1', '1.12345678', 'abc']) {
-    expect(await errorCode(await put({ ...valid, thresholdXlm })), thresholdXlm).toBe('approval_policy_invalid')
+  for (const thresholdUsd of ['-1', '1.123', 'abc', '$5', '0']) {
+    expect(await errorCode(await put({ ...valid, thresholdUsd })), thresholdUsd).toBe('approval_policy_invalid')
   }
   expect(await errorCode(await put({ ...valid, requiredApprovals: 0 }))).toBe('approval_policy_invalid')
   expect(await errorCode(await put({ ...valid, requiredApprovals: 2 }))).toBe('approval_policy_invalid')
@@ -82,7 +84,7 @@ test('personal workspaces have no approval policy', async ({ page }) => {
   const personal = await personalWorkspaceId(team.owner.api)
   expect((await (await team.owner.api.get(`/api/v1/workspaces/${personal}/approval-policy`)).json()).data.policy).toBeNull()
   const set = await team.owner.api.put(`/api/v1/workspaces/${personal}/approval-policy`, {
-    data: { thresholdXlm: '10', requiredApprovals: 1, belowThreshold: 'send' },
+    data: { thresholdUsd: '10', requiredApprovals: 1, belowThreshold: 'send' },
   })
   expect(await errorCode(set)).toBe('personal_workspace')
 
@@ -97,9 +99,9 @@ test('operators see the policy read-only and owners can turn it off', async ({ p
   await openWorkspace(page, team.operator.email, team.name)
   await page.getByRole('navigation').getByRole('button', { name: 'Settings' }).click()
   const policy = page.getByRole('region', { name: 'Payment approvals' })
-  await expect(policy.getByRole('status')).toContainText('Payments over 10 XLM')
+  await expect(policy.getByRole('status')).toContainText('Payments worth more than $1.00')
   await expect(policy.getByRole('button', { name: 'Save policy' })).toBeHidden()
-  await expect(policy.getByLabel('Threshold (XLM)')).toBeHidden()
+  await expect(policy.getByLabel('Threshold (USD)')).toBeHidden()
 
   await page.getByRole('button', { name: `Sign out ${team.operator.email}` }).click()
   await openWorkspace(page, team.owner.email, team.name)
@@ -115,12 +117,13 @@ test('the send form explains when a payment needs approval and holds it', async 
   await openWorkspace(page, team.operator.email, team.name)
   await openSend(page, walletId)
 
-  await page.getByLabel('Amount', { exact: true }).fill('10')
+  await page.getByLabel('Amount', { exact: true }).fill('0.1')
   await expect(page.getByText(/This payment needs 1 approval/)).toBeHidden()
   await expect(page.getByRole('button', { name: 'Review & sign' })).toBeVisible()
 
   await page.getByLabel('Amount', { exact: true }).fill('50')
-  await expect(page.getByText('This payment needs 1 approval from another owner or operator before it is signed.')).toBeVisible()
+  await expect(page.getByText(/^≈ \$\d/)).toBeVisible()
+  await expect(page.getByText('This payment needs 1 approval from another owner or operator before it is signed: it is worth more than $1.00.')).toBeVisible()
   await page.getByRole('button', { name: 'Review & request approval' }).click()
   await page.getByRole('button', { name: 'Confirm & sign' }).click()
 
@@ -133,15 +136,24 @@ test('small payments are held when the policy requires approval below the thresh
   const team = await approvalTeam()
   const walletId = heldWallet(team)
   const update = await team.owner.api.put(`/api/v1/workspaces/${team.workspaceId}/approval-policy`, {
-    data: { thresholdXlm: '10', requiredApprovals: 1, belowThreshold: 'approve' },
+    data: { thresholdUsd: '10', requiredApprovals: 1, belowThreshold: 'approve' },
   })
   expect(update.status()).toBe(200)
   await requestPayment(team.operator.api, walletId, RECIPIENT, '1')
 })
 
-test('non-XLM payments always need approval', async () => {
-  const team = await approvalTeam({ thresholdXlm: '1000000' })
-  await requestPayment(team.operator.api, heldWallet(team), RECIPIENT, '0.01', USDC)
+test('assets without a price mapping always need approval', async () => {
+  const team = await approvalTeam({ thresholdUsd: '1000000' })
+  const request = await requestPayment(team.operator.api, heldWallet(team), RECIPIENT, '0.01', LOOKALIKE_USDC)
+  expect(request.usdValue).toBeUndefined()
+})
+
+test('held payments record their USD value', async () => {
+  const team = await approvalTeam()
+  const request = await requestPayment(team.operator.api, heldWallet(team), RECIPIENT, '20')
+  expect(Number(request.usdValue)).toBeGreaterThan(1)
+  expect(Number(request.usdPrice)).toBeGreaterThan(0)
+  expect(request.pricedAt).toBeTruthy()
 })
 
 test('approvers see a new request live and the approval email links to it', async ({ page }) => {

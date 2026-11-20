@@ -8,6 +8,8 @@ import (
 	"stellar-wallet-backend/internal/domain"
 	"stellar-wallet-backend/internal/repository"
 	"stellar-wallet-backend/internal/repository/sqlite"
+
+	"go.uber.org/zap"
 )
 
 type ApprovalPolicySettings struct {
@@ -17,7 +19,7 @@ type ApprovalPolicySettings struct {
 }
 
 type ApprovalPolicyInput struct {
-	ThresholdXLM      string                    `json:"thresholdXlm"`
+	ThresholdUSD      string                    `json:"thresholdUsd"`
 	RequiredApprovals int                       `json:"requiredApprovals"`
 	BelowThreshold    domain.BelowThresholdMode `json:"belowThreshold"`
 }
@@ -33,9 +35,9 @@ func (s *WorkspaceService) SetApprovalPolicy(userID, workspaceID string, input A
 	if err := s.requireTeamOwner(userID, workspaceID); err != nil {
 		return ApprovalPolicySettings{}, err
 	}
-	threshold, err := parseAmount(input.ThresholdXLM)
+	threshold, err := parseUSD(input.ThresholdUSD)
 	if err != nil {
-		return ApprovalPolicySettings{}, apperror.InvalidApprovalThreshold.New()
+		return ApprovalPolicySettings{}, err
 	}
 	if input.BelowThreshold != domain.BelowThresholdSend && input.BelowThreshold != domain.BelowThresholdApprove {
 		return ApprovalPolicySettings{}, apperror.InvalidBelowThreshold.New()
@@ -49,7 +51,7 @@ func (s *WorkspaceService) SetApprovalPolicy(userID, workspaceID string, input A
 	}
 	policy := domain.ApprovalPolicy{
 		WorkspaceID:       workspaceID,
-		ThresholdXLM:      threshold,
+		ThresholdUSD:      threshold,
 		RequiredApprovals: input.RequiredApprovals,
 		BelowThreshold:    input.BelowThreshold,
 		UpdatedAt:         time.Now().UTC().Format(time.RFC3339),
@@ -58,6 +60,39 @@ func (s *WorkspaceService) SetApprovalPolicy(userID, workspaceID string, input A
 		return ApprovalPolicySettings{}, err
 	}
 	return ApprovalPolicySettings{Policy: &policy, MaxApprovals: maxApprovals}, nil
+}
+
+// ConvertLegacyThresholds moves policies saved in XLM to USD at the current XLM price and reports how many are left.
+// Until a policy is converted, needsApproval holds every payment in that workspace.
+func (s *WorkspaceService) ConvertLegacyThresholds(prices PriceSource) int {
+	legacy, err := s.workspaces.LegacyXLMThresholds()
+	if err != nil {
+		logError("list legacy approval thresholds", err)
+		return -1
+	}
+	if len(legacy) == 0 {
+		return 0
+	}
+	quote, err := prices.Quote("XLM", "")
+	if err != nil {
+		logError("price XLM to convert approval thresholds", err)
+		return len(legacy)
+	}
+	remaining := 0
+	for _, policy := range legacy {
+		thresholdUSD, err := convertXLMToUSD(policy.ThresholdXLM, quote.Price)
+		if err == nil {
+			err = s.workspaces.ConvertXLMThreshold(policy.WorkspaceID, policy.ThresholdXLM, thresholdUSD)
+		}
+		if err != nil {
+			logError("convert approval threshold workspace="+policy.WorkspaceID, err)
+			remaining++
+			continue
+		}
+		zap.L().Info("approval threshold moved to USD", zap.String("workspace", policy.WorkspaceID),
+			zap.String("xlm", policy.ThresholdXLM), zap.String("usd", thresholdUSD))
+	}
+	return remaining
 }
 
 func (s *WorkspaceService) DisableApprovalPolicy(userID, workspaceID string) error {
