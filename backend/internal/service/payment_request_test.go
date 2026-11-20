@@ -5,10 +5,12 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"stellar-wallet-backend/internal/chain"
 	"stellar-wallet-backend/internal/domain"
 	"stellar-wallet-backend/internal/mpc"
+	"stellar-wallet-backend/internal/price"
 	"stellar-wallet-backend/internal/realtime"
 	"stellar-wallet-backend/internal/repository/sqlite"
 )
@@ -20,6 +22,33 @@ type approvalFixture struct {
 	approvals *PaymentRequestService
 	chain     *paymentChainStub
 	signer    *paymentSignerStub
+	prices    *priceStub
+}
+
+const usdcIssuer = "GUSDCISSUER"
+
+// priceStub prices XLM and USDC at $1 so XLM amounts read as dollars; other assets have no source.
+type priceStub struct {
+	prices map[string]string
+	err    error
+}
+
+func newPriceStub() *priceStub {
+	return &priceStub{prices: map[string]string{"XLM:": "1", "USDC:" + usdcIssuer: "1"}}
+}
+
+func (p *priceStub) Quote(code, issuer string) (price.Quote, error) {
+	if p.err != nil {
+		return price.Quote{}, p.err
+	}
+	if code == "" {
+		code = "XLM"
+	}
+	value, ok := p.prices[code+":"+issuer]
+	if !ok {
+		return price.Quote{}, price.ErrNoSource
+	}
+	return price.Quote{Symbol: code + "USDT", Price: value, FetchedAt: time.Unix(1_700_000_000, 0)}, nil
 }
 
 // newApprovalFixture: owner and teammate (operator) can send; stranger joins as a read-only member.
@@ -47,13 +76,14 @@ func newApprovalFixture(t *testing.T, policy *ApprovalPolicyInput) *approvalFixt
 	signer := &paymentSignerStub{}
 	hub := realtime.NewHub()
 	payments := &TransactionService{wallets: f.store, transactions: sqlite.NewTransactionRepository(f.db), chain: stub, mpc: signer, cluster: paymentClusterStub(3), hub: hub, signs: signQueue{dispatchQueue: dispatchQueue{limit: maxInflightSigns}}}
-	approvals := NewPaymentRequestService(f.store, f.workspaces, sqlite.NewPaymentRequestRepository(f.db), payments, hub, f.mailer, "http://localhost:5173/")
+	prices := newPriceStub()
+	approvals := NewPaymentRequestService(f.store, f.workspaces, sqlite.NewPaymentRequestRepository(f.db), payments, hub, f.mailer, prices, "http://localhost:5173/")
 	payments.SetApprovals(approvals)
 	f.mailer.sent = nil
-	return &approvalFixture{workspaceFixture: f, team: team, payments: payments, approvals: approvals, chain: stub, signer: signer}
+	return &approvalFixture{workspaceFixture: f, team: team, payments: payments, approvals: approvals, chain: stub, signer: signer, prices: prices}
 }
 
-var oneApprovalAbove10 = &ApprovalPolicyInput{ThresholdXLM: "10", RequiredApprovals: 1, BelowThreshold: domain.BelowThresholdSend}
+var oneApprovalAbove10 = &ApprovalPolicyInput{ThresholdUSD: "10", RequiredApprovals: 1, BelowThreshold: domain.BelowThresholdSend}
 
 func (f *approvalFixture) pay(t *testing.T, userID string, input PaymentInput) PaymentResult {
 	t.Helper()
@@ -84,9 +114,12 @@ func TestApprovalPolicyRoutesPayments(t *testing.T) {
 		{"no policy sends immediately", nil, PaymentInput{Amount: "1000"}, false},
 		{"at threshold sends", oneApprovalAbove10, PaymentInput{Amount: "10"}, false},
 		{"one stroop above threshold is held", oneApprovalAbove10, PaymentInput{Amount: "10.0000001"}, true},
-		{"below threshold held when policy says so", &ApprovalPolicyInput{ThresholdXLM: "10", RequiredApprovals: 1, BelowThreshold: domain.BelowThresholdApprove}, PaymentInput{Amount: "1"}, true},
+		{"below threshold held when policy says so", &ApprovalPolicyInput{ThresholdUSD: "10", RequiredApprovals: 1, BelowThreshold: domain.BelowThresholdApprove}, PaymentInput{Amount: "1"}, true},
 		{"explicit XLM code is native", oneApprovalAbove10, PaymentInput{Amount: "1", AssetCode: "XLM"}, false},
-		{"non-XLM asset is always held", oneApprovalAbove10, PaymentInput{Amount: "0.01", AssetCode: "USDC", AssetIssuer: "GISSUER"}, true},
+		{"priced USDC below threshold sends", oneApprovalAbove10, PaymentInput{Amount: "9.99", AssetCode: "USDC", AssetIssuer: usdcIssuer}, false},
+		{"priced USDC above threshold is held", oneApprovalAbove10, PaymentInput{Amount: "10.01", AssetCode: "USDC", AssetIssuer: usdcIssuer}, true},
+		{"USDC from another issuer is always held", oneApprovalAbove10, PaymentInput{Amount: "0.01", AssetCode: "USDC", AssetIssuer: "GFAKEISSUER"}, true},
+		{"unpriced asset is always held", oneApprovalAbove10, PaymentInput{Amount: "0.01", AssetCode: "EURC", AssetIssuer: "GISSUER"}, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -105,6 +138,74 @@ func TestApprovalPolicyRoutesPayments(t *testing.T) {
 				t.Fatalf("result = %#v, sign calls = %d", result, f.signer.calls)
 			}
 		})
+	}
+}
+
+func TestHeldPaymentRecordsUSDValue(t *testing.T) {
+	f := newApprovalFixture(t, oneApprovalAbove10)
+	f.prices.prices["XLM:"] = "0.25"
+	request := f.held(t, "teammate", "40.5")
+	if request.USDValue != "10.13" || request.USDPrice != "0.25" || request.PricedAt != "2023-11-14T22:13:20Z" {
+		t.Fatalf("request = %#v", request)
+	}
+	stored, err := f.approvals.Get("owner", request.ID)
+	if err != nil || stored.USDValue != "10.13" {
+		t.Fatalf("stored = %#v, %v", stored, err)
+	}
+}
+
+func TestPaymentIsHeldWhenPriceIsUnavailable(t *testing.T) {
+	f := newApprovalFixture(t, oneApprovalAbove10)
+	f.prices.err = errors.New("binance: HTTP 451")
+	request := f.held(t, "teammate", "1")
+	if request.USDValue != "" || f.signer.calls != 0 {
+		t.Fatalf("request = %#v, sign calls = %d", request, f.signer.calls)
+	}
+}
+
+func TestPaymentWithoutPolicyIgnoresPrices(t *testing.T) {
+	f := newApprovalFixture(t, nil)
+	f.prices.err = errors.New("binance: HTTP 451")
+	if result := f.pay(t, "teammate", PaymentInput{Amount: "1000"}); result.Transaction == nil {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestLegacyXLMThresholdsMoveToUSD(t *testing.T) {
+	f := newApprovalFixture(t, oneApprovalAbove10)
+	if _, err := f.db.Exec(`UPDATE workspace_approval_policies SET threshold_xlm = '100', threshold_usd = ''`); err != nil {
+		t.Fatal(err)
+	}
+	f.held(t, "teammate", "1")
+
+	f.prices.err = errors.New("binance down")
+	if remaining := f.service.ConvertLegacyThresholds(f.prices); remaining != 1 {
+		t.Fatalf("remaining = %d", remaining)
+	}
+	f.prices.err = nil
+	f.prices.prices["XLM:"] = "0.25"
+	if remaining := f.service.ConvertLegacyThresholds(f.prices); remaining != 0 {
+		t.Fatalf("remaining = %d", remaining)
+	}
+	settings, err := f.service.ApprovalPolicy("owner", f.team.ID)
+	if err != nil || settings.Policy.ThresholdUSD != "25" {
+		t.Fatalf("policy = %#v, %v", settings.Policy, err)
+	}
+	if result := f.pay(t, "teammate", PaymentInput{Amount: "100"}); result.Transaction == nil {
+		t.Fatalf("100 XLM at $0.25 is $25, at the threshold: %#v", result)
+	}
+}
+
+func TestConvertXLMToUSD(t *testing.T) {
+	cases := []struct{ xlm, price, usd string }{
+		{"100", "0.25", "25"},
+		{"10.5", "0.123456", "1.3"},
+		{"0.0000001", "0.25", "0.01"},
+	}
+	for _, tc := range cases {
+		if usd, err := convertXLMToUSD(tc.xlm, tc.price); err != nil || usd != tc.usd {
+			t.Fatalf("convert(%s, %s) = %q, %v; want %q", tc.xlm, tc.price, usd, err, tc.usd)
+		}
 	}
 }
 
@@ -155,7 +256,7 @@ func TestPaymentWaitsForEveryRequiredApproval(t *testing.T) {
 	if err := f.service.ChangeRole("owner", f.team.ID, "stranger", domain.RoleOperator); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.service.SetApprovalPolicy("owner", f.team.ID, ApprovalPolicyInput{ThresholdXLM: "10", RequiredApprovals: 2, BelowThreshold: domain.BelowThresholdSend}); err != nil {
+	if _, err := f.service.SetApprovalPolicy("owner", f.team.ID, ApprovalPolicyInput{ThresholdUSD: "10", RequiredApprovals: 2, BelowThreshold: domain.BelowThresholdSend}); err != nil {
 		t.Fatal(err)
 	}
 	request := f.held(t, "teammate", "20")
@@ -505,7 +606,7 @@ func TestApprovalsCountOnlyCurrentSenders(t *testing.T) {
 	if err := f.service.ChangeRole("owner", f.team.ID, "stranger", domain.RoleOperator); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.service.SetApprovalPolicy("owner", f.team.ID, ApprovalPolicyInput{ThresholdXLM: "10", RequiredApprovals: 2, BelowThreshold: domain.BelowThresholdSend}); err != nil {
+	if _, err := f.service.SetApprovalPolicy("owner", f.team.ID, ApprovalPolicyInput{ThresholdUSD: "10", RequiredApprovals: 2, BelowThreshold: domain.BelowThresholdSend}); err != nil {
 		t.Fatal(err)
 	}
 	request := f.held(t, "teammate", "20")

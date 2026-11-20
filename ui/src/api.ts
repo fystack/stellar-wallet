@@ -134,7 +134,7 @@ export const api = {
     req<void>(`/api/v1/workspaces/${id}/members/${userId}`, { method: 'PATCH', json: { role } }),
   approvalPolicy: (id: string) =>
     req<ApprovalPolicySettings>(`/api/v1/workspaces/${id}/approval-policy`),
-  setApprovalPolicy: (id: string, policy: Pick<ApprovalPolicy, 'thresholdXlm' | 'requiredApprovals' | 'belowThreshold'>) =>
+  setApprovalPolicy: (id: string, policy: Pick<ApprovalPolicy, 'thresholdUsd' | 'requiredApprovals' | 'belowThreshold'>) =>
     req<ApprovalPolicySettings>(`/api/v1/workspaces/${id}/approval-policy`, { method: 'PUT', json: policy }),
   disableApprovalPolicy: (id: string) =>
     req<void>(`/api/v1/workspaces/${id}/approval-policy`, { method: 'DELETE' }),

@@ -1,6 +1,6 @@
 import AssetSelect from '../AssetSelect.tsx'
 import { TokenLogo } from '../../logos.tsx'
-import { formatAmount } from '../../lib/format.ts'
+import { formatAmount, formatUsd } from '../../lib/format.ts'
 import { assetKey } from '../../hooks/useBalances.ts'
 import type { AssetBalance } from '../../hooks/useBalances.ts'
 
@@ -12,6 +12,7 @@ export default function AmountField({
   onAssetChange,
   maxSend,
   overBalance,
+  usdValue,
 }: {
   amount: string
   onAmountChange: (amount: string) => void
@@ -20,6 +21,7 @@ export default function AmountField({
   onAssetChange: (assetId: string) => void
   maxSend: number
   overBalance: boolean
+  usdValue?: number | null
 }) {
   const selected = assets.find((a) => assetKey(a) === assetId)
   const asset = selected?.symbol ?? assetId
@@ -64,6 +66,9 @@ export default function AmountField({
           </div>
         )}
       </div>
+      {usdValue != null && (
+        <span className="text-sm font-medium tabular-nums text-ink-soft">≈ {formatUsd(usdValue)}</span>
+      )}
       {selected && (
         <span className={'text-xs ' + (overBalance ? 'text-danger' : 'text-muted')}>
           {overBalance

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { SendIcon, ShieldIcon } from '../icons.tsx'
-import { formatAmount, shortAddress } from '../lib/format.ts'
+import { formatAmount, formatUsd, shortAddress } from '../lib/format.ts'
 import { useSendForm } from '../hooks/useSendForm.ts'
 import EmptyState from '../components/EmptyState.tsx'
 import QrScanner from '../components/QrScanner.tsx'
@@ -9,12 +9,14 @@ import AmountField from '../components/send/AmountField.tsx'
 import MemoField from '../components/send/MemoField.tsx'
 import SendSummary from '../components/send/SendSummary.tsx'
 import ConfirmSendModal from '../components/send/ConfirmSendModal.tsx'
+import { usePrices, usdValue } from '../hooks/usePrices.ts'
 import type { ApprovalPolicy, SendInput, Wallet } from '../types.ts'
 
-function needsApproval(policy: ApprovalPolicy | null, amount: string, asset: string) {
+// A preview only: the backend decides with its own price, and holds payments it can't price.
+function needsApproval(policy: ApprovalPolicy | null, usd: number | null) {
   if (!policy) return false
-  if (asset !== 'XLM') return true
-  return policy.belowThreshold === 'approve' || Number(amount) > Number(policy.thresholdXlm)
+  if (!policy.thresholdUsd || usd === null || policy.belowThreshold === 'approve') return true
+  return usd > Number(policy.thresholdUsd)
 }
 
 export default function Send({
@@ -40,6 +42,7 @@ export default function Send({
   const wallets = allWallets.filter((w) => w.status === 'ready')
   const form = useSendForm(wallets, preselectId, onSubmit)
   const [showScanner, setShowScanner] = useState(false)
+  const { prices } = usePrices()
 
   if (readOnly) {
     return (
@@ -64,7 +67,8 @@ export default function Send({
   }
 
   const { resolved } = form.recipient
-  const held = needsApproval(approvalPolicy, form.amount, form.assetSymbol)
+  const usd = usdValue(prices, form.assetSymbol, form.amount)
+  const held = needsApproval(approvalPolicy, usd)
 
   return (
     <div className="mx-auto mt-2.5 max-w-[760px]">
@@ -109,6 +113,7 @@ export default function Send({
           onAssetChange={form.setAssetId}
           maxSend={form.maxSend}
           overBalance={form.overBalance}
+          usdValue={Number(form.amount) > 0 ? usd : null}
         />
 
         <MemoField
@@ -128,7 +133,12 @@ export default function Send({
         {held && approvalPolicy && (
           <div role="status" className="notice notice-warning">
             This payment needs {approvalPolicy.requiredApprovals} approval{approvalPolicy.requiredApprovals === 1 ? '' : 's'} from
-            another owner or operator before it is signed.
+            another owner or operator before it is signed
+            {usd === null
+              ? ` because ${form.assetSymbol} has no live USD price.`
+              : approvalPolicy.thresholdUsd && approvalPolicy.belowThreshold === 'send'
+                ? `: it is worth more than ${formatUsd(Number(approvalPolicy.thresholdUsd))}.`
+                : '.'}
           </div>
         )}
 

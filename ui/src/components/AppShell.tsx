@@ -282,7 +282,7 @@ export default function AppShell({
         }
       />
 
-      <main className="min-w-0 flex-1 overflow-y-auto px-4 pb-24 pt-5 sm:px-6 md:px-10 md:pb-16 md:pt-6">
+      <main className="min-w-0 flex-1 overflow-y-auto px-4 pb-24 pt-5 sm:px-6 md:px-10 md:pb-16 md:pt-8 xl:px-14">
         {notice && (
           <div role="alert" className="mb-5 border border-line bg-white p-4 text-sm">
             {notice}

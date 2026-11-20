@@ -57,6 +57,7 @@ var (
 	FundingFailed             = define(Upstream, "funding_failed", "Unable to fund the wallet. Please try again later.")
 	SyncFailed                = define(Upstream, "sync_failed", "Unable to check for incoming payments. Please try again later.")
 	BalanceUnavailable        = define(Upstream, "balance_unavailable", "Unable to load balances. Please try again later.")
+	PriceUnavailable          = define(Upstream, "price_unavailable", "Prices are unavailable right now. Please try again later.")
 )
 
 // Workspace, membership and invite failures.
@@ -80,7 +81,7 @@ var (
 // Approval policy failures.
 var (
 	PersonalWorkspacePolicy   = define(Invalid, "personal_workspace", "Approval policies are only available in team workspaces.")
-	InvalidApprovalThreshold  = define(Invalid, "approval_policy_invalid", "Threshold must be a positive XLM amount with at most 7 decimals.")
+	InvalidApprovalThreshold  = define(Invalid, "approval_policy_invalid", "Threshold must be a positive USD amount with at most 2 decimals.")
 	InvalidBelowThreshold     = define(Invalid, "approval_policy_invalid", "Choose whether payments below the threshold send immediately or need approval.")
 	InvalidRequiredApprovals  = define(Invalid, "approval_policy_invalid", "Required approvals must be at least 1 and at most the number of other owners and operators.")
 	ApprovalPolicyNeedsMember = define(Conflict, "approval_policy_conflict", "This would leave too few owners and operators to approve payments. Lower the required approvals in Payment approvals first.")

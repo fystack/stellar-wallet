@@ -9,12 +9,17 @@ body,
 }
 
 body {
-  @apply bg-page text-ink antialiased;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
-    Arial, sans-serif;
+  @apply bg-page font-sans text-ink antialiased;
+  font-feature-settings: 'cv11', 'ss01';
+  text-rendering: optimizeLegibility;
 }
 
 @layer base {
+  h1,
+  h2,
+  h3 {
+    @apply tracking-tight;
+  }
   select {
     @apply cursor-pointer appearance-none bg-no-repeat pr-9;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23627186' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
@@ -130,7 +135,7 @@ body {
 
   .field-input {
     @apply min-w-0 w-full border border-line bg-white px-3.5 py-2 text-[15px] text-ink outline-none
-      transition focus:border-brand focus:ring-2 focus:ring-brand;
+      transition hover:border-line-strong focus:border-brand focus:ring-4 focus:ring-brand/15;
   }
   select.field-input {
     @apply pr-9;
@@ -155,4 +160,21 @@ body {
 @keyframes tlGrow {
   from { height: 0; }
   to { height: 100%; }
+}
+
+@keyframes mpcFlow {
+  to { stroke-dashoffset: -1000; }
+}
+@keyframes mpcFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+@keyframes mpcPulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mpc-flow { animation: mpcFlow 7s linear infinite; }
+  .mpc-pulse { animation: mpcPulse 3.2s ease-in-out infinite; }
+  .mpc-float { animation: mpcFloat 4.2s ease-in-out infinite; }
 }

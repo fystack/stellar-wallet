@@ -49,7 +49,7 @@ export default function WalletDetail({
   const openTx = detail.transactions.find((t) => t.id === openTxId) ?? null
 
   return (
-    <div className="mx-auto max-w-[1040px]">
+    <div className="mx-auto max-w-[1200px]">
       <div className="mb-5 flex items-center justify-between">
         <button onClick={onBack} className="text-sm font-semibold text-ink-soft hover:text-ink">
           ← Back to wallets

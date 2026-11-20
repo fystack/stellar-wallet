@@ -23,18 +23,18 @@ type Feature = {
 const features: Feature[] = [
   {
     icon: <SplitIcon />,
-    title: 'Key split across 3 nodes',
-    body: 'Your private key is divided into shares. Each node holds one fragment — never the whole key.',
-  },
-  {
-    icon: <ShieldIcon />,
-    title: 'No single point of failure',
-    body: 'Compromising one node reveals nothing. An attacker needs 2 of 3 nodes to sign anything.',
+    title: 'Three key shares',
+    body: 'Keygen runs across the 3 nodes. Each node stores one share; none of them stores the full key.',
   },
   {
     icon: <CheckShieldIcon />,
-    title: '2-of-3 must cooperate',
-    body: 'Every transaction requires agreement from 2 nodes. One offline node never blocks your funds.',
+    title: 'Any 2 of 3 sign',
+    body: 'A transaction is signed when 2 nodes take part, so one node being offline does not block payments.',
+  },
+  {
+    icon: <ShieldIcon />,
+    title: 'One share cannot sign',
+    body: 'A single node, or anyone who gets its share, cannot sign a transaction on its own.',
   },
 ]
 
@@ -59,7 +59,7 @@ function WalletGrid({
   hidden: boolean
 }) {
   return (
-    <div className="grid gap-[18px] [grid-template-columns:repeat(auto-fill,minmax(240px,1fr))]">
+    <div className="grid gap-[18px] [grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr))]">
       {wallets.map((w) => (
         <button
           type="button"
@@ -68,13 +68,13 @@ function WalletGrid({
           className="flex flex-col border border-line bg-white p-5 text-left transition duration-200 enabled:hover:-translate-y-0.5 enabled:hover:border-brand disabled:cursor-default"
           key={w.id}
         >
-          <div className="mb-4 flex items-center justify-between">
-            <ChainLogo chain={w.chain} size={40} />
-            <span className="badge badge-brand uppercase">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+            <ChainLogo chain={w.chain} size={36} />
+            <span className="badge badge-brand text-[11px] uppercase tracking-wide">
               {w.chain} · 2-of-3
             </span>
           </div>
-          <div className="text-[17px] font-bold">{w.name}</div>
+          <div className="truncate text-base font-semibold">{w.name}</div>
           {w.status === 'generating' ? (
             <div className="mb-4 mt-1 flex items-center gap-2 text-sm text-brand">
               <span className="h-2 w-2 animate-pulse rounded-full bg-brand" />
@@ -83,17 +83,17 @@ function WalletGrid({
           ) : w.status === 'failed' ? (
             <div className="mb-4 mt-1 text-sm text-danger">Keygen failed</div>
           ) : (
-            <div className="mb-4 mt-1 font-mono text-[13px] text-muted">
+            <div className="mb-5 mt-1 font-mono text-xs text-muted">
               {shortAddress(w.address, 8, 8)}
             </div>
           )}
-          <div className="mt-auto flex items-center gap-2">
-            <TokenLogo symbol={w.symbol} size={22} />
-            <div className="truncate text-2xl font-extrabold leading-none">
-              {hidden ? '••••' : formatAmount(w.balance)}{' '}
-              <span className="text-[15px] font-semibold text-muted">
-                {w.symbol}
+          <div className="mt-auto flex min-w-0 items-center gap-2 border-t border-line pt-4">
+            <TokenLogo symbol={w.symbol} size={20} />
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 leading-tight">
+              <span className="break-all text-[22px] font-bold tabular-nums tracking-tight">
+                {hidden ? '••••' : formatAmount(w.balance)}
               </span>
+              <span className="text-sm font-medium text-muted">{w.symbol}</span>
             </div>
           </div>
         </button>
@@ -137,8 +137,8 @@ export default function Wallets({ loading, failed, onRetry, wallets, workspaceNa
   // With at least one wallet, skip the onboarding hero — just show the list.
   if (hasWallets) {
     return (
-      <section className="mx-auto max-w-[1040px]">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <section className="mx-auto max-w-[1360px]">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-2xl font-bold">Wallets</h2>
             {workspaceName && <p className="truncate text-sm text-muted">{workspaceName}</p>}
@@ -170,18 +170,18 @@ export default function Wallets({ loading, failed, onRetry, wallets, workspaceNa
 
   return (
     <>
-      <ClusterStatus />
+      <ClusterStatus className="mx-auto max-w-[940px]" />
 
-      <section className="mx-auto mt-6 max-w-[940px] text-center sm:mt-10">
+      <section className="mx-auto mt-8 max-w-[940px] text-center sm:mt-12">
         <div className="mx-auto mb-6 grid h-16 w-16 place-items-center bg-brand text-white sm:mb-8 sm:h-[78px] sm:w-[78px]">
           <ShieldIcon size={34} />
         </div>
-        <h1 className="mb-4 text-3xl font-extrabold tracking-tight sm:text-[40px]">
-          Your keys, split — never whole
+        <h1 className="mb-4 text-3xl font-bold tracking-tight sm:text-[36px]">
+          No wallets yet
         </h1>
-        <p className="mx-auto mb-8 max-w-[620px] text-base leading-relaxed text-muted sm:mb-11 sm:text-[19px]">
-          This wallet uses threshold cryptography. No server, no browser, no one
-          ever holds your complete private key.
+        <p className="mx-auto mb-8 max-w-[620px] text-base leading-relaxed text-muted sm:mb-11 sm:text-lg">
+          Each wallet's private key is created as three key shares, one on each MPC node.
+          The full key is never assembled on a server or in the browser.
         </p>
 
         <div className="grid grid-cols-1 gap-5 text-left md:grid-cols-3">
@@ -206,11 +206,6 @@ export default function Wallets({ loading, failed, onRetry, wallets, workspaceNa
           </p>
         )}
 
-        <p className="mt-6 text-sm leading-relaxed text-muted sm:mt-7 sm:text-[15px]">
-          Secured by{' '}
-          <strong className="text-ink-soft">2-of-3 threshold signatures</strong> ·
-          No seed phrase · No single server risk
-        </p>
       </section>
     </>
   )

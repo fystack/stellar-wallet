@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"stellar-wallet-backend/internal/domain"
@@ -32,10 +31,6 @@ type IncomingPayment struct {
 type Client struct {
 	httpClient *http.Client
 	horizonURL string
-
-	priceMu     sync.Mutex
-	priceCache  map[string]float64
-	priceExpiry time.Time
 }
 
 func NewClient(horizonURL string, httpClient *http.Client) *Client {

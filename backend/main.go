@@ -15,6 +15,7 @@ import (
 	"stellar-wallet-backend/internal/logger"
 	"stellar-wallet-backend/internal/mail"
 	"stellar-wallet-backend/internal/mpc"
+	"stellar-wallet-backend/internal/price"
 	"stellar-wallet-backend/internal/realtime"
 	"stellar-wallet-backend/internal/repository/sqlite"
 	"stellar-wallet-backend/internal/service"
@@ -47,6 +48,8 @@ func main() {
 
 	httpClient := &http.Client{Timeout: 20 * time.Second}
 	chainClient := chain.NewClient(cfg.HorizonURL, httpClient)
+	// Short timeout: payments wait on this call, and a slow feed should hold them for approval instead.
+	priceFeed := price.NewFeed(&http.Client{Timeout: 5 * time.Second}, cfg.Binance)
 	authRepo := sqlite.NewAuthRepository(db)
 	authManager := auth.New(authRepo, cfg.CookieSecure)
 	var mailer service.Mailer
@@ -74,6 +77,7 @@ func main() {
 		OAuthProviders:  auth.NewProviders(cfg.OAuth, cfg.PublicURL, httpClient),
 		Auth:            authManager,
 		Chain:           chainClient,
+		Prices:          priceFeed,
 		Cluster:         clusterClient,
 		Hub:             realtime.NewHub(),
 	})

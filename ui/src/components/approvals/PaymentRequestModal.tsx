@@ -4,7 +4,7 @@ import Modal from '../Modal.tsx'
 import RequestStatus from './RequestStatus.tsx'
 import StatusLabel from '../ui/StatusLabel.tsx'
 import { TokenLogo } from '../../logos.tsx'
-import { formatAmount, shortAddress } from '../../lib/format.ts'
+import { formatAmount, formatUsd, shortAddress } from '../../lib/format.ts'
 import { api, explorerTx } from '../../api.ts'
 import { toast } from '../../toast.tsx'
 import type { PaymentRequest } from '../../types.ts'
@@ -80,7 +80,9 @@ export default function PaymentRequestModal({
           <div className="text-2xl font-extrabold leading-tight">
             {formatAmount(request.amount)} <span className="text-base font-semibold text-muted">{request.symbol}</span>
           </div>
-          <div className="truncate text-xs text-muted">from {request.walletName}</div>
+          <div className="truncate text-xs text-muted">
+            {request.usdValue ? `≈ ${formatUsd(Number(request.usdValue))} · ` : ''}from {request.walletName}
+          </div>
         </div>
         <RequestStatus status={request.status} />
       </div>
@@ -90,6 +92,18 @@ export default function PaymentRequestModal({
           <span className="font-mono text-[13px]">{request.destination}</span>
         </Row>
         {request.memo && <Row label="Memo">{request.memo}</Row>}
+        <Row label="USD value">
+          {request.usdValue && request.usdPrice && request.pricedAt ? (
+            <>
+              <span className="block tabular-nums">{formatUsd(Number(request.usdValue))}</span>
+              <span className="block text-xs font-normal text-muted">
+                At {request.usdPrice} USD per {request.symbol} · Binance, {when(request.pricedAt)}
+              </span>
+            </>
+          ) : (
+            <span className="font-normal text-muted">No live price for {request.symbol} when this request was made.</span>
+          )}
+        </Row>
         <Row label="Started by">
           <span className="block truncate">
             {request.initiatorEmail}

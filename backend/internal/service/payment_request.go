@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 	"sync"
 	"time"
@@ -15,7 +16,6 @@ import (
 	"stellar-wallet-backend/internal/repository/sqlite"
 
 	"github.com/google/uuid"
-	"github.com/stellar/go/amount"
 )
 
 const (
@@ -31,27 +31,25 @@ type PaymentRequestService struct {
 	payments      *TransactionService
 	hub           *realtime.Hub
 	mailer        Mailer
+	prices        PriceSource
 	frontendURL   string
 	notifications sync.WaitGroup
 }
 
-func NewPaymentRequestService(wallets repository.Store, workspaces *sqlite.WorkspaceRepository, requests *sqlite.PaymentRequestRepository, payments *TransactionService, hub *realtime.Hub, mailer Mailer, frontendURL string) *PaymentRequestService {
-	return &PaymentRequestService{wallets: wallets, workspaces: workspaces, requests: requests, payments: payments, hub: hub, mailer: mailer, frontendURL: strings.TrimRight(frontendURL, "/")}
+func NewPaymentRequestService(wallets repository.Store, workspaces *sqlite.WorkspaceRepository, requests *sqlite.PaymentRequestRepository, payments *TransactionService, hub *realtime.Hub, mailer Mailer, prices PriceSource, frontendURL string) *PaymentRequestService {
+	return &PaymentRequestService{wallets: wallets, workspaces: workspaces, requests: requests, payments: payments, hub: hub, mailer: mailer, prices: prices, frontendURL: strings.TrimRight(frontendURL, "/")}
 }
 
-func needsApproval(policy domain.ApprovalPolicy, payment preparedPayment) (bool, error) {
-	if !payment.native() {
+// needsApproval fails closed: a payment with no fresh USD price, or a policy not yet in USD, is always held.
+func needsApproval(policy domain.ApprovalPolicy, worth valuation, priced bool) (bool, error) {
+	if !priced || policy.ThresholdUSD == "" {
 		return true, nil
 	}
-	paymentStroops, err := amount.ParseInt64(payment.Amount)
-	if err != nil {
-		return false, fmt.Errorf("parse payment amount: %w", err)
+	threshold, ok := new(big.Rat).SetString(policy.ThresholdUSD)
+	if !ok {
+		return false, fmt.Errorf("parse approval threshold %q", policy.ThresholdUSD)
 	}
-	thresholdStroops, err := amount.ParseInt64(policy.ThresholdXLM)
-	if err != nil {
-		return false, fmt.Errorf("parse approval threshold: %w", err)
-	}
-	if paymentStroops > thresholdStroops {
+	if worth.usd.Cmp(threshold) > 0 {
 		return true, nil
 	}
 	return policy.BelowThreshold == domain.BelowThresholdApprove, nil
@@ -66,7 +64,8 @@ func (s *PaymentRequestService) hold(wallet domain.Wallet, initiatorID string, p
 	if err != nil {
 		return nil, err
 	}
-	required, err := needsApproval(policy, payment)
+	worth, priced := value(s.prices, payment)
+	required, err := needsApproval(policy, worth, priced)
 	if err != nil || !required {
 		return nil, err
 	}
@@ -90,6 +89,9 @@ func (s *PaymentRequestService) hold(wallet domain.Wallet, initiatorID string, p
 		Symbol:            payment.Symbol,
 		Memo:              payment.Memo,
 		MemoType:          payment.MemoType,
+		USDValue:          worth.usdText,
+		USDPrice:          worth.price,
+		PricedAt:          worth.pricedAt,
 		RequiredApprovals: policy.RequiredApprovals,
 		Status:            domain.PaymentRequestPending,
 		CreatedAt:         now.UTC().Format(time.RFC3339),

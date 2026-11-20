@@ -35,6 +35,7 @@ internal/
   httpapi/       JSON envelopes and error-to-HTTP mapping
   auth/          OAuth providers and cookie sessions
   chain/         Stellar Horizon client and transaction builders
+  price/         Binance USD prices for approvals and balances
   mpc/ cluster/  mpcium adapter and node health
   realtime/      per-user SSE hub
   mail/          SMTP mailer and the HTML/plain-text email template
@@ -59,9 +60,13 @@ Coding rules for this layout are in [CLAUDE.md](CLAUDE.md).
 - **Signing.** Payments, swaps and trustlines build an envelope, then go through
   `TransactionService.dispatch`: persist, MPC sign, broadcast, with timeouts and
   restart recovery. Status moves `signing → broadcast → confirmed` (or `failed`).
-- **Approvals.** A team workspace can set a threshold in XLM, the approvals
-  needed, and whether smaller XLM payments also need approval; non-XLM payments
-  always do. A held payment is saved as a payment request with its inputs only,
+- **Approvals.** A team workspace sets a threshold in USD, the approvals
+  needed, and whether smaller payments also need approval. Payments are valued
+  with Binance prices (`binance` in config, matched on asset code and issuer);
+  an asset with no mapping or no fresh price always needs approval. The value,
+  price and price time are saved on the payment request. Policies saved in XLM
+  are converted to USD at the current price on startup, and hold every payment
+  until that succeeds. A held payment is saved as a payment request with its inputs only,
   since envelopes expire 300 s after they are built. The last approval claims the
   request in the same SQL transaction as the vote, so it is sent at most once.
   The request stays `executing` until its transaction confirms (`executed`) or fails (`failed`).

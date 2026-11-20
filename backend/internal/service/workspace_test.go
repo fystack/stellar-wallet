@@ -489,7 +489,7 @@ func TestChangeMemberRole(t *testing.T) {
 }
 
 func TestApprovalPolicy(t *testing.T) {
-	valid := ApprovalPolicyInput{ThresholdXLM: "100.50", RequiredApprovals: 1, BelowThreshold: domain.BelowThresholdSend}
+	valid := ApprovalPolicyInput{ThresholdUSD: "100.50", RequiredApprovals: 1, BelowThreshold: domain.BelowThresholdSend}
 	cases := []struct {
 		name      string
 		userID    string
@@ -499,13 +499,15 @@ func TestApprovalPolicy(t *testing.T) {
 		code      string
 	}{
 		{"owner sets policy", "owner", true, teamID, valid, ""},
-		{"below threshold needs approval", "owner", true, teamID, ApprovalPolicyInput{ThresholdXLM: "1", RequiredApprovals: 1, BelowThreshold: domain.BelowThresholdApprove}, ""},
+		{"below threshold needs approval", "owner", true, teamID, ApprovalPolicyInput{ThresholdUSD: "1", RequiredApprovals: 1, BelowThreshold: domain.BelowThresholdApprove}, ""},
 		{"no other sender to approve", "owner", false, teamID, valid, "approval_policy_invalid"},
-		{"too many approvals", "owner", true, teamID, ApprovalPolicyInput{ThresholdXLM: "1", RequiredApprovals: 2, BelowThreshold: domain.BelowThresholdSend}, "approval_policy_invalid"},
-		{"zero approvals", "owner", true, teamID, ApprovalPolicyInput{ThresholdXLM: "1", RequiredApprovals: 0, BelowThreshold: domain.BelowThresholdSend}, "approval_policy_invalid"},
-		{"zero threshold", "owner", true, teamID, ApprovalPolicyInput{ThresholdXLM: "0", RequiredApprovals: 1, BelowThreshold: domain.BelowThresholdSend}, "approval_policy_invalid"},
-		{"eight decimals", "owner", true, teamID, ApprovalPolicyInput{ThresholdXLM: "1.12345678", RequiredApprovals: 1, BelowThreshold: domain.BelowThresholdSend}, "approval_policy_invalid"},
-		{"unknown below threshold mode", "owner", true, teamID, ApprovalPolicyInput{ThresholdXLM: "1", RequiredApprovals: 1, BelowThreshold: "maybe"}, "approval_policy_invalid"},
+		{"too many approvals", "owner", true, teamID, ApprovalPolicyInput{ThresholdUSD: "1", RequiredApprovals: 2, BelowThreshold: domain.BelowThresholdSend}, "approval_policy_invalid"},
+		{"zero approvals", "owner", true, teamID, ApprovalPolicyInput{ThresholdUSD: "1", RequiredApprovals: 0, BelowThreshold: domain.BelowThresholdSend}, "approval_policy_invalid"},
+		{"zero threshold", "owner", true, teamID, ApprovalPolicyInput{ThresholdUSD: "0", RequiredApprovals: 1, BelowThreshold: domain.BelowThresholdSend}, "approval_policy_invalid"},
+		{"three decimals", "owner", true, teamID, ApprovalPolicyInput{ThresholdUSD: "1.123", RequiredApprovals: 1, BelowThreshold: domain.BelowThresholdSend}, "approval_policy_invalid"},
+		{"negative threshold", "owner", true, teamID, ApprovalPolicyInput{ThresholdUSD: "-5", RequiredApprovals: 1, BelowThreshold: domain.BelowThresholdSend}, "approval_policy_invalid"},
+		{"dollar sign", "owner", true, teamID, ApprovalPolicyInput{ThresholdUSD: "$5", RequiredApprovals: 1, BelowThreshold: domain.BelowThresholdSend}, "approval_policy_invalid"},
+		{"unknown below threshold mode", "owner", true, teamID, ApprovalPolicyInput{ThresholdUSD: "1", RequiredApprovals: 1, BelowThreshold: "maybe"}, "approval_policy_invalid"},
 		{"operator cannot set policy", "teammate", true, teamID, valid, "workspace_owner_required"},
 		{"stranger cannot set policy", "stranger", true, teamID, valid, "workspace_not_found"},
 		{"personal workspace", "owner", true, func(domain.Workspace) string { return domain.PersonalWorkspaceID("owner") }, valid, "personal_workspace"},
@@ -538,8 +540,8 @@ func TestApprovalPolicy(t *testing.T) {
 			if err != nil || stored.Policy == nil || *stored.Policy != *settings.Policy || stored.MaxApprovals != 1 {
 				t.Fatalf("stored = %#v, %v", stored, err)
 			}
-			if stored.Policy.ThresholdXLM != strings.TrimSuffix(strings.TrimRight(tc.input.ThresholdXLM, "0"), ".") {
-				t.Fatalf("threshold = %q", stored.Policy.ThresholdXLM)
+			if stored.Policy.ThresholdUSD != strings.TrimSuffix(strings.TrimRight(tc.input.ThresholdUSD, "0"), ".") {
+				t.Fatalf("threshold = %q", stored.Policy.ThresholdUSD)
 			}
 			if err := f.service.DisableApprovalPolicy("owner", workspaceID); err != nil {
 				t.Fatal(err)

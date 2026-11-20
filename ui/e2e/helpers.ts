@@ -66,9 +66,9 @@ export function memberSwitcher(page: Page, workspaceName: string) {
   return page.getByRole('button', { name: new RegExp(`${workspaceName}\\s+Member`) })
 }
 
-export async function setApprovalPolicy(owner: APIRequestContext, workspaceId: string, thresholdXlm: string, requiredApprovals = 1) {
+export async function setApprovalPolicy(owner: APIRequestContext, workspaceId: string, thresholdUsd: string, requiredApprovals = 1) {
   const response = await owner.put(`/api/v1/workspaces/${workspaceId}/approval-policy`, {
-    data: { thresholdXlm, requiredApprovals, belowThreshold: 'send' },
+    data: { thresholdUsd, requiredApprovals, belowThreshold: 'send' },
   })
   expect(response.status(), await response.text()).toBe(200)
 }
@@ -81,10 +81,19 @@ export function insertReadyWallet(workspaceId: string, ownerId: string, name: st
   return id
 }
 
+// The USD value of an XLM amount at the backend's current price, as a policy threshold.
+export async function usdForXlm(api: APIRequestContext, xlm: number) {
+  const response = await api.get('/api/v1/prices')
+  expect(response.status(), await response.text()).toBe(200)
+  const price: number = (await response.json()).data.XLM
+  expect(price).toBeGreaterThan(0)
+  return (xlm * price).toFixed(2)
+}
+
 export async function requestPayment(sender: APIRequestContext, walletId: string, to: string, amount: string, extra: Record<string, string> = {}) {
   const response = await sender.post('/api/v1/transactions', { data: { wallet_id: walletId, to, amount, ...extra } })
   expect(response.status(), await response.text()).toBe(202)
-  return (await response.json()).data.request as { id: string; requiredApprovals: number }
+  return (await response.json()).data.request as { id: string; requiredApprovals: number; usdValue?: string; usdPrice?: string; pricedAt?: string }
 }
 
 export async function clusterOnline(): Promise<boolean> {
@@ -116,7 +125,8 @@ export async function walletsSettled(owner: APIRequestContext, workspaceId: stri
     .toBe(false)
 }
 
-export async function approvalTeam({ extraOperators = 0, thresholdXlm = '10', requiredApprovals = 1 } = {}) {
+// The $1 default keeps the 20-60 XLM test payments above the threshold at any realistic XLM price.
+export async function approvalTeam({ extraOperators = 0, thresholdUsd = '1', requiredApprovals = 1 } = {}) {
   const owner = await registerAccount(uniqueEmail('owner'))
   const operator = await registerAccount(uniqueEmail('operator'))
   const viewer = await registerAccount(uniqueEmail('viewer'))
@@ -132,7 +142,7 @@ export async function approvalTeam({ extraOperators = 0, thresholdXlm = '10', re
     await acceptByLink(extra.api, (await invite(owner.api, workspaceId, extra.email, 'operator')).token)
     operators.push(extra)
   }
-  await setApprovalPolicy(owner.api, workspaceId, thresholdXlm, requiredApprovals)
+  await setApprovalPolicy(owner.api, workspaceId, thresholdUsd, requiredApprovals)
   return { owner, operator, viewer, operators, name, workspaceId }
 }
 

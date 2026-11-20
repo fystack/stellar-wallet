@@ -15,6 +15,20 @@ health_base_port: 8091              # node$n /health on health_base_port + n
 # Chains
 horizon_url: "https://horizon-testnet.stellar.org"
 
+# USD prices from Binance. Approval thresholds are in USD; a payment whose asset
+# has no mapping here, or no price younger than max_age, always needs approval.
+# api.binance.com answers HTTP 451 from US IPs; use
+# https://data-api.binance.vision/api/v3/ticker/price there.
+binance:
+  endpoint: "https://api.binance.com/api/v3/ticker/price"
+  max_age: 60s
+  assets:                      # match on code AND issuer: anyone can issue a "USDC"
+    - code: XLM
+      symbol: XLMUSDT
+    - code: USDC               # Circle USDC on testnet
+      issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+      symbol: USDCUSDT
+
 # Browser-facing URLs (OAuth callbacks use public_url, not internal Docker names).
 public_url: "http://localhost:8090"
 frontend_url: "http://localhost:5173"

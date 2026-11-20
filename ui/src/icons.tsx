@@ -177,3 +177,30 @@ export function MailIcon({ size = 18 }: IconProps) {
     </svg>
   )
 }
+
+export function KeyIcon({ size = 18 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <circle cx="8" cy="15" r="4" />
+      <path d="M10.8 12.2L19 4M16 7l2.5 2.5M14 9l2 2" />
+    </svg>
+  )
+}
+
+export function BoltIcon({ size = 22 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" />
+    </svg>
+  )
+}
+
+export function UsersIcon({ size = 22 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" />
+      <path d="M16 4.6a3.5 3.5 0 010 6.8M18 14.3c2.1.7 3.5 2.8 3.5 5.7" />
+    </svg>
+  )
+}

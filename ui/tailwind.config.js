@@ -5,13 +5,18 @@ export default {
     extend: {
       colors: {
         ink: '#0f2748',
-        night: '#0d1422',
+        night: {
+          DEFAULT: '#0a1530',
+          deep: '#060e22',
+          line: '#1c2a4a',
+        },
         'ink-soft': '#5b6b82',
         muted: '#627186',
         brand: {
           DEFAULT: '#1f6bff',
           deep: '#0b53e6',
           soft: '#e8f0ff',
+          bright: '#5b9bff',
         },
         page: '#f7f8fa',
         card: '#f4f6f9',
@@ -50,7 +55,8 @@ export default {
         shimmer: 'shimmer 1.4s infinite',
       },
       fontFamily: {
-        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
     },
   },

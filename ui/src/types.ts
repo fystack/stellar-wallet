@@ -127,7 +127,8 @@ export type CustomAsset = { code: string; issuer: string }
 
 export type ApprovalPolicy = {
   workspaceId: string
-  thresholdXlm: string
+  // Empty while a policy saved in XLM waits to be converted; every payment needs approval meanwhile.
+  thresholdUsd: string
   requiredApprovals: number
   belowThreshold: 'send' | 'approve'
   updatedAt: string
@@ -169,6 +170,10 @@ export type PaymentRequest = {
   symbol: string
   memo?: string
   memoType?: string
+  // USD value when the payment was held; absent when the asset had no price.
+  usdValue?: string
+  usdPrice?: string
+  pricedAt?: string
   requiredApprovals: number
   status: PaymentRequestStatus
   transactionId?: string
